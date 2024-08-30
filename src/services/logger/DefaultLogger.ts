@@ -13,7 +13,7 @@ export const alignedWithColorsAndTime = winston.format.combine(
   }),
 );
 
-export class DefaultLoggerService implements ServerLogger {
+export class DefaultLogger implements ServerLogger {
 
   public logger: Logger;
 
@@ -24,9 +24,6 @@ export class DefaultLoggerService implements ServerLogger {
       transports: [new winston.transports.Console({ format: alignedWithColorsAndTime } as any)],
     });
   }
-
-  // Todo: this implementation still under development idk
-  public async start(): Promise<void> {}
 
   public info(message: string, meta?: any): void {
     this.logger.info(message, meta);

@@ -1,1 +1,1 @@
-export * from "./logger/DefaultLoggerService.ts"
+export * from "./logger/DefaultLogger.ts"

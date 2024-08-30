@@ -1,9 +1,8 @@
-import type { DataBaseController } from '../database';
 import { type Class, ServerErrorStatusCode } from './types';
 import { IocEngine } from '../ioc';
 import { readConfigFile } from '../ioc/helper/fileHelper';
 import { ComponentType } from '../ioc/types';
-import { DatabaseKey, PathKey } from '../ioc/constants';
+import { PathKey } from '../ioc/constants';
 import { getMetadata } from 'reflect-metadata/no-conflict';
 import { RouteKey } from './web/helper';
 import type { Route } from './web/types';
@@ -19,9 +18,8 @@ export class Server {
 
   private _port: number;
 
+  
   private _app: Hono;
-
-  private databaseController: DataBaseController<any>;
 
   private controllers: Class[] = [];
 
@@ -113,21 +111,7 @@ export class Server {
   }
 
   // todo: this implementation still under development idk
-  private async initializeServices() {
-    const dbController = this._ioc.container.get<DataBaseController<any>>(DatabaseKey);
-
-    if (dbController !== null && !Array.isArray(dbController)) {
-      this.databaseController = dbController;
-    }
-
-    if (this.databaseController) {
-      await this.databaseController.startConnection();
-
-      this._logger.info('Database connected');
-    } else {
-      this._logger.info('Database not connected');
-    }
-  }
+  private async initializeServices() {}
 
   private configureErrorHandling() {
     this._app.onError((err: Error | HTTPResponseError, c: Context) => {
