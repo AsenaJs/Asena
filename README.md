@@ -1,15 +1,13 @@
 # Asena
 
-To install dependencies:
+To use asena in your prject add required packages for asena
 
 ```bash
-bun install
+
+bun add hono winston https://github.com/AsenaJs/Asena
 ```
 
-To run:
+for example you can check this project [Example](https://github.com/LibirSoft/AsenaExample).
 
-```bash
-bun run dist/src/server/index.js
-```
-
-This project was created using `bun init` in bun v1.1.26. [Bun](https://bun.sh) is a fast all-in-one JavaScript runtime.
+## Note
+Asena still under development. Documents will be added soon...
