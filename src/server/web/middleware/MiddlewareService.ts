@@ -1,5 +1,5 @@
 import type { MiddlewareHandler } from 'hono';
 
-export interface Middleware {
+export interface MiddlewareService {
   handle: MiddlewareHandler;
 }

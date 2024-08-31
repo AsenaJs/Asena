@@ -1,9 +1,9 @@
-import type { Middleware } from '../../types';
-import { HttpMethod } from '../../types';
+import { HttpMethod, type MiddlewareClass } from '../../types';
 import { defineMetadata, getMetadata } from 'reflect-metadata/no-conflict';
 import { RouteKey } from '../helper';
 import type { ApiHandler } from '../types';
 import type { Context, TypedResponse } from 'hono';
+import {defineMiddleware} from "../helper/defineMiddleware.ts";
 
 // improve type check in here
 export type apiMethod = (
@@ -28,12 +28,14 @@ function genericHandler({ method, path, description, middlewares }: ApiHandler) 
     }
 
     defineMetadata(RouteKey, routes, route);
+
+    defineMiddleware(route.constructor, middlewares);
   };
 }
 
 interface ControllerDecoratorParams {
   path: string;
-  middlewares?: Middleware[];
+  middlewares?: MiddlewareClass[];
   description?: string;
 }
 

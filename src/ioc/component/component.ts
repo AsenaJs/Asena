@@ -35,5 +35,7 @@ export const defineComponent = <T extends ComponentParams>(
 };
 
 const paramsGenerator = (params: ComponentParams | string): ComponentParams | ServiceParams => {
-  return typeof params === 'string' ? { name: params } : params;
+  const defaultParam: ComponentParams | ServiceParams = { name: undefined, scope: undefined };
+
+  return typeof params === 'string' ? { name: params } : params || defaultParam;
 };
