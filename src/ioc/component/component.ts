@@ -1,4 +1,4 @@
-import type { ComponentParams , ComponentType} from '../types';
+import type { ComponentParams, ComponentType, ServiceParams } from '../types';
 import { Scope } from '../types';
 import { defineMetadata, getMetadata } from 'reflect-metadata/no-conflict';
 
@@ -6,12 +6,11 @@ import { DependencyKey, IOCObjectKey, NameKey, ScopeKey, StrategyKey } from '../
 
 export const defineComponent = <T extends ComponentParams>(
   componentType: ComponentType,
-  params: T,
+  params: T | string,
   extra?: (target: Function) => void,
 ): ClassDecorator => {
   return (target: Function) => {
-    const scope = params.scope || Scope.SINGLETON;
-    const name = params.name || target.name;
+    const { scope = Scope.SINGLETON, name = target.name } = paramsGenerator(params);
 
     defineMetadata(componentType, true, target);
 
@@ -21,6 +20,10 @@ export const defineComponent = <T extends ComponentParams>(
 
     defineMetadata(NameKey, name, target);
 
+    if (extra) {
+      extra(target);
+    }
+
     if (getMetadata(DependencyKey, target) === undefined) {
       defineMetadata(DependencyKey, {}, target);
     }
@@ -28,9 +31,11 @@ export const defineComponent = <T extends ComponentParams>(
     if (getMetadata(StrategyKey, target) === undefined) {
       defineMetadata(StrategyKey, {}, target);
     }
-
-    if (extra) {
-      extra(target);
-    }
   };
+};
+
+const paramsGenerator = (params: ComponentParams | string): ComponentParams | ServiceParams => {
+  const defaultParam: ComponentParams | ServiceParams = { name: undefined, scope: undefined };
+
+  return typeof params === 'string' ? { name: params } : params || defaultParam;
 };

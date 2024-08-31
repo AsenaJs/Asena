@@ -1,24 +1,25 @@
-import { type Class, ServerErrorStatusCode } from './types';
+import { type Class, type MiddlewareClass, ServerErrorStatusCode } from './types';
 import { IocEngine } from '../ioc';
 import { readConfigFile } from '../ioc/helper/fileHelper';
 import { ComponentType } from '../ioc/types';
-import { PathKey } from '../ioc/constants';
+import { MiddlewaresKey, NameKey, PathKey } from '../ioc/constants';
 import { getMetadata } from 'reflect-metadata/no-conflict';
 import { RouteKey } from './web/helper';
-import type { Route } from './web/types';
+import type { ApiHandler, Route } from './web/types';
 import * as path from 'node:path';
-import { type Context, Hono } from 'hono';
+import { type Context, Hono, type MiddlewareHandler } from 'hono';
 import * as bun from 'bun';
 import { every } from 'hono/combine';
 import type { ServerLogger } from '../services/types/Logger.ts';
 import { HTTPException } from 'hono/http-exception';
 import type { HTTPResponseError } from 'hono/types';
+import { green, yellow } from '../services';
+import type { MiddlewareService } from './web/middleware/MiddlewareService.ts';
 
 export class Server {
 
   private _port: number;
 
-  
   private _app: Hono;
 
   private controllers: Class[] = [];
@@ -90,7 +91,9 @@ export class Server {
 
       this.controllers = controllers as Class[];
 
-      this._logger.info(this.controllers.length.toString() + ' controllers found');
+      for (const controller of this.controllers) {
+        this._logger.info(`Controller: ${green(controller.constructor.name)} found`);
+      }
     }
 
     for (const controller of this.controllers) {
@@ -102,12 +105,39 @@ export class Server {
         const lastPath = path.join(routePath, params.path);
 
         this._logger.info(
-          `METHOD: ${params.method.toUpperCase()}, PATH: ${lastPath}, DESCRIPTION: ${params.description}, api ready`,
+          `METHOD: ${yellow(params.method.toUpperCase())}, PATH: ${yellow(lastPath)}${params.description ? `, DESCRIPTION: ${params.description}` : ''}, ${green('READY')}`,
         );
 
-        this._app.on([params.method], lastPath, every(...params.middlewares), controller[name].bind(controller));
+        const middlewares = this.prepareMiddleware(controller, params);
+
+        this._app.on([params.method], lastPath, every(...middlewares), controller[name].bind(controller));
       }
     }
+  }
+
+  private prepareMiddleware(controller: Class, params: ApiHandler) {
+    const topMiddlewares = getMetadata(MiddlewaresKey, controller.constructor) || [];
+    const middleWareClasses: MiddlewareClass[] = [...topMiddlewares, ...(params.middlewares || [])];
+
+    const middlewares: MiddlewareHandler[] = [];
+
+    for (const middleware of middleWareClasses) {
+      const name = getMetadata(NameKey, middleware);
+
+      let instances = this._ioc.container.get<MiddlewareService>(name);
+
+      if (!instances) {
+        continue;
+      }
+
+      instances = Array.isArray(instances) ? instances : [instances];
+
+      for (const instance of instances) {
+        middlewares.push(instance.handle.bind(instance));
+      }
+    }
+
+    return middlewares;
   }
 
   // todo: this implementation still under development idk

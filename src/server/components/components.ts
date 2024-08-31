@@ -6,23 +6,28 @@ import {
   type ServiceParams,
 } from '../../ioc/types';
 import { defineMetadata } from 'reflect-metadata/no-conflict';
-import { CronKey, MiddlewaresKey, PathKey } from '../../ioc/constants';
+import { CronKey, IsMiddlewareKey, MiddlewaresKey, PathKey } from '../../ioc/constants';
 import { parseCron } from '../../ioc/helper/cronParser.ts';
 import { defineComponent } from '../../ioc/component/component.ts';
+import { defineMiddleware } from '../web/helper/defineMiddleware.ts';
 
-export const Component = (params?: ComponentParams): ClassDecorator => {
+export const Component = (params?: ComponentParams | string): ClassDecorator => {
   return defineComponent(ComponentType.COMPONENT, params);
 };
 
-export const Service = (params?: ServiceParams): ClassDecorator => {
+export const Service = (params?: ServiceParams | string): ClassDecorator => {
   return defineComponent(ComponentType.SERVICE, params);
 };
 
-export const Controller = (params?: ControllerParams): ClassDecorator => {
-  return defineComponent(ComponentType.CONTROLLER, params, (target) => {
-    defineMetadata(PathKey, (params as ControllerParams).path, target);
+export const Controller = (params?: ControllerParams | string): ClassDecorator => {
+  const _params = typeof params === 'string' ? { path: params, name: undefined } : params;
 
-    defineMetadata(MiddlewaresKey, (params as ControllerParams).middlewares, target);
+  return defineComponent(ComponentType.CONTROLLER, _params, (target) => {
+    defineMetadata(PathKey, (_params as ControllerParams).path || '', target);
+
+    defineMiddleware(target, (_params as ControllerParams).middlewares || []);
+
+    defineMetadata(MiddlewaresKey, (_params as ControllerParams).middlewares || [], target);
   });
 };
 
@@ -38,9 +43,11 @@ export const Schedule = (params: ScheduleParams): ClassDecorator => {
   });
 };
 
-export const Middleware = (params?: ComponentParams): ClassDecorator => {
+export const Middleware = (params?: ComponentParams | string): ClassDecorator => {
   return defineComponent(ComponentType.MIDDLEWARE, params, (target) => {
-    if (typeof target.prototype.filter !== 'function') {
+    defineMetadata(IsMiddlewareKey, true, target);
+
+    if (typeof target.prototype.handle !== 'function') {
       throw new Error(`Class ${target.name} must implement a 'filter(req, res, next)' method.`);
     }
   });
