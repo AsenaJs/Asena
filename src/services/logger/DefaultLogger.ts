@@ -2,9 +2,9 @@ import type { Logger } from 'winston';
 import winston from 'winston';
 import type { ServerLogger } from '../types/Logger.ts';
 
-export const alignedWithColorsAndTime = winston.format.combine(
-  winston.format.colorize(),
+export const defaultFormat = winston.format.combine(
   winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
+  winston.format.colorize(),
   winston.format.align(),
   winston.format.printf((info) => {
     const { timestamp, level, message, ...extra } = info;
@@ -13,7 +13,11 @@ export const alignedWithColorsAndTime = winston.format.combine(
   }),
 );
 
-export class DefaultLoggerService implements ServerLogger {
+export const green = (message: string) => `\x1b[32m${message}\x1b[0m`;
+export const red = (message: string) => `\x1b[31m${message}\x1b[0m`;
+export const yellow = (message: string) => `\x1b[33m${message}\x1b[0m`;
+
+export class DefaultLogger implements ServerLogger {
 
   public logger: Logger;
 
@@ -21,12 +25,9 @@ export class DefaultLoggerService implements ServerLogger {
     this.logger = winston.createLogger({
       level: 'info',
       format: winston.format.json(),
-      transports: [new winston.transports.Console({ format: alignedWithColorsAndTime } as any)],
+      transports: [new winston.transports.Console({ format: defaultFormat } as any)],
     });
   }
-
-  // Todo: this implementation still under development idk
-  public async start(): Promise<void> {}
 
   public info(message: string, meta?: any): void {
     this.logger.info(message, meta);

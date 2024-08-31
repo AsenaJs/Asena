@@ -5,7 +5,6 @@ export {
   Component,
   Middleware,
   ServerService,
-  Database,
   Schedule,
 } from './server/components/components';
 export { Implements } from './ioc/component/decorators/implements';

@@ -6,7 +6,7 @@ import * as path from 'node:path';
 import type { Class } from '../server/types';
 import { getMetadata } from 'reflect-metadata/no-conflict';
 
-import { DependencyKey, InterfaceKey, IOCObjectKey, ScopeKey, StrategyKey } from './constants';
+import { DependencyKey, InterfaceKey, IOCObjectKey, NameKey, ScopeKey, StrategyKey } from './constants';
 import * as process from 'node:process';
 import * as console from 'node:console';
 import { getStrategyClass } from './helper/iocHelper';
@@ -45,7 +45,9 @@ export class IocEngine {
 
   private register(injectables: Class[]) {
     for (const injectable of injectables) {
-      this._container.register(injectable.name, injectable, getMetadata(ScopeKey, injectable) === Scope.SINGLETON);
+      const name = getMetadata(NameKey, injectable) || injectable.name;
+
+      this._container.register(name, injectable, getMetadata(ScopeKey, injectable) === Scope.SINGLETON);
 
       const _interface = getMetadata(InterfaceKey, injectable);
 
@@ -69,9 +71,7 @@ export class IocEngine {
             return [];
           }
 
-          const classes = Object.values(fileContent);
-
-          return classes;
+          return Object.values(fileContent);
         }
 
         return [] as Component[];

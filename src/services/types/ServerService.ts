@@ -1,3 +1,3 @@
 export interface ServerService {
-  start?: () => void | Promise<void>;
+  onStart?: () => void | Promise<void>;
 }

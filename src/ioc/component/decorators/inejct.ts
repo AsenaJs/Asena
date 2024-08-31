@@ -1,5 +1,5 @@
 import { defineMetadata, getMetadata } from 'reflect-metadata/no-conflict';
-import type { Class } from '../../../server/types/Class';
+import type { Class } from '../../../server/types';
 import { DependencyKey, StrategyKey } from '../../constants';
 import type { Injectable, Strategies } from '../../types';
 

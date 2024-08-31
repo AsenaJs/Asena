@@ -1,7 +1,7 @@
 import type { Class } from '../server/types';
 import type { ContainerService, ComponentType, Injectable } from './types';
 import { getMetadata } from 'reflect-metadata/no-conflict';
-import { DependencyKey, StrategyKey } from './constants';
+import { DependencyKey, IsMiddlewareKey, NameKey, StrategyKey } from './constants';
 
 export class Container {
 
@@ -116,7 +116,9 @@ export class Container {
     const injects: Injectable = {};
 
     for (const key of Object.values(getMetadata(DependencyKey, Class)) as Class[]) {
-      const instance = this.get(key.name);
+      const name = getMetadata(NameKey, key) || key.name;
+
+      const instance = this.get(name);
 
       if (instance === null) {
         throw new Error('Instance cant be null ' + key);
@@ -131,10 +133,15 @@ export class Container {
     }
 
     // inject the services into the instance
+
     for (const value of Object.values(injects)) {
       for (const [k, v] of Object.entries(getMetadata(DependencyKey, Class))) {
         // @ts-ignore
         if (value instanceof v) {
+          if (getMetadata(IsMiddlewareKey, value.constructor)) {
+            continue;
+          }
+
           (newInstance as any)[k] = value;
         }
       }
