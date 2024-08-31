@@ -1,8 +1,8 @@
-import { type Class, ServerErrorStatusCode } from './types';
+import { type Class, type Middleware, ServerErrorStatusCode } from './types';
 import { IocEngine } from '../ioc';
 import { readConfigFile } from '../ioc/helper/fileHelper';
 import { ComponentType } from '../ioc/types';
-import { PathKey } from '../ioc/constants';
+import { MiddlewaresKey, PathKey } from '../ioc/constants';
 import { getMetadata } from 'reflect-metadata/no-conflict';
 import { RouteKey } from './web/helper';
 import type { Route } from './web/types';
@@ -13,6 +13,7 @@ import { every } from 'hono/combine';
 import type { ServerLogger } from '../services/types/Logger.ts';
 import { HTTPException } from 'hono/http-exception';
 import type { HTTPResponseError } from 'hono/types';
+import { green, yellow } from '../services';
 
 export class Server {
 
@@ -89,11 +90,14 @@ export class Server {
 
       this.controllers = controllers as Class[];
 
-      this._logger.info(this.controllers.length.toString() + ' controllers found');
+      for (const controller of this.controllers) {
+        this._logger.info(`Controller: ${green(controller.constructor.name)} found`);
+      }
     }
 
     for (const controller of this.controllers) {
       const routes: Route = getMetadata(RouteKey, controller) || {};
+      const middlewares: Middleware[] = getMetadata(MiddlewaresKey, controller.constructor) || [];
 
       const routePath: string = getMetadata(PathKey, controller.constructor) || '';
 
@@ -104,7 +108,12 @@ export class Server {
           `METHOD: ${yellow(params.method.toUpperCase())}, PATH: ${yellow(lastPath)}${params.description ? `, DESCRIPTION: ${params.description}` : ''}, ${green('READY')}`,
         );
 
-        this._app.on([params.method], lastPath, every(...params.middlewares), controller[name].bind(controller));
+        this._app.on(
+          [params.method],
+          lastPath,
+          every(...[...middlewares, ...params.middlewares]),
+          controller[name].bind(controller),
+        );
       }
     }
   }
