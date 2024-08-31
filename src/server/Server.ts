@@ -18,7 +18,6 @@ export class Server {
 
   private _port: number;
 
-  
   private _app: Hono;
 
   private controllers: Class[] = [];
@@ -102,7 +101,7 @@ export class Server {
         const lastPath = path.join(routePath, params.path);
 
         this._logger.info(
-          `METHOD: ${params.method.toUpperCase()}, PATH: ${lastPath}, DESCRIPTION: ${params.description}, api ready`,
+          `METHOD: ${yellow(params.method.toUpperCase())}, PATH: ${yellow(lastPath)}${params.description ? `, DESCRIPTION: ${params.description}` : ''}, ${green('READY')}`,
         );
 
         this._app.on([params.method], lastPath, every(...params.middlewares), controller[name].bind(controller));

@@ -10,19 +10,21 @@ import { CronKey, MiddlewaresKey, PathKey } from '../../ioc/constants';
 import { parseCron } from '../../ioc/helper/cronParser.ts';
 import { defineComponent } from '../../ioc/component/component.ts';
 
-export const Component = (params?: ComponentParams): ClassDecorator => {
+export const Component = (params?: ComponentParams | string): ClassDecorator => {
   return defineComponent(ComponentType.COMPONENT, params);
 };
 
-export const Service = (params?: ServiceParams): ClassDecorator => {
+export const Service = (params?: ServiceParams | string): ClassDecorator => {
   return defineComponent(ComponentType.SERVICE, params);
 };
 
-export const Controller = (params?: ControllerParams): ClassDecorator => {
-  return defineComponent(ComponentType.CONTROLLER, params, (target) => {
-    defineMetadata(PathKey, (params as ControllerParams).path, target);
+export const Controller = (params?: ControllerParams | string): ClassDecorator => {
+  const _params = typeof params === 'string' ? { path: params, name: undefined } : params;
 
-    defineMetadata(MiddlewaresKey, (params as ControllerParams).middlewares, target);
+  return defineComponent(ComponentType.CONTROLLER, _params, (target) => {
+    defineMetadata(PathKey, (_params as ControllerParams).path || '', target);
+
+    defineMetadata(MiddlewaresKey, (_params as ControllerParams).middlewares || [], target);
   });
 };
 
