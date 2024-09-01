@@ -7,7 +7,7 @@ import { getMetadata } from 'reflect-metadata/no-conflict';
 import { RouteKey } from './web/helper';
 import type { ApiHandler, Route } from './web/types';
 import * as path from 'node:path';
-import { type Context, Hono, type MiddlewareHandler } from 'hono';
+import { type Context, Hono, type MiddlewareHandler, type ValidationTargets } from 'hono';
 import * as bun from 'bun';
 import { every } from 'hono/combine';
 import type { ServerLogger } from '../services/types/Logger.ts';
@@ -15,6 +15,8 @@ import { HTTPException } from 'hono/http-exception';
 import type { HTTPResponseError } from 'hono/types';
 import { green, yellow } from '../services';
 import type { MiddlewareService } from './web/middleware/MiddlewareService.ts';
+import type { Validators } from './web/types/validator';
+import { zValidator } from '@hono/zod-validator';
 
 export class Server {
 
@@ -110,9 +112,24 @@ export class Server {
 
         const middlewares = this.prepareMiddleware(controller, params);
 
-        this._app.on([params.method], lastPath, every(...middlewares), controller[name].bind(controller));
+        const validators = this.prepareValidators(params.validator);
+
+        // TODO: this code block usage wrong needs to be fixed
+        this._app.on(
+          [params.method],
+          lastPath,
+          every(...validators),
+          every(...middlewares),
+          controller[name].bind(controller),
+        );
       }
     }
+  }
+
+  private prepareValidators(validators: Validators): MiddlewareHandler[] {
+    return Object.entries(validators).map(([key, value]) => {
+      return zValidator(key as keyof ValidationTargets, value);
+    });
   }
 
   private prepareMiddleware(controller: Class, params: ApiHandler) {
@@ -149,6 +166,8 @@ export class Server {
         // Get the custom response
         return err.getResponse();
       }
+
+      this._logger.error(err.message);
 
       return c.json({ message: 'Internal server error' }, ServerErrorStatusCode.INTERNAL_SERVER_ERROR);
     });

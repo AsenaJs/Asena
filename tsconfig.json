@@ -1,7 +1,7 @@
 {
   "compilerOptions": {
     // Enable latest features
-    "lib": ["ESNext","DOM"],
+    "lib": ["ESNext", "DOM"],
     "target": "ESNext",
     "module": "ESNext",
     "moduleDetection": "force",
@@ -12,10 +12,13 @@
 
     // Bundler mode
     "moduleResolution": "bundler",
-    "allowImportingTsExtensions": true,
+    "allowImportingTsExtensions": false,
     "verbatimModuleSyntax": true,
-    "noEmit": true,
-
+    "declaration": true,
+    "sourceMap": true,
+    "noEmit": false,
+    "outDir": "dist",
+    "rootDir": "./",
     // Best practices
     "strict": false,
     "skipLibCheck": true,

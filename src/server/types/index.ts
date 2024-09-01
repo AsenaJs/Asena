@@ -1,3 +1,3 @@
-export * from '../web/http/HttpMethod.ts';
+export * from '../web/http/HttpMethod';
 export * from './Class';
-export * from '../web/http/HttpStatus.ts';
+export * from '../web/http/HttpStatus';
