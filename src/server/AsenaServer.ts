@@ -16,7 +16,7 @@ import type { HTTPResponseError } from 'hono/types';
 import { green, yellow } from '../services';
 import type { MiddlewareService } from './web/middleware/MiddlewareService.ts';
 
-export class Server {
+export class AsenaServer {
 
   private _port: number;
 
@@ -64,13 +64,13 @@ export class Server {
     bun.serve({ port: this._port, fetch: this._app.fetch });
   }
 
-  public port(port: number): Server {
+  public port(port: number): AsenaServer {
     this._port = port;
 
     return this;
   }
 
-  public logger(value: ServerLogger): Server {
+  public logger(value: ServerLogger): AsenaServer {
     this._logger = value;
 
     return this;

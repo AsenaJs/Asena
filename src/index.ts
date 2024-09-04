@@ -1,4 +1,4 @@
-export { Server } from './server';
+export { AsenaServer } from './server';
 export {
   Controller,
   Service,
