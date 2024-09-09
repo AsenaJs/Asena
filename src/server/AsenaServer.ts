@@ -1,4 +1,4 @@
-import { type Class, type MiddlewareClass, ServerErrorStatusCode } from './types';
+import type { Class, MiddlewareClass } from './types';
 import { IocEngine } from '../ioc';
 import { readConfigFile } from '../ioc/helper/fileHelper';
 import { ComponentType } from '../ioc/types';
@@ -7,20 +7,15 @@ import { getMetadata } from 'reflect-metadata/no-conflict';
 import { RouteKey } from './web/helper';
 import type { ApiHandler, Route } from './web/types';
 import * as path from 'node:path';
-import { type Context, Hono, type MiddlewareHandler } from 'hono';
-import * as bun from 'bun';
-import { every } from 'hono/combine';
 import type { ServerLogger } from '../services/types/Logger.ts';
-import { HTTPException } from 'hono/http-exception';
-import type { HTTPResponseError } from 'hono/types';
 import { green, yellow } from '../services';
 import type { MiddlewareService } from './web/middleware/MiddlewareService.ts';
+import type { AsenaAdapter } from '../adapter/AsenaAdapter.ts';
+import { DefaultAdapter } from '../adapter/defaultAdapter/DefaultAdapter.ts';
 
 export class AsenaServer {
 
   private _port: number;
-
-  private _app: Hono;
 
   private controllers: Class[] = [];
 
@@ -28,7 +23,9 @@ export class AsenaServer {
 
   private _logger: ServerLogger;
 
-  public constructor() {
+  private _adapter: AsenaAdapter<any, any, any, any, any>;
+
+  public constructor(adapter?: AsenaAdapter<any, any, any, any, any>) {
     const config = readConfigFile();
 
     if (!config) {
@@ -37,7 +34,11 @@ export class AsenaServer {
 
     this._ioc = new IocEngine(config);
 
-    this._app = new Hono();
+    if (!adapter) {
+      this._adapter = new DefaultAdapter();
+    } else {
+      this._adapter = adapter;
+    }
 
     // Logger setting
     this.prepareLogger();
@@ -61,11 +62,13 @@ export class AsenaServer {
 
     this._logger.info('Server started on port ' + this._port);
 
-    bun.serve({ port: this._port, fetch: this._app.fetch });
+    await this._adapter.start();
   }
 
   public port(port: number): AsenaServer {
     this._port = port;
+
+    this._adapter.setPort(port);
 
     return this;
   }
@@ -110,7 +113,14 @@ export class AsenaServer {
 
         const middlewares = this.prepareMiddleware(controller, params);
 
-        this._app.on([params.method], lastPath, every(...middlewares), controller[name].bind(controller));
+        this._adapter.registerRoute({
+          method: params.method,
+          path: lastPath,
+          middleware: this._adapter.prepareMiddlewares(middlewares),
+          handler: this._adapter.prepareHandler(controller[name].bind(controller)),
+        });
+
+        // this._app.on([params.method], lastPath, every(...middlewares), controller[name].bind(controller));
       }
     }
   }
@@ -119,12 +129,12 @@ export class AsenaServer {
     const topMiddlewares = getMetadata(MiddlewaresKey, controller.constructor) || [];
     const middleWareClasses: MiddlewareClass[] = [...topMiddlewares, ...(params.middlewares || [])];
 
-    const middlewares: MiddlewareHandler[] = [];
+    const middlewares: MiddlewareService<any, any>[] = [];
 
     for (const middleware of middleWareClasses) {
       const name = getMetadata(NameKey, middleware);
 
-      let instances = this._ioc.container.get<MiddlewareService>(name);
+      let instances = this._ioc.container.get<MiddlewareService<any, any>>(name);
 
       if (!instances) {
         continue;
@@ -133,25 +143,26 @@ export class AsenaServer {
       instances = Array.isArray(instances) ? instances : [instances];
 
       for (const instance of instances) {
-        middlewares.push(instance.handle.bind(instance));
+        middlewares.push(instance);
       }
     }
 
     return middlewares;
   }
 
-  // todo: this implementation still under development idk
+  // todo: this implementation still under development
   private async initializeServices() {}
 
+  // todo: this implementation still under development
   private configureErrorHandling() {
-    this._app.onError((err: Error | HTTPResponseError, c: Context) => {
-      if (err instanceof HTTPException) {
-        // Get the custom response
-        return err.getResponse();
-      }
-
-      return c.json({ message: 'Internal server error' }, ServerErrorStatusCode.INTERNAL_SERVER_ERROR);
-    });
+    // this._adapter.app.onError((err: Error | HTTPResponseError, c: Context) => {
+    //   if (err instanceof HTTPException) {
+    //     // Get the custom response
+    //     return err.getResponse();
+    //   }
+    //
+    //   return c.json({ message: 'Internal server error' }, ServerErrorStatusCode.INTERNAL_SERVER_ERROR);
+    // });
   }
 
   private prepareLogger() {

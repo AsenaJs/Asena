@@ -2,25 +2,20 @@ import { HttpMethod, type MiddlewareClass } from '../../types';
 import { defineMetadata, getMetadata } from 'reflect-metadata/no-conflict';
 import { RouteKey } from '../helper';
 import type { ApiHandler } from '../types';
-import type { Context, TypedResponse } from 'hono';
-import {defineMiddleware} from "../helper/defineMiddleware.ts";
+import type { TypedResponse } from 'hono';
+import { defineMiddleware } from '../helper/defineMiddleware.ts';
+import type { AsenaContext } from '../../../adapter/AsenaContext.ts';
 
 // improve type check in here
 export type apiMethod = (
-  c: Context,
+  c: AsenaContext<any, any>,
   ...args: any[]
 ) => Response | Promise<Response> | TypedResponse | Promise<TypedResponse>;
 
 // Todo: route system needs to be implemented
 function genericHandler({ method, path, description, middlewares }: ApiHandler) {
-  return function (route: any, propertyKey: string, descriptor: TypedPropertyDescriptor<apiMethod>) {
-    const originalMethod = descriptor.value;
-
-    // Todo : maybe we can validate the context request here
-    descriptor.value = function (context: Context, ...args: any[]) {
-      return originalMethod.apply(this, [context, ...args]);
-    };
-
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  return function (route: any, propertyKey: string, _descriptor: TypedPropertyDescriptor<apiMethod>) {
     const routes = getMetadata(RouteKey, route) || {};
 
     if (!routes[propertyKey]) {
