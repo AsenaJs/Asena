@@ -20,7 +20,7 @@ export const Service = (params?: ServiceParams | string): ClassDecorator => {
 };
 
 export const Controller = (params?: ControllerParams | string): ClassDecorator => {
-  const _params = typeof params === 'string' ? { path: params, name: undefined } : params;
+  const _params = typeof params === 'string' ? { path: params || '', name: undefined } : params;
 
   return defineComponent(ComponentType.CONTROLLER, _params, (target) => {
     defineMetadata(PathKey, (_params as ControllerParams).path || '', target);
