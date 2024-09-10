@@ -100,4 +100,19 @@ export class DefaultContextWrapper implements AsenaContext<HonoRequest<any, any>
     this._context.set(key, value);
   }
 
+  public html(data: string, statusOrOptions?: SendOptions | number) {
+    const { headers = {}, status = 200 } =
+      typeof statusOrOptions === 'number' ? { status: statusOrOptions } : statusOrOptions || {};
+
+    if (typeof data === 'string') {
+      return this._context.html(data, { headers, status });
+    }
+
+    Object.entries(headers).forEach(([key, value]) => {
+      this._context.res.headers.append(key, value);
+    });
+
+    return this._context.html(data, { status });
+  }
+
 }
