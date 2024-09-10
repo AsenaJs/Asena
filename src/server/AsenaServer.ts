@@ -2,15 +2,15 @@ import type { Class, MiddlewareClass } from './types';
 import { IocEngine } from '../ioc';
 import { readConfigFile } from '../ioc/helper/fileHelper';
 import { ComponentType } from '../ioc/types';
-import { MiddlewaresKey, NameKey, PathKey } from '../ioc/constants';
+import { MiddlewaresKey, NameKey, OverrideKey, PathKey } from '../ioc/constants';
 import { getMetadata } from 'reflect-metadata/no-conflict';
 import { RouteKey } from './web/helper';
-import type { ApiHandler, Route } from './web/types';
+import type { ApiHandler, BaseMiddleware, Route } from './web/types';
 import * as path from 'node:path';
 import type { ServerLogger } from '../services/types/Logger.ts';
 import { green, yellow } from '../services';
-import type { MiddlewareService } from './web/middleware/MiddlewareService.ts';
-import type { AsenaAdapter } from '../adapter/AsenaAdapter.ts';
+import type { MiddlewareService } from './web/middleware';
+import type { AsenaAdapter } from '../adapter';
 import { DefaultAdapter } from '../adapter/defaultAdapter/DefaultAdapter.ts';
 
 export class AsenaServer {
@@ -118,6 +118,7 @@ export class AsenaServer {
           path: lastPath,
           middleware: this._adapter.prepareMiddlewares(middlewares),
           handler: this._adapter.prepareHandler(controller[name].bind(controller)),
+          staticServe: params.staticServe,
         });
 
         // this._app.on([params.method], lastPath, every(...middlewares), controller[name].bind(controller));
@@ -129,10 +130,11 @@ export class AsenaServer {
     const topMiddlewares = getMetadata(MiddlewaresKey, controller.constructor) || [];
     const middleWareClasses: MiddlewareClass[] = [...topMiddlewares, ...(params.middlewares || [])];
 
-    const middlewares: MiddlewareService<any, any>[] = [];
+    const middlewares: BaseMiddleware<any, any>[] = [];
 
     for (const middleware of middleWareClasses) {
       const name = getMetadata(NameKey, middleware);
+      const override = getMetadata(OverrideKey, middleware);
 
       let instances = this._ioc.container.get<MiddlewareService<any, any>>(name);
 
@@ -143,7 +145,7 @@ export class AsenaServer {
       instances = Array.isArray(instances) ? instances : [instances];
 
       for (const instance of instances) {
-        middlewares.push(instance);
+        middlewares.push({ middlewareService: instance, override });
       }
     }
 

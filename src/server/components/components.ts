@@ -5,11 +5,12 @@ import {
   type ScheduleParams,
   type ServiceParams,
 } from '../../ioc/types';
-import { defineMetadata } from 'reflect-metadata/no-conflict';
-import { CronKey, IsMiddlewareKey, MiddlewaresKey, PathKey } from '../../ioc/constants';
+import { defineMetadata, getMetadata } from 'reflect-metadata/no-conflict';
+import { CronKey, IsMiddlewareKey, MiddlewaresKey, OverrideKey, PathKey } from '../../ioc/constants';
 import { parseCron } from '../../ioc/helper/cronParser.ts';
 import { defineComponent } from '../../ioc/component/component.ts';
 import { defineMiddleware } from '../web/helper/defineMiddleware.ts';
+import type { MiddlewareParams } from '../../ioc/types/decorators/MiddlewareParams.ts';
 
 export const Component = (params?: ComponentParams | string): ClassDecorator => {
   return defineComponent(ComponentType.COMPONENT, params);
@@ -20,7 +21,8 @@ export const Service = (params?: ServiceParams | string): ClassDecorator => {
 };
 
 export const Controller = (params?: ControllerParams | string): ClassDecorator => {
-  const _params = typeof params === 'string' ? { path: params , name: undefined } : params || {path: '', name: undefined};
+  const _params =
+    typeof params === 'string' ? { path: params, name: undefined } : params || { path: '', name: undefined };
 
   return defineComponent(ComponentType.CONTROLLER, _params, (target) => {
     defineMetadata(PathKey, (_params as ControllerParams).path || '', target);
@@ -43,12 +45,22 @@ export const Schedule = (params: ScheduleParams): ClassDecorator => {
   });
 };
 
-export const Middleware = (params?: ComponentParams | string): ClassDecorator => {
+export const Middleware = (params?: MiddlewareParams): ClassDecorator => {
   return defineComponent(ComponentType.MIDDLEWARE, params, (target) => {
     defineMetadata(IsMiddlewareKey, true, target);
+
+    const overdrive = getMetadata(OverrideKey, target);
+
+    defineMetadata(OverrideKey, overdrive || params?.override || false, target);
 
     if (typeof target.prototype.handle !== 'function') {
       throw new Error(`Class ${target.name} must implement a 'filter(req, res, next)' method.`);
     }
   });
+};
+
+export const Override = (): ClassDecorator => {
+  return (target: Function) => {
+    defineMetadata(OverrideKey, true, target);
+  };
 };

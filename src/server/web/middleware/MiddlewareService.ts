@@ -1,5 +1,6 @@
-import type { AsenaContext } from '../../../adapter/AsenaContext.ts';
+import type { AsenaContext } from '../../../adapter';
 
 export interface MiddlewareService<R, S> {
-  handle: (context: AsenaContext<R, S>, next: Function) => void | Promise<void>;
+  // eslint-disable-next-line @typescript-eslint/no-invalid-void-type
+  handle: (context: AsenaContext<R, S>, next: Function) => void | Promise<void> | any;
 }

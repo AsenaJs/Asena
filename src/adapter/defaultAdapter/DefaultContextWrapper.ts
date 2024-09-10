@@ -7,7 +7,7 @@ import type { CookieOptions } from 'hono/utils/cookie';
 
 export class DefaultContextWrapper implements AsenaContext<HonoRequest<any, any>, Response> {
 
-  private readonly _context: Context;
+  private _context: Context;
 
   public constructor(context: Context) {
     this._context = context;
@@ -58,19 +58,18 @@ export class DefaultContextWrapper implements AsenaContext<HonoRequest<any, any>
   }
 
   public send(data: string | any, statusOrOptions?: SendOptions | number) {
-    const {
-      headers = {},
-      status = 200,
-      override = false,
-    } = typeof statusOrOptions === 'number' ? { status: statusOrOptions } : statusOrOptions || {};
+    const { headers = {}, status = 200 } =
+      typeof statusOrOptions === 'number' ? { status: statusOrOptions } : statusOrOptions || {};
 
-    if (typeof data === 'string' && override) {
-      return this._context.text(data, { headers, status });
+    if (headers !== undefined) {
+      Object.entries(headers).forEach(([key, value]) => {
+        this._context.res.headers.append(key, value);
+      });
     }
 
-    Object.entries(headers).forEach(([key, value]) => {
-      this._context.res.headers.append(key, value);
-    });
+    if (typeof data === 'string') {
+      return this._context.text(data);
+    }
 
     return this._context.json(data, { status });
   }
@@ -113,6 +112,14 @@ export class DefaultContextWrapper implements AsenaContext<HonoRequest<any, any>
     });
 
     return this._context.html(data, { status });
+  }
+
+  public get context(): Context {
+    return this._context;
+  }
+
+  public set context(value: Context) {
+    this._context = value;
   }
 
 }

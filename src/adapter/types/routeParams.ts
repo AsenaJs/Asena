@@ -5,4 +5,5 @@ export interface RouteParams<M, H> {
   path: string;
   middleware: M[];
   handler: H;
+  staticServe: boolean;
 }
