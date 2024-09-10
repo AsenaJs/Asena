@@ -17,3 +17,5 @@ export const IsMiddlewareKey = '_isMiddleware';
 export const CronKey = '_cron';
 
 export const IOCObjectKey = '_iocObject';
+
+export const OverrideKey = '_override';
