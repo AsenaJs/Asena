@@ -1,23 +1,17 @@
 import { HttpMethod } from '../../types';
 import { defineMetadata, getMetadata } from 'reflect-metadata/no-conflict';
 import { RouteKey } from '../helper';
-import type { ApiHandler, ControllerDecoratorParams } from '../types';
-import type { Context, TypedResponse } from 'hono';
-import { defineMiddleware } from '../helper/defineMiddleware';
-import type { Validators } from '../types/validator';
+import type { ApiHandler, apiMethod, ControllerDecoratorParams, Route } from '../types';
+import { defineMiddleware } from '../helper/defineMiddleware.ts';
 
-// improve type check in here
-export type apiMethod = (
-  c: Context,
-  ...args: any[]
-) => Response | Promise<Response> | TypedResponse | Promise<TypedResponse>;
-
-function genericHandler({ method, path, description, middlewares, validator }: ApiHandler) {
+// Todo: route system needs to be implemented
+function genericHandler({ method, path, description, middlewares, staticServe }: ApiHandler) {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   return function (route: any, propertyKey: string, _descriptor: TypedPropertyDescriptor<apiMethod>) {
-    const routes = getMetadata(RouteKey, route) || {};
+    const routes: Route = getMetadata(RouteKey, route) || {};
 
     if (!routes[propertyKey]) {
-      routes[propertyKey] = { path, method, description, middlewares, validator };
+      routes[propertyKey] = { path, method, description, middlewares, staticServe };
     }
 
     defineMetadata(RouteKey, routes, route);
@@ -27,49 +21,66 @@ function genericHandler({ method, path, description, middlewares, validator }: A
 }
 
 export function Get(params: ControllerDecoratorParams | string) {
-  return genericHandler({ ...generateHandlerParams(params), method: HttpMethod.GET });
+  const { path, middlewares, description, staticServe } = generateHandlerParams(params);
+
+  return genericHandler({ method: HttpMethod.GET, path, middlewares, description, staticServe });
 }
 
 export function Post(params: ControllerDecoratorParams | string) {
-  return genericHandler({ ...generateHandlerParams(params), method: HttpMethod.POST });
+  const { path, middlewares, description, staticServe } = generateHandlerParams(params);
+
+  return genericHandler({ method: HttpMethod.POST, path, middlewares, description, staticServe });
 }
 
 export function Put(params: ControllerDecoratorParams | string) {
-  return genericHandler({ ...generateHandlerParams(params), method: HttpMethod.PUT });
+  const { path, middlewares, description, staticServe } = generateHandlerParams(params);
+
+  return genericHandler({ method: HttpMethod.PUT, path, middlewares, description, staticServe });
 }
 
 export function Delete(params: ControllerDecoratorParams | string) {
-  return genericHandler({ ...generateHandlerParams(params), method: HttpMethod.DELETE });
+  const { path, middlewares, description, staticServe } = generateHandlerParams(params);
+
+  return genericHandler({ method: HttpMethod.DELETE, path, middlewares, description, staticServe });
 }
 
 export function Patch(params: ControllerDecoratorParams | string) {
-  return genericHandler({ ...generateHandlerParams(params), method: HttpMethod.PATCH });
+  const { path, middlewares, description, staticServe } = generateHandlerParams(params);
+
+  return genericHandler({ method: HttpMethod.PATCH, path, middlewares, description, staticServe });
 }
 
 export function Options(params: ControllerDecoratorParams | string) {
-  return genericHandler({ ...generateHandlerParams(params), method: HttpMethod.OPTIONS });
+  const { path, middlewares, description, staticServe } = generateHandlerParams(params);
+
+  return genericHandler({ method: HttpMethod.OPTIONS, path, middlewares, description, staticServe });
 }
 
 export function Head(params: ControllerDecoratorParams | string) {
-  return genericHandler({ ...generateHandlerParams(params), method: HttpMethod.HEAD });
+  const { path, middlewares, description, staticServe } = generateHandlerParams(params);
+
+  return genericHandler({ method: HttpMethod.HEAD, path, middlewares, description, staticServe });
 }
 
 export function Connect(params: ControllerDecoratorParams | string) {
-  return genericHandler({ ...generateHandlerParams(params), method: HttpMethod.CONNECT });
+  const { path, middlewares, description, staticServe } = generateHandlerParams(params);
+
+  return genericHandler({ method: HttpMethod.CONNECT, path, middlewares, description, staticServe });
 }
 
 export function Trace(params: ControllerDecoratorParams | string) {
-  return genericHandler({ ...generateHandlerParams(params), method: HttpMethod.TRACE });
+  const { path, middlewares, description, staticServe } = generateHandlerParams(params);
+
+  return genericHandler({ method: HttpMethod.TRACE, path, middlewares, description, staticServe });
 }
 
 const generateHandlerParams = (params: ControllerDecoratorParams | string): ApiHandler => {
   return typeof params === 'string'
-    ? { path: params, middlewares: [], description: '', validator: {} as Validators, method: null }
+    ? { path: params, middlewares: [], description: '' }
     : {
         ...params,
-        method: null,
         middlewares: params.middlewares || [],
         description: params.description || '',
-        validator: params.validator || ({} as Validators),
+        staticServe: params.staticServe || false,
       };
 };

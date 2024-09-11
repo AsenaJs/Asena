@@ -1,5 +1,5 @@
 import type { Class } from '../server/types';
-import type { ContainerService, ComponentType, Injectable } from './types';
+import type { ComponentType, ContainerService, Injectable } from './types';
 import { getMetadata } from 'reflect-metadata/no-conflict';
 import { DependencyKey, IsMiddlewareKey, NameKey, StrategyKey } from './constants';
 

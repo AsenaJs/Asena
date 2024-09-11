@@ -1,28 +1,21 @@
-import { type Class, type MiddlewareClass, ServerErrorStatusCode } from './types';
+import type { Class, MiddlewareClass } from './types';
 import { IocEngine } from '../ioc';
 import { readConfigFile } from '../ioc/helper/fileHelper';
 import { ComponentType } from '../ioc/types';
-import { MiddlewaresKey, NameKey, PathKey } from '../ioc/constants';
+import { MiddlewaresKey, NameKey, OverrideKey, PathKey } from '../ioc/constants';
 import { getMetadata } from 'reflect-metadata/no-conflict';
 import { RouteKey } from './web/helper';
-import type { ApiHandler, Route } from './web/types';
+import type { ApiHandler, BaseMiddleware, Route } from './web/types';
 import * as path from 'node:path';
-import { type Context, Hono, type MiddlewareHandler, type ValidationTargets } from 'hono';
-import * as bun from 'bun';
-import { every } from 'hono/combine';
 import type { ServerLogger } from '../services/types/Logger.ts';
-import { HTTPException } from 'hono/http-exception';
-import type { HTTPResponseError } from 'hono/types';
 import { green, yellow } from '../services';
-import type { MiddlewareService } from './web/middleware/MiddlewareService.ts';
-import type { Validators } from './web/types/validator';
-import { zValidator } from '@hono/zod-validator';
+import type { MiddlewareService } from './web/middleware';
+import type { AsenaAdapter } from '../adapter';
+import { DefaultAdapter } from '../adapter/defaultAdapter/DefaultAdapter.ts';
 
-export class Server {
+export class AsenaServer {
 
   private _port: number;
-
-  private _app: Hono;
 
   private controllers: Class[] = [];
 
@@ -30,7 +23,9 @@ export class Server {
 
   private _logger: ServerLogger;
 
-  public constructor() {
+  private _adapter: AsenaAdapter<any, any, any, any, any>;
+
+  public constructor(adapter?: AsenaAdapter<any, any, any, any, any>) {
     const config = readConfigFile();
 
     if (!config) {
@@ -39,7 +34,11 @@ export class Server {
 
     this._ioc = new IocEngine(config);
 
-    this._app = new Hono();
+    if (!adapter) {
+      this._adapter = new DefaultAdapter();
+    } else {
+      this._adapter = adapter;
+    }
 
     // Logger setting
     this.prepareLogger();
@@ -63,16 +62,18 @@ export class Server {
 
     this._logger.info('Server started on port ' + this._port);
 
-    bun.serve({ port: this._port, fetch: this._app.fetch });
+    await this._adapter.start();
   }
 
-  public port(port: number): Server {
+  public port(port: number): AsenaServer {
     this._port = port;
+
+    this._adapter.setPort(port);
 
     return this;
   }
 
-  public logger(value: ServerLogger): Server {
+  public logger(value: ServerLogger): AsenaServer {
     this._logger = value;
 
     return this;
@@ -112,36 +113,30 @@ export class Server {
 
         const middlewares = this.prepareMiddleware(controller, params);
 
-        const validators = this.prepareValidators(params.validator);
+        this._adapter.registerRoute({
+          method: params.method,
+          path: lastPath,
+          middleware: this._adapter.prepareMiddlewares(middlewares),
+          handler: this._adapter.prepareHandler(controller[name].bind(controller)),
+          staticServe: params.staticServe,
+        });
 
-        // TODO: this code block usage wrong needs to be fixed
-        this._app.on(
-          [params.method],
-          lastPath,
-          every(...validators),
-          every(...middlewares),
-          controller[name].bind(controller),
-        );
+        // this._app.on([params.method], lastPath, every(...middlewares), controller[name].bind(controller));
       }
     }
-  }
-
-  private prepareValidators(validators: Validators): MiddlewareHandler[] {
-    return Object.entries(validators).map(([key, value]) => {
-      return zValidator(key as keyof ValidationTargets, value);
-    });
   }
 
   private prepareMiddleware(controller: Class, params: ApiHandler) {
     const topMiddlewares = getMetadata(MiddlewaresKey, controller.constructor) || [];
     const middleWareClasses: MiddlewareClass[] = [...topMiddlewares, ...(params.middlewares || [])];
 
-    const middlewares: MiddlewareHandler[] = [];
+    const middlewares: BaseMiddleware<any, any>[] = [];
 
     for (const middleware of middleWareClasses) {
       const name = getMetadata(NameKey, middleware);
+      const override = getMetadata(OverrideKey, middleware);
 
-      let instances = this._ioc.container.get<MiddlewareService>(name);
+      let instances = this._ioc.container.get<MiddlewareService<any, any>>(name);
 
       if (!instances) {
         continue;
@@ -150,27 +145,26 @@ export class Server {
       instances = Array.isArray(instances) ? instances : [instances];
 
       for (const instance of instances) {
-        middlewares.push(instance.handle.bind(instance));
+        middlewares.push({ middlewareService: instance, override });
       }
     }
 
     return middlewares;
   }
 
-  // todo: this implementation still under development idk
+  // todo: this implementation still under development
   private async initializeServices() {}
 
+  // todo: this implementation still under development
   private configureErrorHandling() {
-    this._app.onError((err: Error | HTTPResponseError, c: Context) => {
-      if (err instanceof HTTPException) {
-        // Get the custom response
-        return err.getResponse();
-      }
-
-      this._logger.error(err.message);
-
-      return c.json({ message: 'Internal server error' }, ServerErrorStatusCode.INTERNAL_SERVER_ERROR);
-    });
+    // this._adapter.app.onError((err: Error | HTTPResponseError, c: Context) => {
+    //   if (err instanceof HTTPException) {
+    //     // Get the custom response
+    //     return err.getResponse();
+    //   }
+    //
+    //   return c.json({ message: 'Internal server error' }, ServerErrorStatusCode.INTERNAL_SERVER_ERROR);
+    // });
   }
 
   private prepareLogger() {
