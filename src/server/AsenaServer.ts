@@ -11,7 +11,7 @@ import type { ServerLogger } from '../services/types/Logger.ts';
 import { green, yellow } from '../services';
 import type { MiddlewareService } from './web/middleware';
 import type { AsenaAdapter } from '../adapter';
-import { DefaultAdapter } from '../adapter/defaultAdapter/DefaultAdapter.ts';
+import { DefaultAdapter } from '../adapter/defaultAdapter/DefaultAdapter';
 
 export class AsenaServer {
 
@@ -79,10 +79,6 @@ export class AsenaServer {
     return this;
   }
 
-  public getLogger(): ServerLogger {
-    return this._logger;
-  }
-
   private async initializeControllers(): Promise<void> {
     const controllers = this._ioc.container.getAll<Class>(ComponentType.CONTROLLER);
 
@@ -120,8 +116,6 @@ export class AsenaServer {
           handler: this._adapter.prepareHandler(controller[name].bind(controller)),
           staticServe: params.staticServe,
         });
-
-        // this._app.on([params.method], lastPath, every(...middlewares), controller[name].bind(controller));
       }
     }
   }

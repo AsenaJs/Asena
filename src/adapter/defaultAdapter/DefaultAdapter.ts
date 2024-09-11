@@ -4,8 +4,8 @@ import * as bun from 'bun';
 import type { RouteParams } from '../types';
 import { createFactory } from 'hono/factory';
 import type { H } from 'hono/types';
-import { DefaultContextWrapper } from './DefaultContextWrapper.ts';
-import { HttpMethod } from '../../server/types/index.ts';
+import { DefaultContextWrapper } from './DefaultContextWrapper';
+import { HttpMethod } from '../../server/types/index';
 import type { BaseMiddleware } from '../../server/web/types';
 import type { ErrorHandler, Handler } from './types/handler.ts';
 
@@ -23,7 +23,13 @@ export class DefaultAdapter implements AsenaAdapter<Hono, Handler, MiddlewareHan
     this.app.use(...this.prepareMiddlewares(middleware));
   }
 
-  public registerRoute({ method, path, middleware, handler, staticServe }: RouteParams<MiddlewareHandler, H>) {
+  public registerRoute({
+    method,
+    path,
+    middleware,
+    handler,
+    staticServe,
+  }: RouteParams<MiddlewareHandler, H>) {
     const routeHandler = staticServe ? middleware : [...middleware, handler];
 
     switch (method) {
