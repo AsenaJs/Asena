@@ -1,4 +1,4 @@
-import type { Class } from '../../server/types/Class';
+import type { Class } from '../../server/types';
 
 export interface Component {
   Class: Class;

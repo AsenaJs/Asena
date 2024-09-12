@@ -1,8 +1,8 @@
 import type { Context, HonoRequest } from 'hono';
 import type { AsenaContext } from '../AsenaContext.ts';
-import type { SendOptions } from '../types/SendOptions.ts';
+import type { SendOptions } from '../types';
 import { getCookie, getSignedCookie, setCookie, setSignedCookie } from 'hono/cookie';
-import type { CookieExtra } from '../types/CookieExtra.ts';
+import type { CookieExtra } from '../types';
 import type { CookieOptions } from 'hono/utils/cookie';
 
 export class DefaultContextWrapper implements AsenaContext<HonoRequest<any, any>, Response> {

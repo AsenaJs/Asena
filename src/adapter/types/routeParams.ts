@@ -1,5 +1,5 @@
-import type { HttpMethod } from '../../server/web/http/HttpMethod.ts';
-import type {ValidationService} from "../../server/validation/ValidationService";
+import type { HttpMethod } from '../../server/web/http';
+import type {ValidationService} from "../../server/web/middleware";
 
 export interface RouteParams<M, H> {
   method: HttpMethod;

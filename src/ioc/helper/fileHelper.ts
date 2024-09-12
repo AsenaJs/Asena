@@ -1,6 +1,6 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import type { IocConfig } from '../types/IocConfig';
+import type { IocConfig } from '../types';
 
 export const getAllFiles = (dirPath: string, arrayOfFiles: string[] = []): string[] => {
   const files = fs.readdirSync(dirPath);

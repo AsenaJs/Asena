@@ -1,8 +1,8 @@
-import type { HttpMethod } from '../http/HttpMethod.ts';
+import type { HttpMethod } from '../http';
 import type { MiddlewareClass } from '../../types';
 import type { AsenaContext } from '../../../adapter';
 import type { TypedResponse } from 'hono';
-import type { ValidationService } from '../../validation/ValidationService';
+import type { ValidationService } from '../middleware';
 
 export interface Route {
   [key: string]: ApiHandler;

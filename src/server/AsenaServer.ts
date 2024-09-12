@@ -7,7 +7,7 @@ import { getMetadata } from 'reflect-metadata/no-conflict';
 import { RouteKey } from './web/helper';
 import type { ApiHandler, BaseMiddleware, Route } from './web/types';
 import * as path from 'node:path';
-import type { ServerLogger } from '../services/types/Logger.ts';
+import type { ServerLogger } from '../services/types/Logger';
 import { green, yellow } from '../services';
 import type { MiddlewareService } from './web/middleware';
 import type { AsenaAdapter } from '../adapter';
@@ -115,6 +115,7 @@ export class AsenaServer {
           middleware: this._adapter.prepareMiddlewares(middlewares),
           handler: this._adapter.prepareHandler(controller[name].bind(controller)),
           staticServe: params.staticServe,
+          validator: params.validator,
         });
       }
     }

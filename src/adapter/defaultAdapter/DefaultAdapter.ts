@@ -5,7 +5,7 @@ import type { RouteParams } from '../types';
 import { createFactory } from 'hono/factory';
 import type { H } from 'hono/types';
 import { DefaultContextWrapper } from './DefaultContextWrapper';
-import { HttpMethod } from '../../server/types/index';
+import { HttpMethod } from '../../server/web/http';
 import type { BaseMiddleware } from '../../server/web/types';
 import type { ErrorHandler, Handler } from './types/handler.ts';
 
