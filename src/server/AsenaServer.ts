@@ -14,6 +14,7 @@ import type { AsenaAdapter } from '../adapter';
 import { DefaultAdapter } from '../adapter/defaultAdapter/DefaultAdapter';
 
 export class AsenaServer {
+
   private _port: number;
 
   private controllers: Class[] = [];
@@ -165,6 +166,7 @@ export class AsenaServer {
     for (const service of flatServerServices) {
       this._logger.info(`Service: ${green(service.constructor.name)} found`);
 
+      // Todo: This is a temporary solution. We need to find a better way to handle this. Maybe create a interface with then using it with proxy idk.
       if (service['onStart']) {
         await service['onStart']();
       }
@@ -190,4 +192,5 @@ export class AsenaServer {
       this._logger = console;
     }
   }
+
 }
