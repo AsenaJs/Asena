@@ -7,14 +7,13 @@ import { getMetadata } from 'reflect-metadata/no-conflict';
 import { RouteKey } from './web/helper';
 import type { ApiHandler, BaseMiddleware, Route } from './web/types';
 import * as path from 'node:path';
-import type { ServerLogger } from '../services/types/Logger';
+import type { AsenaService, ServerLogger } from '../services';
 import { green, yellow } from '../services';
 import type { MiddlewareService } from './web/middleware';
 import type { AsenaAdapter } from '../adapter';
 import { DefaultAdapter } from '../adapter/defaultAdapter/DefaultAdapter';
 
 export class AsenaServer {
-
   private _port: number;
 
   private controllers: Class[] = [];
@@ -48,9 +47,17 @@ export class AsenaServer {
   public async start(): Promise<void> {
     await this._ioc.searchAndRegister();
 
+    this._logger.info(`
+    ___    _____  ______ _   __ ___ 
+   /   |  / ___/ / ____// | / //   |
+  / /| |  \\__ \\ / __/  /  |/ // /| |
+ / ___ | ___/ // /___ / /|  // ___ |
+/_/  |_|/____//_____//_/ |_//_/  |_|  
+                            `);
+
     this._logger.info('IoC initialized');
 
-    await this.initializeServices();
+    await this.prepareServerServices();
 
     this._logger.info('Controllers initializing');
 
@@ -147,8 +154,24 @@ export class AsenaServer {
     return middlewares;
   }
 
-  // todo: this implementation still under development
-  private async initializeServices() {}
+  private async prepareServerServices() {
+    const serverServices: (AsenaService | AsenaService[])[] = this._ioc.container.getAll<AsenaService>(
+      ComponentType.SERVER_SERVICE,
+    );
+
+    // flat the array
+    const flatServerServices = serverServices.flat();
+
+    for (const service of flatServerServices) {
+      this._logger.info(`Service: ${green(service.constructor.name)} found`);
+
+      if (service['onStart']) {
+        await service['onStart']();
+      }
+
+      this._logger.info(`Service: ${green(service.constructor.name)} initialized`);
+    }
+  }
 
   // todo: this implementation still under development
   private configureErrorHandling() {
@@ -167,5 +190,4 @@ export class AsenaServer {
       this._logger = console;
     }
   }
-
 }

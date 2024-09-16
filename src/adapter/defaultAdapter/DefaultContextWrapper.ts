@@ -1,5 +1,5 @@
 import type { Context, HonoRequest } from 'hono';
-import type { AsenaContext } from '../AsenaContext.ts';
+import type { AsenaContext } from '../AsenaContext';
 import type { SendOptions } from '../types';
 import { getCookie, getSignedCookie, setCookie, setSignedCookie } from 'hono/cookie';
 import type { CookieExtra } from '../types';

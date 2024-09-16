@@ -1,4 +1,4 @@
-import type { AsenaAdapter } from '../AsenaAdapter.ts';
+import type { AsenaAdapter } from '../AsenaAdapter';
 import { type Context, Hono, type HonoRequest, type MiddlewareHandler, type Next } from 'hono';
 import * as bun from 'bun';
 import type { RouteParams } from '../types';
@@ -7,7 +7,7 @@ import type { H } from 'hono/types';
 import { DefaultContextWrapper } from './DefaultContextWrapper';
 import { HttpMethod } from '../../server/web/http';
 import type { BaseMiddleware } from '../../server/web/types';
-import type { ErrorHandler, Handler } from './types/handler.ts';
+import type { ErrorHandler, Handler } from './types/handler';
 
 export class DefaultAdapter implements AsenaAdapter<Hono, Handler, MiddlewareHandler, H> {
 
@@ -23,13 +23,7 @@ export class DefaultAdapter implements AsenaAdapter<Hono, Handler, MiddlewareHan
     this.app.use(...this.prepareMiddlewares(middleware));
   }
 
-  public registerRoute({
-    method,
-    path,
-    middleware,
-    handler,
-    staticServe,
-  }: RouteParams<MiddlewareHandler, H>) {
+  public registerRoute({ method, path, middleware, handler, staticServe }: RouteParams<MiddlewareHandler, H>) {
     const routeHandler = staticServe ? middleware : [...middleware, handler];
 
     switch (method) {
