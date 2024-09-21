@@ -1,4 +1,4 @@
-import type { HttpMethod } from '../../server/web/http/HttpMethod.ts';
+import type { HttpMethod } from '../../server/web/http';
 
 export interface RouteParams<M, H> {
   method: HttpMethod;
@@ -6,4 +6,5 @@ export interface RouteParams<M, H> {
   middleware: M[];
   handler: H;
   staticServe: boolean;
+  validator: M[];
 }

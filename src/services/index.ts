@@ -1,1 +1,2 @@
-export * from "./logger/DefaultLogger.ts"
+export * from './logger/DefaultLogger';
+export * from './types';

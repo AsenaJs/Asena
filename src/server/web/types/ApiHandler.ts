@@ -1,5 +1,5 @@
-import type { HttpMethod } from '../http/HttpMethod.ts';
-import type { MiddlewareClass } from '../../types';
+import type { HttpMethod } from '../http';
+import type { MiddlewareClass, ValidatorClass } from '../../types';
 import type { AsenaContext } from '../../../adapter';
 import type { TypedResponse } from 'hono';
 
@@ -13,17 +13,19 @@ export interface ApiHandler {
   description: string;
   middlewares: MiddlewareClass[];
   staticServe: boolean;
+  validator: ValidatorClass<any>;
 }
 
 export type apiMethod = (
   c: AsenaContext<any, any>,
   ...args: any[]
   // eslint-disable-next-line @typescript-eslint/no-invalid-void-type
-) => Response | Promise<Response> | TypedResponse | Promise<TypedResponse> | void | Promise<void>;
+) => void | Promise<void> | Promise<Response | TypedResponse>;
 
 export interface ControllerDecoratorParams {
   path: string;
   middlewares?: MiddlewareClass[];
   description?: string;
   staticServe?: boolean;
+  validator?: ValidatorClass<any>;
 }

@@ -1,5 +1,5 @@
-import type { CookieExtra } from './types/CookieExtra.ts';
-import type { SendOptions } from './types/SendOptions.ts';
+import type { CookieExtra } from './types';
+import type { SendOptions } from './types';
 import type { TypedResponse } from 'hono';
 
 export interface AsenaContext<R, S> {

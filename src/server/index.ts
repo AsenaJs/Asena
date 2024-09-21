@@ -1,1 +1,1 @@
-export * from './AsenaServer.ts';
+export * from './AsenaServer';

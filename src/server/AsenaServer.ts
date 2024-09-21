@@ -7,11 +7,11 @@ import { getMetadata } from 'reflect-metadata/no-conflict';
 import { RouteKey } from './web/helper';
 import type { ApiHandler, BaseMiddleware, Route } from './web/types';
 import * as path from 'node:path';
-import type { ServerLogger } from '../services/types/Logger.ts';
+import type { AsenaService, ServerLogger } from '../services';
 import { green, yellow } from '../services';
 import type { MiddlewareService } from './web/middleware';
 import type { AsenaAdapter } from '../adapter';
-import { DefaultAdapter } from '../adapter/defaultAdapter/DefaultAdapter.ts';
+import { DefaultAdapter } from '../adapter/defaultAdapter';
 
 export class AsenaServer {
 
@@ -48,9 +48,17 @@ export class AsenaServer {
   public async start(): Promise<void> {
     await this._ioc.searchAndRegister();
 
+    this._logger.info(`
+    ___    _____  ______ _   __ ___ 
+   /   |  / ___/ / ____// | / //   |
+  / /| |  \\__ \\ / __/  /  |/ // /| |
+ / ___ | ___/ // /___ / /|  // ___ |
+/_/  |_|/____//_____//_/ |_//_/  |_|  
+                            `);
+
     this._logger.info('IoC initialized');
 
-    await this.initializeServices();
+    await this.prepareServerServices();
 
     this._logger.info('Controllers initializing');
 
@@ -77,10 +85,6 @@ export class AsenaServer {
     this._logger = value;
 
     return this;
-  }
-
-  public getLogger(): ServerLogger {
-    return this._logger;
   }
 
   private async initializeControllers(): Promise<void> {
@@ -119,9 +123,8 @@ export class AsenaServer {
           middleware: this._adapter.prepareMiddlewares(middlewares),
           handler: this._adapter.prepareHandler(controller[name].bind(controller)),
           staticServe: params.staticServe,
+          validator: this._adapter.prepareValidator(params.validator),
         });
-
-        // this._app.on([params.method], lastPath, every(...middlewares), controller[name].bind(controller));
       }
     }
   }
@@ -152,8 +155,25 @@ export class AsenaServer {
     return middlewares;
   }
 
-  // todo: this implementation still under development
-  private async initializeServices() {}
+  private async prepareServerServices() {
+    const serverServices: (AsenaService | AsenaService[])[] = this._ioc.container.getAll<AsenaService>(
+      ComponentType.SERVER_SERVICE,
+    );
+
+    // flat the array
+    const flatServerServices = serverServices.flat();
+
+    for (const service of flatServerServices) {
+      this._logger.info(`Service: ${green(service.constructor.name)} found`);
+
+      // Todo: This is a temporary solution. We need to find a better way to handle this. Maybe create a interface with then using it with proxy idk.
+      if (service['onStart']) {
+        await service['onStart']();
+      }
+
+      this._logger.info(`Service: ${green(service.constructor.name)} initialized`);
+    }
+  }
 
   // todo: this implementation still under development
   private configureErrorHandling() {
