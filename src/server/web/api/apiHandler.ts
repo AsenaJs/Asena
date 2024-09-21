@@ -76,12 +76,12 @@ export function Trace(params: ControllerDecoratorParams | string) {
 
 const generateHandlerParams = (params: ControllerDecoratorParams | string): ControllerDecoratorParams => {
   return typeof params === 'string'
-    ? { path: params, middlewares: [], description: '', staticServe: false, validator: {} }
+    ? { path: params, middlewares: [], description: '', staticServe: false, validator: undefined }
     : {
         ...params,
         middlewares: params.middlewares || [],
         description: params.description || '',
         staticServe: params.staticServe || false,
-        validator: params.validator || {},
+        validator: params.validator || undefined,
       };
 };

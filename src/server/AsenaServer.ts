@@ -11,7 +11,7 @@ import type { AsenaService, ServerLogger } from '../services';
 import { green, yellow } from '../services';
 import type { MiddlewareService } from './web/middleware';
 import type { AsenaAdapter } from '../adapter';
-import { DefaultAdapter } from '../adapter/defaultAdapter/DefaultAdapter';
+import { DefaultAdapter } from '../adapter/defaultAdapter';
 
 export class AsenaServer {
 
@@ -123,7 +123,7 @@ export class AsenaServer {
           middleware: this._adapter.prepareMiddlewares(middlewares),
           handler: this._adapter.prepareHandler(controller[name].bind(controller)),
           staticServe: params.staticServe,
-          validator: params.validator,
+          validator: this._adapter.prepareValidator(params.validator),
         });
       }
     }

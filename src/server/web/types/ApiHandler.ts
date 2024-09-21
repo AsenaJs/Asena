@@ -1,8 +1,7 @@
 import type { HttpMethod } from '../http';
-import type { MiddlewareClass } from '../../types';
+import type { MiddlewareClass, ValidatorClass } from '../../types';
 import type { AsenaContext } from '../../../adapter';
 import type { TypedResponse } from 'hono';
-import type { ValidationService } from '../middleware';
 
 export interface Route {
   [key: string]: ApiHandler;
@@ -14,7 +13,7 @@ export interface ApiHandler {
   description: string;
   middlewares: MiddlewareClass[];
   staticServe: boolean;
-  validator: ValidationService<any>;
+  validator: ValidatorClass<any>;
 }
 
 export type apiMethod = (
@@ -28,5 +27,5 @@ export interface ControllerDecoratorParams {
   middlewares?: MiddlewareClass[];
   description?: string;
   staticServe?: boolean;
-  validator?: ValidationService<any>;
+  validator?: ValidatorClass<any>;
 }

@@ -1,5 +1,4 @@
 import type { HttpMethod } from '../../server/web/http';
-import type {ValidationService} from "../../server/web/middleware";
 
 export interface RouteParams<M, H> {
   method: HttpMethod;
@@ -7,5 +6,5 @@ export interface RouteParams<M, H> {
   middleware: M[];
   handler: H;
   staticServe: boolean;
-  validator:ValidationService<M>
+  validator: M[];
 }

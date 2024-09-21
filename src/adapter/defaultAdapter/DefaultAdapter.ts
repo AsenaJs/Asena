@@ -1,4 +1,4 @@
-import type { AsenaAdapter } from '../AsenaAdapter';
+import { AsenaAdapter } from '../AsenaAdapter';
 import { type Context, Hono, type HonoRequest, type MiddlewareHandler, type Next } from 'hono';
 import * as bun from 'bun';
 import type { RouteParams } from '../types';
@@ -7,24 +7,29 @@ import type { H } from 'hono/types';
 import { DefaultContextWrapper } from './DefaultContextWrapper';
 import { HttpMethod } from '../../server/web/http';
 import type { BaseMiddleware } from '../../server/web/types';
-import type { ErrorHandler, Handler } from './types/handler';
+import type { ErrorHandler, Handler } from './types';
+import type { ValidatorClass } from '../../server/types';
 
-export class DefaultAdapter implements AsenaAdapter<Hono, Handler, MiddlewareHandler, H> {
+export class DefaultAdapter extends AsenaAdapter<Hono, Handler, MiddlewareHandler, H> {
 
   public app = new Hono();
 
   protected port: number;
 
-  public setPort(port: number) {
-    this.port = port;
-  }
-
   public use(middleware: BaseMiddleware<HonoRequest, Response>) {
     this.app.use(...this.prepareMiddlewares(middleware));
   }
 
-  public registerRoute({ method, path, middleware, handler, staticServe }: RouteParams<MiddlewareHandler, H>) {
-    const routeHandler = staticServe ? middleware : [...middleware, handler];
+  public registerRoute({
+    method,
+    path,
+    middleware,
+    handler,
+    staticServe,
+    validator,
+  }: RouteParams<MiddlewareHandler, H>) {
+    const middlewares = validator ? [...validator, ...middleware] : middleware;
+    const routeHandler = staticServe ? middleware : [...middlewares, handler];
 
     switch (method) {
       case HttpMethod.GET:
@@ -109,6 +114,24 @@ export class DefaultAdapter implements AsenaAdapter<Hono, Handler, MiddlewareHan
     this.app.onError((error, context) => {
       return errorHandler(error, new DefaultContextWrapper(context));
     });
+  }
+
+  public setPort(port: number) {
+    this.port = port;
+  }
+
+  public prepareValidator(Validator: ValidatorClass<MiddlewareHandler>) {
+    if (!Validator) {
+      return [];
+    }
+
+    const validatorInstance = new Validator();
+
+    return ['json', 'query', 'form', 'param', 'header']
+      .filter((key) => validatorInstance[key])
+      .map((key) => {
+        return validatorInstance[key]().bind(validatorInstance);
+      });
   }
 
 }
