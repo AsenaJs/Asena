@@ -7,9 +7,9 @@ import {
 } from '../../ioc/types';
 import { defineMetadata, getMetadata } from 'reflect-metadata/no-conflict';
 import { CronKey, IsMiddlewareKey, MiddlewaresKey, OverrideKey, PathKey } from '../../ioc/constants';
-import { parseCron } from '../../ioc/helper/cronParser.ts';
-import { defineComponent } from '../../ioc/component/component.ts';
-import { defineMiddleware } from '../web/helper/defineMiddleware.ts';
+import { parseCron } from '../../ioc/helper/cronParser';
+import { defineComponent } from '../../ioc/component/component';
+import { defineMiddleware } from '../web/helper/defineMiddleware';
 import type { MiddlewareParams } from '../../ioc/types/decorators/MiddlewareParams.ts';
 
 export const Component = (params?: ComponentParams | string): ClassDecorator => {

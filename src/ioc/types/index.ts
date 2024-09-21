@@ -1,6 +1,6 @@
 export * from './decorators/ComponentParams';
 export * from './decorators/ControllerParams';
-export * from './decorators/ComponentType.ts';
+export * from './decorators/ComponentType';
 export * from './decorators/ServiceParams';
 export * from './decorators/ScheduleParams';
 export * from './Scope';
