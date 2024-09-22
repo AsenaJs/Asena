@@ -82,7 +82,11 @@ export class IocEngine {
       components
         .flatMap((c) => c)
         .filter((c) => {
-          return !!getMetadata(IOCObjectKey, c as any);
+          try {
+            return !!getMetadata(IOCObjectKey, c as any);
+          } catch (e) {
+            return false;
+          }
         })
         // @ts-ignore
         .map((_component: Class) => {
