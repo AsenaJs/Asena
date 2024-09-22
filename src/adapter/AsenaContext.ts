@@ -15,7 +15,7 @@ export interface AsenaContext<R, S> {
   getQuery: (query: string) => Promise<string>;
   getQueryAll: (query: string) => Promise<string[]>;
   getCookie: (name: string, secret?: string | BufferSource) => Promise<string | false>;
-  setCookie: (name: string, value: string, options?: CookieExtra<any>) => void;
+  setCookie: (name: string, value: string, options?: CookieExtra<any>) => Promise<void>;
   getValue: <T>(key: string) => T;
   setValue: (key: string, value: any) => void;
   html: (data: string) => Response | Promise<Response> | TypedResponse | Promise<TypedResponse>;
