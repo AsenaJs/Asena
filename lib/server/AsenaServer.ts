@@ -9,7 +9,7 @@ import type { ApiHandler, BaseMiddleware, Route } from './web/types';
 import * as path from 'node:path';
 import type { AsenaService, ServerLogger } from '../services';
 import { green, yellow } from '../services';
-import type { MiddlewareService } from './web/middleware';
+import type { AsenaMiddlewareService } from './web/middleware';
 import type { AsenaAdapter } from '../adapter';
 import { DefaultAdapter } from '../adapter/defaultAdapter';
 
@@ -139,7 +139,7 @@ export class AsenaServer {
       const name = getMetadata(NameKey, middleware);
       const override = getMetadata(OverrideKey, middleware);
 
-      let instances = this._ioc.container.get<MiddlewareService<any, any>>(name);
+      let instances = this._ioc.container.get<AsenaMiddlewareService<any, any>>(name);
 
       if (!instances) {
         continue;
@@ -159,6 +159,12 @@ export class AsenaServer {
     const serverServices: (AsenaService | AsenaService[])[] = this._ioc.container.getAll<AsenaService>(
       ComponentType.SERVER_SERVICE,
     );
+
+    if (!serverServices) {
+      this._logger.info('No server services found');
+
+      return;
+    }
 
     // flat the array
     const flatServerServices = serverServices.flat();

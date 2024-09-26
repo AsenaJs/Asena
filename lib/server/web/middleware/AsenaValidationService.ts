@@ -3,7 +3,9 @@
  *
  *
  */
-export abstract class ValidationService<H> {
+import type { MiddlewareHandler } from 'hono';
+
+export abstract class AsenaValidationService<H> {
 
   public abstract json?(): H;
 
@@ -16,3 +18,5 @@ export abstract class ValidationService<H> {
   public abstract header?(): H;
 
 }
+
+export type ValidationService = AsenaValidationService<MiddlewareHandler>;
