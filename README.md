@@ -1,10 +1,10 @@
 # Asena
 
-To use asena in your prject add required packages for asena
+To use asena in your project add required packages for asena
 
 ```bash
 
-bun add hono winston https://github.com/AsenaJs/Asena
+bun add asena hono winston
 ```
 
 for example, you can check this project [Example](https://github.com/LibirSoft/AsenaExample).

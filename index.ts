@@ -1,4 +1,4 @@
-export { AsenaServer } from './src/server';
+export { AsenaServer } from './lib/server';
 export {
   Controller,
   Service,
@@ -6,11 +6,11 @@ export {
   Middleware,
   ServerService,
   Schedule,
-} from './src/server/components/components';
-export * from './src/server/web/middleware';
-export * from './src/adapter';
-export * from './src/adapter/defaultAdapter';
-export { Implements } from './src/ioc/component/decorators/implements';
-export { Inject } from './src/ioc/component/decorators/inejct';
-export * from './src/server/web/api';
-export * from './src/ioc/types';
+} from './lib/server/components/components';
+export * from './lib/server/web/middleware';
+export * from './lib/adapter';
+export * from './lib/adapter/defaultAdapter';
+export { Implements } from './lib/ioc/component/decorators/implements';
+export { Inject } from './lib/ioc/component/decorators/inejct';
+export * from './lib/server/web/api';
+export * from './lib/ioc/types';
