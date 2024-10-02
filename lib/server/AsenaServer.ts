@@ -1,8 +1,8 @@
 import type { Class, MiddlewareClass } from './types';
 import { IocEngine } from '../ioc';
 import { readConfigFile } from '../ioc/helper/fileHelper';
-import { ComponentType } from '../ioc/types';
-import { MiddlewaresKey, NameKey, OverrideKey, PathKey } from '../ioc/constants';
+import { type Component, ComponentType } from '../ioc/types';
+import { InterfaceKey, MiddlewaresKey, NameKey, OverrideKey, PathKey } from '../ioc/constants';
 import { getMetadata } from 'reflect-metadata/no-conflict';
 import { RouteKey } from './web/helper';
 import type { ApiHandler, BaseMiddleware, Route } from './web/types';
@@ -19,6 +19,8 @@ export class AsenaServer {
 
   private controllers: Class[] = [];
 
+  private _components: Component[] = [];
+
   private _ioc: IocEngine;
 
   private _logger: ServerLogger;
@@ -27,10 +29,6 @@ export class AsenaServer {
 
   public constructor(adapter?: AsenaAdapter<any, any, any, any, any>) {
     const config = readConfigFile();
-
-    if (!config) {
-      throw new Error('Config file not found');
-    }
 
     this._ioc = new IocEngine(config);
 
@@ -46,7 +44,7 @@ export class AsenaServer {
   }
 
   public async start(): Promise<void> {
-    await this._ioc.searchAndRegister();
+    await this._ioc.searchAndRegister(this._components);
 
     this._logger.info(`
     ___    _____  ______ _   __ ___ 
@@ -71,6 +69,20 @@ export class AsenaServer {
     this._logger.info('Server started on port ' + this._port);
 
     await this._adapter.start();
+  }
+
+  public components(components: Class[]): AsenaServer {
+    this._components = components.map((_component: Class) => {
+      const face: string = getMetadata(InterfaceKey, _component);
+      const component: Component = {
+        Class: _component as Class,
+        interface: face,
+      };
+
+      return component;
+    });
+
+    return this;
   }
 
   public port(port: number): AsenaServer {
