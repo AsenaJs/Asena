@@ -1,7 +1,7 @@
 import type { Class, MiddlewareClass } from './types';
 import { IocEngine } from '../ioc';
 import { readConfigFile } from '../ioc/helper/fileHelper';
-import { ComponentType } from '../ioc/types';
+import { type Component, ComponentType } from '../ioc/types';
 import { getMetadata } from 'reflect-metadata/no-conflict';
 import type { ApiHandler, BaseMiddleware, Route } from './web/types';
 import * as path from 'node:path';
@@ -22,6 +22,8 @@ export class AsenaServer {
 
   private controllers: Class[] = [];
 
+  private _components: Component[] = [];
+
   private _ioc: IocEngine;
 
   private _logger: ServerLogger;
@@ -33,10 +35,6 @@ export class AsenaServer {
   public constructor(adapter?: AsenaAdapter<any, any, any, any, any>) {
     // TODO: those are causing bugs some times we need to put them into another place
     const config = readConfigFile();
-
-    if (!config) {
-      throw new Error('Config file not found');
-    }
 
     this._ioc = new IocEngine(config);
 
@@ -52,7 +50,7 @@ export class AsenaServer {
   }
 
   public async start(): Promise<void> {
-    await this._ioc.searchAndRegister();
+    await this._ioc.searchAndRegister(this._components);
 
     this._logger.info(`
     ___    _____  ______ _   __ ___ 
@@ -77,6 +75,20 @@ export class AsenaServer {
     this.server = await this._adapter.start();
 
     this.updateWebSockets();
+  }
+
+  public components(components: Class[]): AsenaServer {
+    this._components = components.map((_component: Class) => {
+      const face: string = getMetadata(ComponentConstants.InterfaceKey, _component);
+      const component: Component = {
+        Class: _component as Class,
+        interface: face,
+      };
+
+      return component;
+    });
+
+    return this;
   }
 
   public port(port: number): AsenaServer {
