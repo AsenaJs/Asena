@@ -12,6 +12,8 @@ import { green, yellow } from '../services';
 import type { AsenaMiddlewareService } from './web/middleware';
 import type { AsenaAdapter } from '../adapter';
 import { DefaultAdapter } from '../adapter/defaultAdapter';
+import type { AsenaWebSocketService, WebSocketData } from './web/websocket';
+import type { Server } from 'bun';
 
 export class AsenaServer {
 
@@ -25,7 +27,10 @@ export class AsenaServer {
 
   private _adapter: AsenaAdapter<any, any, any, any, any>;
 
+  private server: Server;
+
   public constructor(adapter?: AsenaAdapter<any, any, any, any, any>) {
+    // TODO: those are causing bugs some times we need to put them into another place
     const config = readConfigFile();
 
     if (!config) {
@@ -60,17 +65,17 @@ export class AsenaServer {
 
     await this.prepareServerServices();
 
-    this._logger.info('Controllers initializing');
+    this.initializeControllers();
 
-    await this.initializeControllers();
-
-    this._logger.info('Controllers initialized');
+    this.prepareWebSocket();
 
     this.configureErrorHandling();
 
     this._logger.info('Server started on port ' + this._port);
 
-    await this._adapter.start();
+    this.server = await this._adapter.start();
+
+    this.updateWebSocketThis();
   }
 
   public port(port: number): AsenaServer {
@@ -87,7 +92,7 @@ export class AsenaServer {
     return this;
   }
 
-  private async initializeControllers(): Promise<void> {
+  private initializeControllers() {
     const controllers = this._ioc.container.getAll<Class>(ComponentType.CONTROLLER);
 
     if (controllers !== null) {
@@ -129,9 +134,9 @@ export class AsenaServer {
     }
   }
 
-  private prepareMiddleware(controller: Class, params: ApiHandler) {
+  private prepareMiddleware(controller: Class, params?: ApiHandler) {
     const topMiddlewares = getMetadata(MiddlewaresKey, controller.constructor) || [];
-    const middleWareClasses: MiddlewareClass[] = [...topMiddlewares, ...(params.middlewares || [])];
+    const middleWareClasses: MiddlewareClass[] = [...topMiddlewares, ...(params?.middlewares || [])];
 
     const middlewares: BaseMiddleware<any, any>[] = [];
 
@@ -153,6 +158,70 @@ export class AsenaServer {
     }
 
     return middlewares;
+  }
+
+  private prepareWebSocket() {
+    const webSockets = this._ioc.container.getAll<AsenaWebSocketService<WebSocketData>>(ComponentType.WEBSOCKET);
+
+    if (!webSockets) {
+      this._logger.info('No websockets found');
+
+      return;
+    }
+
+    // flat the array
+    const flatWebSockets = webSockets.flat();
+    const registeredPaths = new Set<string>();
+
+    for (const webSocket of flatWebSockets) {
+      const path = getMetadata(PathKey, webSocket.constructor);
+
+      if (!path) {
+        throw new Error('Path not found in WebSocket');
+      }
+
+      if (registeredPaths.has(path)) {
+        throw new Error(`Duplicate WebSocket path found: ${path}`);
+      }
+
+      registeredPaths.add(path);
+
+      const middlewares = this.prepareMiddleware(webSocket as unknown as Class);
+
+      this._adapter.registerWebSocketHandler({
+        path,
+        middlewares: this._adapter.prepareMiddlewares(middlewares),
+        onPong: webSocket?.onPong?.bind({ webSocket }),
+        onPing: webSocket?.onPing?.bind(webSocket),
+        onMessage: webSocket?.onMessage?.bind(webSocket),
+        onOpen: webSocket?.onOpen?.bind(webSocket),
+        onClose: webSocket?.onClose?.bind(webSocket),
+        onDrain: webSocket?.onDrain?.bind(webSocket),
+      });
+
+      this._logger.info(
+        `WebSocket: ${green(webSocket.constructor.name)} initialized with path: ${yellow(`/${path}`)} ${green('READY')}`,
+      );
+
+      if (flatWebSockets.length > 0) {
+        this._adapter.prepareWebSocket();
+      }
+    }
+  }
+
+  private updateWebSocketThis() {
+    const webSockets = this._ioc.container.getAll<AsenaWebSocketService<WebSocketData>>(ComponentType.WEBSOCKET);
+
+    if (!webSockets) {
+      return;
+    }
+
+    // flat the array
+    const flatWebSockets = webSockets.flat();
+
+    for (const webSocket of flatWebSockets) {
+      webSocket.server = this.server;
+    }
   }
 
   private async prepareServerServices() {

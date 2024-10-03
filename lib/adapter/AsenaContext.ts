@@ -18,6 +18,8 @@ export interface AsenaContext<R, S> {
   setCookie: (name: string, value: string, options?: CookieExtra<any>) => Promise<void>;
   getValue: <T>(key: string) => T;
   setValue: (key: string, value: any) => void;
+  setWebSocketValue: (value: any) => void;
+  getWebSocketValue: <T>() => T;
   html: (data: string) => Response | Promise<Response> | TypedResponse | Promise<TypedResponse>;
   send: (
     data: string | any,

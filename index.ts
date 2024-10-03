@@ -6,6 +6,8 @@ export {
   Middleware,
   ServerService,
   Schedule,
+  WebSocket,
+  Override,
 } from './lib/server/components/components';
 export * from './lib/server/web/middleware';
 export * from './lib/adapter';
@@ -14,3 +16,4 @@ export { Implements } from './lib/ioc/component/decorators/implements';
 export { Inject } from './lib/ioc/component/decorators/inejct';
 export * from './lib/server/web/api';
 export * from './lib/ioc/types';
+export * from './lib/server/web/websocket';

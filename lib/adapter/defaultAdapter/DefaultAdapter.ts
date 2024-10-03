@@ -1,5 +1,6 @@
 import { AsenaAdapter } from '../AsenaAdapter';
 import { type Context, Hono, type HonoRequest, type MiddlewareHandler, type Next } from 'hono';
+import type { Server, ServerWebSocket } from 'bun';
 import * as bun from 'bun';
 import type { RouteParams } from '../types';
 import { createFactory } from 'hono/factory';
@@ -9,12 +10,13 @@ import { HttpMethod } from '../../server/web/http';
 import type { BaseMiddleware } from '../../server/web/types';
 import type { ErrorHandler, Handler } from './types';
 import type { ValidatorClass } from '../../server/types';
+import type { WebSocketData, WebSocketHandlerWithPath, WSEvents, WSOptions } from '../../server/web/websocket';
 
 export class DefaultAdapter extends AsenaAdapter<Hono, Handler, MiddlewareHandler, H> {
 
   public app = new Hono();
 
-  protected port: number;
+  private server: Server;
 
   public use(middleware: BaseMiddleware<HonoRequest, Response>) {
     this.app.use(...this.prepareMiddlewares(middleware));
@@ -83,7 +85,15 @@ export class DefaultAdapter extends AsenaAdapter<Hono, Handler, MiddlewareHandle
   }
 
   public async start() {
-    bun.serve({ port: this.port, fetch: this.app.fetch });
+    if (this.websocketHandlers) {
+      for (const handler of this.websocketHandlers) {
+        this.upgradeWebSocket(handler);
+      }
+    }
+
+    this.server = bun.serve({ port: this.port, fetch: this.app.fetch, websocket: this.websocket });
+
+    return this.server;
   }
 
   public prepareMiddlewares(
@@ -132,6 +142,55 @@ export class DefaultAdapter extends AsenaAdapter<Hono, Handler, MiddlewareHandle
       .map((key) => {
         return validatorInstance[key]().bind(validatorInstance);
       });
+  }
+
+  public registerWebSocketHandler(websocketHandlers: WebSocketHandlerWithPath<MiddlewareHandler>): void {
+    if (this.websocketHandlers === undefined) {
+      this.websocketHandlers = [];
+    }
+
+    this.websocketHandlers.push(websocketHandlers);
+  }
+
+  public prepareWebSocket(options?: WSOptions): void {
+    const createHandler =
+      (type: keyof WSEvents) =>
+      (ws: ServerWebSocket<WebSocketData>, ...args: any[]) => {
+        const handler = this.websocketHandlers.find((h) => h.path === ws.data.path);
+
+        if (handler?.[type]) {
+          // @ts-ignore
+
+          handler[type](ws, ...args);
+        }
+      };
+
+    this.websocket = {
+      open: createHandler('onOpen'),
+      message: createHandler('onMessage'),
+      drain: createHandler('onDrain'),
+      close: createHandler('onClose'),
+      ping: createHandler('onPing'),
+      pong: createHandler('onPong'),
+      ...options,
+    };
+  }
+
+  private upgradeWebSocket(handler: WebSocketHandlerWithPath<MiddlewareHandler>): void {
+    this.app.get(`/${handler.path}`, ...handler.middlewares, async (c: Context, next) => {
+      const websocketData = c.get('_websocketData') || {};
+
+      const id = crypto.randomUUID();
+
+      const data: WebSocketData = { values: websocketData, id, path: handler.path };
+      const upgradeResult = this.server.upgrade(c.req.raw, { data });
+
+      if (upgradeResult) {
+        return new Response(null);
+      }
+
+      await next(); // Failed
+    });
   }
 
 }
