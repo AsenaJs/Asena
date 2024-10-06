@@ -1,3 +1,3 @@
 export interface IocConfig {
-  sourceFile: string;
+  sourceFolder: string;
 }
