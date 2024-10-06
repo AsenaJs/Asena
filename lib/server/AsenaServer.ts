@@ -14,6 +14,7 @@ import type { AsenaAdapter } from '../adapter';
 import { DefaultAdapter } from '../adapter/defaultAdapter';
 import type { AsenaWebSocketService, WebSocketData } from './web/websocket';
 import type { Server } from 'bun';
+import type {AsenaWebsocketAdapter} from "../adapter/AsenaWebsocketAdapter";
 
 export class AsenaServer {
 
@@ -25,7 +26,7 @@ export class AsenaServer {
 
   private _logger: ServerLogger;
 
-  private _adapter: AsenaAdapter<any, any, any, any, any>;
+  private _adapter: AsenaAdapter<any, any, any, any, any, any, AsenaWebsocketAdapter<any, any>>;
 
   private server: Server;
 
@@ -188,7 +189,7 @@ export class AsenaServer {
 
       const middlewares = this.prepareMiddleware(webSocket as unknown as Class);
 
-      this._adapter.registerWebSocketHandler({
+      this._adapter.websocketAdapter.registerWebSocketHandler({
         path,
         middlewares: this._adapter.prepareMiddlewares(middlewares),
         onPong: webSocket?.onPong?.bind({ webSocket }),
@@ -204,7 +205,7 @@ export class AsenaServer {
       );
 
       if (flatWebSockets.length > 0) {
-        this._adapter.prepareWebSocket();
+        this._adapter.websocketAdapter.prepareWebSocket();
       }
     }
   }
