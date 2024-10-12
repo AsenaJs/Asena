@@ -10,8 +10,6 @@ export class DefaultWebsocketAdapter extends AsenaWebsocketAdapter<Hono, Middlew
 
   private _server: Server;
 
-
-
   public constructor(app: Hono) {
     super();
 

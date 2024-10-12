@@ -5,8 +5,7 @@ import { getAllFiles } from './helper/fileHelper';
 import * as path from 'node:path';
 import type { Class } from '../server/types';
 import { getMetadata } from 'reflect-metadata/no-conflict';
-
-import { DependencyKey, InterfaceKey, IOCObjectKey, NameKey, ScopeKey, StrategyKey } from './constants';
+import { ComponentConstants } from './constants';
 import * as process from 'node:process';
 import * as console from 'node:console';
 import { getStrategyClass } from './helper/iocHelper';
@@ -45,14 +44,14 @@ export class IocEngine {
 
   private register(injectables: Class[]) {
     for (const injectable of injectables) {
-      const name = getMetadata(NameKey, injectable) || injectable.name;
+      const name = getMetadata(ComponentConstants.NameKey, injectable) || injectable.name;
 
-      this._container.register(name, injectable, getMetadata(ScopeKey, injectable) === Scope.SINGLETON);
+      this._container.register(name, injectable, getMetadata(ComponentConstants.ScopeKey, injectable) === Scope.SINGLETON);
 
-      const _interface = getMetadata(InterfaceKey, injectable);
+      const _interface = getMetadata(ComponentConstants.InterfaceKey, injectable);
 
       if (_interface) {
-        this._container.register(_interface, injectable, getMetadata(ScopeKey, injectable) === Scope.SINGLETON);
+        this._container.register(_interface, injectable, getMetadata(ComponentConstants.ScopeKey, injectable) === Scope.SINGLETON);
       }
     }
   }
@@ -83,14 +82,14 @@ export class IocEngine {
         .flatMap((c) => c)
         .filter((c) => {
           try {
-            return !!getMetadata(IOCObjectKey, c as any);
+            return !!getMetadata(ComponentConstants.IOCObjectKey, c as any);
           } catch (e) {
             return false;
           }
         })
         // @ts-ignore
         .map((_component: Class) => {
-          const face: string = getMetadata(InterfaceKey, _component);
+          const face: string = getMetadata(ComponentConstants.InterfaceKey, _component);
           const component: Component = {
             Class: _component as Class,
             interface: face,
@@ -114,9 +113,14 @@ export class IocEngine {
 
         visited.push(component);
 
-        const dependencies: Class[] = Object.values(getMetadata(DependencyKey, component)) as Class[];
+        const dependencies: Class[] = Object.values(
+          getMetadata(ComponentConstants.DependencyKey, component),
+        ) as Class[];
 
-        const strategyDeps = getStrategyClass(getMetadata(StrategyKey, component), injectables) as Class[];
+        const strategyDeps = getStrategyClass(
+          getMetadata(ComponentConstants.StrategyKey, component),
+          injectables,
+        ) as Class[];
 
         const totalDeps: Class[] = [...dependencies, ...strategyDeps];
 
@@ -172,9 +176,9 @@ export class IocEngine {
 
         recStack.add(component);
 
-        const dependencyDeps: Class[] = Object.values(getMetadata(DependencyKey, component)) as Class[];
+        const dependencyDeps: Class[] = Object.values(getMetadata(ComponentConstants.DependencyKey, component)) as Class[];
 
-        const strategyDeps = getStrategyClass(getMetadata(StrategyKey, component), injectables) as Class[];
+        const strategyDeps = getStrategyClass(getMetadata(ComponentConstants.StrategyKey, component), injectables) as Class[];
 
         const totalDeps: Class[] = [...dependencyDeps, ...strategyDeps];
 

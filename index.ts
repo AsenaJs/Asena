@@ -1,19 +1,9 @@
 export { AsenaServer } from './lib/server';
-export {
-  Controller,
-  Service,
-  Component,
-  Middleware,
-  ServerService,
-  Schedule,
-  WebSocket,
-  Override,
-} from './lib/server/components/components';
 export * from './lib/server/web/middleware';
 export * from './lib/adapter';
 export * from './lib/adapter/defaultAdapter';
-export { Implements } from './lib/ioc/component/decorators/implements';
-export { Inject } from './lib/ioc/component/decorators/inejct';
+export { Implements } from './lib/ioc/component/decorators/Implements';
+export { Inject } from './lib/ioc/component/decorators/Inject';
 export * from './lib/server/web/api';
-export * from './lib/ioc/types';
 export * from './lib/server/web/websocket';
+export * from './lib/server/decorators';

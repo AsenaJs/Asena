@@ -1,7 +1,7 @@
 import type { Class } from '../server/types';
 import type { ComponentType, ContainerService, Injectable } from './types';
 import { getMetadata } from 'reflect-metadata/no-conflict';
-import { DependencyKey, IsMiddlewareKey, NameKey, StrategyKey } from './constants';
+import { ComponentConstants } from './constants';
 
 export class Container {
 
@@ -115,8 +115,8 @@ export class Container {
 
     const injects: Injectable = {};
 
-    for (const key of Object.values(getMetadata(DependencyKey, Class)) as Class[]) {
-      const name = getMetadata(NameKey, key) || key.name;
+    for (const key of Object.values(getMetadata(ComponentConstants.DependencyKey, Class)) as Class[]) {
+      const name = getMetadata(ComponentConstants.NameKey, key) || key.name;
 
       const instance = this.get(name);
 
@@ -135,10 +135,10 @@ export class Container {
     // inject the services into the instance
 
     for (const value of Object.values(injects)) {
-      for (const [k, v] of Object.entries(getMetadata(DependencyKey, Class))) {
+      for (const [k, v] of Object.entries(getMetadata(ComponentConstants.DependencyKey, Class))) {
         // @ts-ignore
         if (value instanceof v) {
-          if (getMetadata(IsMiddlewareKey, value.constructor)) {
+          if (getMetadata(ComponentConstants.IsMiddlewareKey, value.constructor)) {
             continue;
           }
 
@@ -149,7 +149,7 @@ export class Container {
 
     // strategy injection
 
-    for (const [propertyKey, interfaceName] of Object.entries(getMetadata(StrategyKey, Class))) {
+    for (const [propertyKey, interfaceName] of Object.entries(getMetadata(ComponentConstants.StrategyKey, Class))) {
       if (!interfaceName) {
         continue;
       }

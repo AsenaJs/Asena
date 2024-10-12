@@ -1,6 +1,8 @@
 import type { Server, ServerWebSocket } from 'bun';
 import type { WebSocketData } from './WebSocketEvents';
 
+// TODO: server needs to be a generic , also write default implementation for server object it needs to have sockets
+
 /**
  * A service class for handling WebSocket connections.
  *

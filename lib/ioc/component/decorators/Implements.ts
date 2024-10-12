@@ -1,8 +1,8 @@
 import { defineMetadata } from 'reflect-metadata/no-conflict';
-import { InterfaceKey } from '../../constants';
+import { ComponentConstants } from '../../constants';
 
 export function Implements(implement: string): ClassDecorator {
   return (target: any) => {
-    defineMetadata(InterfaceKey, implement, target);
+    defineMetadata(ComponentConstants.InterfaceKey, implement, target);
   };
 }

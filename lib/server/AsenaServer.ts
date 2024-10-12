@@ -2,7 +2,6 @@ import type { Class, MiddlewareClass } from './types';
 import { IocEngine } from '../ioc';
 import { readConfigFile } from '../ioc/helper/fileHelper';
 import { ComponentType } from '../ioc/types';
-import { MiddlewaresKey, NameKey, OverrideKey, PathKey } from '../ioc/constants';
 import { getMetadata } from 'reflect-metadata/no-conflict';
 import { RouteKey } from './web/helper';
 import type { ApiHandler, BaseMiddleware, Route } from './web/types';
@@ -15,6 +14,7 @@ import { DefaultAdapter } from '../adapter/defaultAdapter';
 import type { AsenaWebSocketService, WebSocketData } from './web/websocket';
 import type { Server } from 'bun';
 import type {AsenaWebsocketAdapter} from "../adapter/AsenaWebsocketAdapter";
+import {ComponentConstants} from "../ioc/constants";
 
 export class AsenaServer {
 
@@ -112,7 +112,7 @@ export class AsenaServer {
     for (const controller of this.controllers) {
       const routes: Route = getMetadata(RouteKey, controller) || {};
 
-      const routePath: string = getMetadata(PathKey, controller.constructor) || '';
+      const routePath: string = getMetadata(ComponentConstants.PathKey, controller.constructor) || '';
 
       for (const [name, params] of Object.entries(routes)) {
         const lastPath = path.join(routePath, params.path);
@@ -136,14 +136,14 @@ export class AsenaServer {
   }
 
   private prepareMiddleware(controller: Class, params?: ApiHandler) {
-    const topMiddlewares = getMetadata(MiddlewaresKey, controller.constructor) || [];
+    const topMiddlewares = getMetadata(ComponentConstants.MiddlewaresKey, controller.constructor) || [];
     const middleWareClasses: MiddlewareClass[] = [...topMiddlewares, ...(params?.middlewares || [])];
 
     const middlewares: BaseMiddleware<any, any>[] = [];
 
     for (const middleware of middleWareClasses) {
-      const name = getMetadata(NameKey, middleware);
-      const override = getMetadata(OverrideKey, middleware);
+      const name = getMetadata(ComponentConstants.NameKey, middleware);
+      const override = getMetadata(ComponentConstants.OverrideKey, middleware);
 
       let instances = this._ioc.container.get<AsenaMiddlewareService<any, any>>(name);
 
@@ -175,7 +175,7 @@ export class AsenaServer {
     const registeredPaths = new Set<string>();
 
     for (const webSocket of flatWebSockets) {
-      const path = getMetadata(PathKey, webSocket.constructor);
+      const path = getMetadata(ComponentConstants.PathKey, webSocket.constructor);
 
       if (!path) {
         throw new Error('Path not found in WebSocket');

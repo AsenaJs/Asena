@@ -20,7 +20,7 @@ export type apiMethod = (
   c: AsenaContext<any, any>,
   ...args: any[]
   // eslint-disable-next-line @typescript-eslint/no-invalid-void-type
-) => void | Promise<void> | Promise<Response | TypedResponse>;
+) => void | Promise<void> | Promise<Response | TypedResponse> | Response |TypedResponse;
 
 export interface ControllerDecoratorParams {
   path: string;
