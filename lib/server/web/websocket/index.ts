@@ -1,2 +1,2 @@
 export * from './WebSocketService';
-export * from './WebSocketEvents';
+export * from './types';

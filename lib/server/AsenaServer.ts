@@ -3,7 +3,6 @@ import { IocEngine } from '../ioc';
 import { readConfigFile } from '../ioc/helper/fileHelper';
 import { ComponentType } from '../ioc/types';
 import { getMetadata } from 'reflect-metadata/no-conflict';
-import { RouteKey } from './web/helper';
 import type { ApiHandler, BaseMiddleware, Route } from './web/types';
 import * as path from 'node:path';
 import type { AsenaService, ServerLogger } from '../services';
@@ -13,8 +12,9 @@ import type { AsenaAdapter } from '../adapter';
 import { DefaultAdapter } from '../adapter/defaultAdapter';
 import type { AsenaWebSocketService, WebSocketData } from './web/websocket';
 import type { Server } from 'bun';
-import type {AsenaWebsocketAdapter} from "../adapter/AsenaWebsocketAdapter";
-import {ComponentConstants} from "../ioc/constants";
+import type { AsenaWebsocketAdapter } from '../adapter/AsenaWebsocketAdapter';
+import { ComponentConstants } from '../ioc/constants';
+import { AsenaWebSocketServer } from './web/websocket/AsenaWebSocketServer';
 
 export class AsenaServer {
 
@@ -76,7 +76,7 @@ export class AsenaServer {
 
     this.server = await this._adapter.start();
 
-    this.updateWebSocketThis();
+    this.updateWebSockets();
   }
 
   public port(port: number): AsenaServer {
@@ -110,12 +110,12 @@ export class AsenaServer {
     }
 
     for (const controller of this.controllers) {
-      const routes: Route = getMetadata(RouteKey, controller) || {};
+      const routes: Route = getMetadata(ComponentConstants.RouteKey, controller) || {};
 
       const routePath: string = getMetadata(ComponentConstants.PathKey, controller.constructor) || '';
 
       for (const [name, params] of Object.entries(routes)) {
-        const lastPath = path.join(routePath, params.path);
+        const lastPath = path.join(`${routePath}/`, params.path);
 
         this._logger.info(
           `METHOD: ${yellow(params.method.toUpperCase())}, PATH: ${yellow(lastPath)}${params.description ? `, DESCRIPTION: ${params.description}` : ''}, ${green('READY')}`,
@@ -189,16 +189,7 @@ export class AsenaServer {
 
       const middlewares = this.prepareMiddleware(webSocket as unknown as Class);
 
-      this._adapter.websocketAdapter.registerWebSocketHandler({
-        path,
-        middlewares: this._adapter.prepareMiddlewares(middlewares),
-        onPong: webSocket?.onPong?.bind({ webSocket }),
-        onPing: webSocket?.onPing?.bind(webSocket),
-        onMessage: webSocket?.onMessage?.bind(webSocket),
-        onOpen: webSocket?.onOpen?.bind(webSocket),
-        onClose: webSocket?.onClose?.bind(webSocket),
-        onDrain: webSocket?.onDrain?.bind(webSocket),
-      });
+      this._adapter.websocketAdapter.registerWebSocket(webSocket, this._adapter.prepareMiddlewares(middlewares));
 
       this._logger.info(
         `WebSocket: ${green(webSocket.constructor.name)} initialized with path: ${yellow(`/${path}`)} ${green('READY')}`,
@@ -210,7 +201,7 @@ export class AsenaServer {
     }
   }
 
-  private updateWebSocketThis() {
+  private updateWebSockets() {
     const webSockets = this._ioc.container.getAll<AsenaWebSocketService<WebSocketData>>(ComponentType.WEBSOCKET);
 
     if (!webSockets) {
@@ -221,7 +212,10 @@ export class AsenaServer {
     const flatWebSockets = webSockets.flat();
 
     for (const webSocket of flatWebSockets) {
-      webSocket.server = this.server;
+      // getPath key
+      const path = getMetadata(ComponentConstants.PathKey, webSocket.constructor);
+
+      webSocket.server = new AsenaWebSocketServer(this.server, path);
     }
   }
 

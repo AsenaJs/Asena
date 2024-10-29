@@ -46,12 +46,14 @@ export class IocEngine {
     for (const injectable of injectables) {
       const name = getMetadata(ComponentConstants.NameKey, injectable) || injectable.name;
 
-      this._container.register(name, injectable, getMetadata(ComponentConstants.ScopeKey, injectable) === Scope.SINGLETON);
+      const isSingleton = getMetadata(ComponentConstants.ScopeKey, injectable) === Scope.SINGLETON;
+
+      this._container.register(name, injectable, isSingleton);
 
       const _interface = getMetadata(ComponentConstants.InterfaceKey, injectable);
 
       if (_interface) {
-        this._container.register(_interface, injectable, getMetadata(ComponentConstants.ScopeKey, injectable) === Scope.SINGLETON);
+        this._container.register(_interface, injectable, isSingleton);
       }
     }
   }
@@ -139,7 +141,6 @@ export class IocEngine {
     return sorted;
   }
 
-  // Todo: needs to update with new interface object
   private detectCycleAndReport(
     classes: Class[],
     injectables: Component[],
@@ -176,9 +177,14 @@ export class IocEngine {
 
         recStack.add(component);
 
-        const dependencyDeps: Class[] = Object.values(getMetadata(ComponentConstants.DependencyKey, component)) as Class[];
+        const dependencyDeps: Class[] = Object.values(
+          getMetadata(ComponentConstants.DependencyKey, component),
+        ) as Class[];
 
-        const strategyDeps = getStrategyClass(getMetadata(ComponentConstants.StrategyKey, component), injectables) as Class[];
+        const strategyDeps = getStrategyClass(
+          getMetadata(ComponentConstants.StrategyKey, component),
+          injectables,
+        ) as Class[];
 
         const totalDeps: Class[] = [...dependencyDeps, ...strategyDeps];
 

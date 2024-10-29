@@ -1,6 +1,6 @@
 import type { Logger } from 'winston';
 import winston from 'winston';
-import type { ServerLogger } from '../types/Logger';
+import type { ServerLogger } from '../types';
 
 export const defaultFormat = winston.format.combine(
   winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
@@ -14,7 +14,9 @@ export const defaultFormat = winston.format.combine(
 );
 
 export const green = (message: string) => `\x1b[32m${message}\x1b[0m`;
+
 export const red = (message: string) => `\x1b[31m${message}\x1b[0m`;
+
 export const yellow = (message: string) => `\x1b[33m${message}\x1b[0m`;
 
 export class DefaultLogger implements ServerLogger {

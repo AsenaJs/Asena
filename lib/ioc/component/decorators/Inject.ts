@@ -3,6 +3,12 @@ import type { Class } from '../../../server/types';
 import type { Injectable, Strategies } from '../../types';
 import { ComponentConstants } from '../../constants';
 
+/**
+ * Property decorator to inject a dependency.
+ *
+ * @param {Class | string} Injection - The class or string identifier of the dependency to inject.
+ * @returns {PropertyDecorator} - The property decorator function.
+ */
 export const Inject = (Injection: Class | string): PropertyDecorator => {
   return (target: Object, propertyKey: string) => {
     const dependencies: Injectable = getMetadata(ComponentConstants.DependencyKey, target.constructor) || {};

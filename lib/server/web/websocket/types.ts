@@ -34,17 +34,6 @@ export interface WSOptions {
 }
 
 /**
- * Represents a WebSocket handler with a specific path and associated middlewares.
- *
- * @template MH - The type of the middlewares handlers.
- * @template T - The type of the WebSocket data.
- */
-export type WebSocketHandlerWithPath<MH, T = any> = {
-  path: string;
-  middlewares: MH[];
-} & WSEvents<ServerWebSocket<T>>;
-
-/**
  * Interface representing the data associated with a WebSocket connection.
  *
  * @template T - The type of the values associated with the WebSocket data.
@@ -54,3 +43,15 @@ export interface WebSocketData<T = any> {
   id: string;
   path: string;
 }
+
+export interface WebSocketWithId<T> {
+  id: string;
+  ws: Socket<T>;
+}
+
+/**
+ * Represents a WebSocket connection with a specific type of data.
+ *
+ * @template T - The type of data expected in the WebSocket object.
+ */
+export type Socket<T = any> = ServerWebSocket<WebSocketData<T>>;

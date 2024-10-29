@@ -78,7 +78,7 @@ export class Container {
     }
 
     if (service.length > 0) {
-      const mapped = service.map((containerService) => {
+      return service.map((containerService) => {
         if (Array.isArray(containerService)) {
           return containerService.map((_service) => {
             if (!_service.singleton) {
@@ -103,8 +103,6 @@ export class Container {
 
         return containerService.instance as T;
       });
-
-      return mapped;
     }
 
     return null;

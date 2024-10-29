@@ -25,26 +25,78 @@ export abstract class AsenaAdapter<
   WSA extends AsenaWebsocketAdapter<A, AM> = AsenaWebsocketAdapter<A, AM>,
 > {
 
+  /**
+   * The application instance.
+   */
   public app: A;
 
+  /**
+   * The WebSocket adapter instance.
+   */
   public websocketAdapter: WSA;
 
+  /**
+   * The port number.
+   */
   protected port: number;
 
+  /**
+   * Sets the port number.
+   *
+   * @param {number} port - The port number to set.
+   */
   public abstract setPort(port: number): void;
 
+  /**
+   * Uses a middleware.
+   *
+   * @param {BaseMiddleware<R, S>} middleware - The middleware to use.
+   */
   public abstract use(middleware: BaseMiddleware<R, S>): void;
 
+  /**
+   * Registers a route.
+   *
+   * @param {RouteParams<AM, AH>} params - The route parameters.
+   */
   public abstract registerRoute(params: RouteParams<AM, AH>): void;
 
+  /**
+   * Prepares middlewares.
+   *
+   * @param {BaseMiddleware<R, S> | BaseMiddleware<R, S>[]} middlewares - The middlewares to prepare.
+   * @returns {any[]} The prepared middlewares.
+   */
   public abstract prepareMiddlewares(middlewares: BaseMiddleware<R, S> | BaseMiddleware<R, S>[]): any[];
 
+  /**
+   * Prepares a handler.
+   *
+   * @param {H} handler - The handler to prepare.
+   * @returns {any} The prepared handler.
+   */
   public abstract prepareHandler(handler: H): any;
 
+  /**
+   * Starts the server.
+   *
+   * @returns {Promise<Server>} A promise that resolves to the server instance.
+   */
   public abstract start(): Promise<Server>;
 
+  /**
+   * Sets an error handler.
+   *
+   * @param {any} errorHandler - The error handler to set.
+   */
   public abstract onError(errorHandler: any): void;
 
+  /**
+   * Prepares a validator.
+   *
+   * @param {ValidatorClass<AM>} validator - The validator to prepare.
+   * @returns {any} The prepared validator.
+   */
   public abstract prepareValidator(validator: ValidatorClass<AM>): any;
 
 }

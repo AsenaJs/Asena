@@ -2,6 +2,7 @@
  * Enum representing various component constants used in the IOC (Inversion of Control) container.
  */
 export enum ComponentConstants {
+    RouteKey = '_routeKey',
     DependencyKey = '_IDependencies',
     ScopeKey = '_IScope',
     NameKey = '_IName',
