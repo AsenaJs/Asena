@@ -1,3 +1,3 @@
-export * from './inejct';
-export * from './implements';
-export * from '../component';
+export * from './Inject';
+export * from './Implements';
+export * from '../componentUtils';

@@ -99,6 +99,14 @@ export class DefaultContextWrapper implements AsenaContext<HonoRequest<any, any>
     this._context.set(key, value);
   }
 
+  public setWebSocketValue(value: any): void {
+    this._context.set('_websocketData', value);
+  }
+
+  public getWebSocketValue<T>(): T {
+    return this._context.get('_websocketData') as T;
+  }
+
   public html(data: string, statusOrOptions?: SendOptions | number) {
     const { headers = {}, status = 200 } =
       typeof statusOrOptions === 'number' ? { status: statusOrOptions } : statusOrOptions || {};
