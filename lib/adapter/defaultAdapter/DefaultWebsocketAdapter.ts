@@ -23,15 +23,17 @@ export class DefaultWebsocketAdapter extends AsenaWebsocketAdapter<Hono, Middlew
       this.websockets = [];
     }
 
+    websocketHandlers.namespace = getMetadata(ComponentConstants.PathKey, websocketHandlers.constructor);
+
     this.websockets.push({ socket: websocketHandlers, middlewares });
   }
 
   public prepareWebSocket(options?: WSOptions): void {
     this._websocket = {
-      open: this.createHandler('onOpen'),
+      open: this.createHandler('onOpenInternal'),
       message: this.createHandler('onMessage'),
       drain: this.createHandler('onDrain'),
-      close: this.createHandler('onClose'),
+      close: this.createHandler('onCloseInternal'),
       ping: this.createHandler('onPing'),
       pong: this.createHandler('onPong'),
       ...options,
@@ -78,28 +80,12 @@ export class DefaultWebsocketAdapter extends AsenaWebsocketAdapter<Hono, Middlew
   private createHandler(type: keyof WSEvents) {
     return (ws: ServerWebSocket<WebSocketData>, ...args: any[]) => {
       const websocket = this.websockets.find((h) => {
-        const path = getMetadata(ComponentConstants.PathKey, h.socket.constructor);
+        const path = h.socket.namespace;
 
         return path === ws.data.path;
       });
 
       if (websocket?.socket[type]) {
-        if (type === 'onOpen') {
-          websocket.socket.sockets.push({ id: ws.data.id, ws });
-
-          ws.subscribe(`/${ws.data.path}`);
-
-          ws.subscribe(ws.data.id);
-        }
-
-        if (type === 'onClose') {
-          ws.unsubscribe(`/${ws.data.path}`);
-
-          ws.unsubscribe(ws.data.id);
-
-          websocket.socket.sockets = websocket.socket.sockets.filter((s) => s.id !== ws.data.id);
-        }
-
         // @ts-ignore
         websocket?.socket[type](ws, ...args);
       }

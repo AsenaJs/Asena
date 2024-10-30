@@ -1,8 +1,7 @@
 import type { ComponentParams, ComponentType, ServiceParams } from '../types';
 import { Scope } from '../types';
 import { defineMetadata, getMetadata } from 'reflect-metadata/no-conflict';
-import {ComponentConstants} from "../constants";
-
+import { ComponentConstants } from '../constants';
 
 export const defineComponent = <T extends ComponentParams>(
   componentType: ComponentType,

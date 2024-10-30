@@ -12,6 +12,8 @@ export interface WSEvents<T extends ServerWebSocket<any> = ServerWebSocket<any>>
   onClose?: (ws: T, code: number, reason: string) => void | Promise<void>;
   onPing?: (ws: T, data: Buffer) => void | Promise<void>;
   onPong?: (ws: T, data: Buffer) => void | Promise<void>;
+  onOpenInternal: (ws: T) => void | Promise<void>;
+  onCloseInternal: (ws: T, code: number, reason: string) => void | Promise<void>;
 }
 
 /**
