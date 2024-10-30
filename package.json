@@ -1,10 +1,16 @@
 {
   "name": "@asenajs/asena",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "description": "Asena is a spring like framework for building web applications built with hono and bun",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/AsenaJs/Asena.git"
+  },
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "build": "tsc"
