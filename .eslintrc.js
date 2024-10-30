@@ -22,6 +22,7 @@ module.exports = {
   rules: {
     'lines-between-class-members': ['error', 'always'],
     'padded-blocks': ['error', { classes: 'always' }],
+    "@typescript-eslint/no-unused-vars": ["error", { "argsIgnorePattern": "^_" }],
     'padding-line-between-statements': [
       'error',
       { blankLine: 'always', prev: 'directive', next: '*' },

@@ -1,2 +1,2 @@
-export * from './handler';
+export * from './Handler';
 export * from './Defaultcontext';

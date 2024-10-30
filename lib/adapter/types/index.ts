@@ -1,4 +1,4 @@
 export * from './CookieExtra';
-export * from './routeParams';
+export * from './RouteParams';
 export * from './SendOptions';
 

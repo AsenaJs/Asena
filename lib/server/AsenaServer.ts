@@ -2,9 +2,7 @@ import type { Class, MiddlewareClass } from './types';
 import { IocEngine } from '../ioc';
 import { readConfigFile } from '../ioc/helper/fileHelper';
 import { ComponentType } from '../ioc/types';
-import { MiddlewaresKey, NameKey, OverrideKey, PathKey } from '../ioc/constants';
 import { getMetadata } from 'reflect-metadata/no-conflict';
-import { RouteKey } from './web/helper';
 import type { ApiHandler, BaseMiddleware, Route } from './web/types';
 import * as path from 'node:path';
 import type { AsenaService, ServerLogger } from '../services';
@@ -12,6 +10,11 @@ import { green, yellow } from '../services';
 import type { AsenaMiddlewareService } from './web/middleware';
 import type { AsenaAdapter } from '../adapter';
 import { DefaultAdapter } from '../adapter/defaultAdapter';
+import type { AsenaWebSocketService, WebSocketData } from './web/websocket';
+import type { Server } from 'bun';
+import type { AsenaWebsocketAdapter } from '../adapter/AsenaWebsocketAdapter';
+import { ComponentConstants } from '../ioc/constants';
+import { AsenaWebSocketServer } from './web/websocket/AsenaWebSocketServer';
 
 export class AsenaServer {
 
@@ -23,9 +26,12 @@ export class AsenaServer {
 
   private _logger: ServerLogger;
 
-  private _adapter: AsenaAdapter<any, any, any, any, any>;
+  private _adapter: AsenaAdapter<any, any, any, any, any, any, AsenaWebsocketAdapter<any, any>>;
+
+  private server: Server;
 
   public constructor(adapter?: AsenaAdapter<any, any, any, any, any>) {
+    // TODO: those are causing bugs some times we need to put them into another place
     const config = readConfigFile();
 
     if (!config) {
@@ -60,17 +66,17 @@ export class AsenaServer {
 
     await this.prepareServerServices();
 
-    this._logger.info('Controllers initializing');
+    this.initializeControllers();
 
-    await this.initializeControllers();
-
-    this._logger.info('Controllers initialized');
+    this.prepareWebSocket();
 
     this.configureErrorHandling();
 
     this._logger.info('Server started on port ' + this._port);
 
-    await this._adapter.start();
+    this.server = await this._adapter.start();
+
+    this.updateWebSockets();
   }
 
   public port(port: number): AsenaServer {
@@ -87,7 +93,7 @@ export class AsenaServer {
     return this;
   }
 
-  private async initializeControllers(): Promise<void> {
+  private initializeControllers() {
     const controllers = this._ioc.container.getAll<Class>(ComponentType.CONTROLLER);
 
     if (controllers !== null) {
@@ -104,12 +110,12 @@ export class AsenaServer {
     }
 
     for (const controller of this.controllers) {
-      const routes: Route = getMetadata(RouteKey, controller) || {};
+      const routes: Route = getMetadata(ComponentConstants.RouteKey, controller) || {};
 
-      const routePath: string = getMetadata(PathKey, controller.constructor) || '';
+      const routePath: string = getMetadata(ComponentConstants.PathKey, controller.constructor) || '';
 
       for (const [name, params] of Object.entries(routes)) {
-        const lastPath = path.join(routePath, params.path);
+        const lastPath = path.join(`${routePath}/`, params.path);
 
         this._logger.info(
           `METHOD: ${yellow(params.method.toUpperCase())}, PATH: ${yellow(lastPath)}${params.description ? `, DESCRIPTION: ${params.description}` : ''}, ${green('READY')}`,
@@ -129,15 +135,15 @@ export class AsenaServer {
     }
   }
 
-  private prepareMiddleware(controller: Class, params: ApiHandler) {
-    const topMiddlewares = getMetadata(MiddlewaresKey, controller.constructor) || [];
-    const middleWareClasses: MiddlewareClass[] = [...topMiddlewares, ...(params.middlewares || [])];
+  private prepareMiddleware(controller: Class, params?: ApiHandler) {
+    const topMiddlewares = getMetadata(ComponentConstants.MiddlewaresKey, controller.constructor) || [];
+    const middleWareClasses: MiddlewareClass[] = [...topMiddlewares, ...(params?.middlewares || [])];
 
     const middlewares: BaseMiddleware<any, any>[] = [];
 
     for (const middleware of middleWareClasses) {
-      const name = getMetadata(NameKey, middleware);
-      const override = getMetadata(OverrideKey, middleware);
+      const name = getMetadata(ComponentConstants.NameKey, middleware);
+      const override = getMetadata(ComponentConstants.OverrideKey, middleware);
 
       let instances = this._ioc.container.get<AsenaMiddlewareService<any, any>>(name);
 
@@ -153,6 +159,64 @@ export class AsenaServer {
     }
 
     return middlewares;
+  }
+
+  private prepareWebSocket() {
+    const webSockets = this._ioc.container.getAll<AsenaWebSocketService<WebSocketData>>(ComponentType.WEBSOCKET);
+
+    if (!webSockets) {
+      this._logger.info('No websockets found');
+
+      return;
+    }
+
+    // flat the array
+    const flatWebSockets = webSockets.flat();
+    const registeredPaths = new Set<string>();
+
+    for (const webSocket of flatWebSockets) {
+      const path = getMetadata(ComponentConstants.PathKey, webSocket.constructor);
+
+      if (!path) {
+        throw new Error('Path not found in WebSocket');
+      }
+
+      if (registeredPaths.has(path)) {
+        throw new Error(`Duplicate WebSocket path found: ${path}`);
+      }
+
+      registeredPaths.add(path);
+
+      const middlewares = this.prepareMiddleware(webSocket as unknown as Class);
+
+      this._adapter.websocketAdapter.registerWebSocket(webSocket, this._adapter.prepareMiddlewares(middlewares));
+
+      this._logger.info(
+        `WebSocket: ${green(webSocket.constructor.name)} initialized with path: ${yellow(`/${path}`)} ${green('READY')}`,
+      );
+
+      if (flatWebSockets.length > 0) {
+        this._adapter.websocketAdapter.prepareWebSocket();
+      }
+    }
+  }
+
+  private updateWebSockets() {
+    const webSockets = this._ioc.container.getAll<AsenaWebSocketService<WebSocketData>>(ComponentType.WEBSOCKET);
+
+    if (!webSockets) {
+      return;
+    }
+
+    // flat the array
+    const flatWebSockets = webSockets.flat();
+
+    for (const webSocket of flatWebSockets) {
+      // getPath key
+      const path = getMetadata(ComponentConstants.PathKey, webSocket.constructor);
+
+      webSocket.server = new AsenaWebSocketServer(this.server, path);
+    }
   }
 
   private async prepareServerServices() {

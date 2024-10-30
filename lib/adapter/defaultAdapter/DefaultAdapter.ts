@@ -1,5 +1,6 @@
 import { AsenaAdapter } from '../AsenaAdapter';
 import { type Context, Hono, type HonoRequest, type MiddlewareHandler, type Next } from 'hono';
+import type { Server } from 'bun';
 import * as bun from 'bun';
 import type { RouteParams } from '../types';
 import { createFactory } from 'hono/factory';
@@ -9,12 +10,15 @@ import { HttpMethod } from '../../server/web/http';
 import type { BaseMiddleware } from '../../server/web/types';
 import type { ErrorHandler, Handler } from './types';
 import type { ValidatorClass } from '../../server/types';
+import { DefaultWebsocketAdapter } from './DefaultWebsocketAdapter';
 
 export class DefaultAdapter extends AsenaAdapter<Hono, Handler, MiddlewareHandler, H> {
 
   public app = new Hono();
 
-  protected port: number;
+  public websocketAdapter = new DefaultWebsocketAdapter(this.app);
+
+  private server: Server;
 
   public use(middleware: BaseMiddleware<HonoRequest, Response>) {
     this.app.use(...this.prepareMiddlewares(middleware));
@@ -83,7 +87,13 @@ export class DefaultAdapter extends AsenaAdapter<Hono, Handler, MiddlewareHandle
   }
 
   public async start() {
-    bun.serve({ port: this.port, fetch: this.app.fetch });
+    this.websocketAdapter.startWebSocket();
+
+    this.server = bun.serve({ port: this.port, fetch: this.app.fetch, websocket: this.websocketAdapter.websocket });
+
+    this.websocketAdapter.setServer(this.server);
+
+    return this.server;
   }
 
   public prepareMiddlewares(
