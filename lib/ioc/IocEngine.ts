@@ -24,10 +24,16 @@ export class IocEngine {
     this.config = config;
   }
 
-  public async searchAndRegister(): Promise<void> {
-    const files: string[] = getAllFiles(this.config.sourceFile);
+  public async searchAndRegister(components?: Component[]): Promise<void> {
+    if (components) {
+      this.injectables = components;
+    } else if (this.config) {
+      const files: string[] = getAllFiles(this.config.sourceFolder);
 
-    this.injectables = await this.getInjectables(files);
+      this.injectables = await this.getInjectables(files);
+    } else {
+      throw new Error('Config file not found');
+    }
 
     const injectableClasses = this.injectables.map((c) => c.Class);
 
