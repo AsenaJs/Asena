@@ -18,7 +18,7 @@ export class IocEngine {
 
   private readonly config: IocConfig;
 
-  public constructor(config: IocConfig) {
+  public constructor(config?: IocConfig) {
     this._container = new Container();
 
     this.config = config;
@@ -32,7 +32,7 @@ export class IocEngine {
 
       this.injectables = await this.getInjectables(files);
     } else {
-      throw new Error('Config file not found');
+      throw new Error('No components found');
     }
 
     const injectableClasses = this.injectables.map((c) => c.Class);

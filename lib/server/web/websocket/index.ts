@@ -1,2 +1,3 @@
-export * from './WebSocketService';
+export * from './AsenaWebSocketService';
 export * from './types';
+export * from './AsenaSocket';

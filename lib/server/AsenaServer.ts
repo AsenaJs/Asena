@@ -33,8 +33,13 @@ export class AsenaServer {
   private server: Server;
 
   public constructor(adapter?: AsenaAdapter<any, any, any, any, any>) {
-    // TODO: those are causing bugs some times we need to put them into another place
+    this.prepareLogger();
+
     const config = readConfigFile();
+
+    if (!config) {
+      this._logger.error('Config file not found');
+    }
 
     this._ioc = new IocEngine(config);
 
@@ -43,10 +48,6 @@ export class AsenaServer {
     } else {
       this._adapter = adapter;
     }
-
-    // Logger setting
-    this.prepareLogger();
-    // Logger setting
   }
 
   public async start(): Promise<void> {

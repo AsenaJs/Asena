@@ -45,15 +45,3 @@ export interface WebSocketData<T = any> {
   id: string;
   path: string;
 }
-
-export interface WebSocketWithId<T> {
-  id: string;
-  ws: Socket<T>;
-}
-
-/**
- * Represents a WebSocket connection with a specific type of data.
- *
- * @template T - The type of data expected in the WebSocket object.
- */
-export type Socket<T = any> = ServerWebSocket<WebSocketData<T>>;
