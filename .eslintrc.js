@@ -22,7 +22,7 @@ module.exports = {
   rules: {
     'lines-between-class-members': ['error', 'always'],
     'padded-blocks': ['error', { classes: 'always' }],
-    "@typescript-eslint/no-unused-vars": ["error", { "argsIgnorePattern": "^_" }],
+    '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
     'padding-line-between-statements': [
       'error',
       { blankLine: 'always', prev: 'directive', next: '*' },
@@ -30,7 +30,7 @@ module.exports = {
       { blankLine: 'always', prev: ['case', 'default'], next: '*' },
       { blankLine: 'always', prev: ['const', 'let', 'var'], next: '*' },
       { blankLine: 'always', prev: 'class', next: '*' },
-      { blankLine: 'always', prev: ['for', 'if', 'iife', 'do', 'expression', 'try', 'while'], next: '*' },
+      { blankLine: 'always', prev: ['for', 'if', 'iife', 'do', 'try', 'while'], next: '*' },
       { blankLine: 'any', prev: ['const', 'let', 'var'], next: ['const', 'let', 'var'] },
     ],
   },

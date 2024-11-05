@@ -116,7 +116,7 @@ export class Container {
     for (const key of Object.values(getMetadata(ComponentConstants.DependencyKey, Class)) as Class[]) {
       const name = getMetadata(ComponentConstants.NameKey, key) || key.name;
 
-      const instance = this.get(name);
+      const instance = this.get<Class>(name);
 
       if (instance === null) {
         throw new Error('Instance cant be null ' + key);
@@ -126,7 +126,6 @@ export class Container {
         throw new Error('instance error cannot be null');
       }
 
-      // @ts-ignore
       injects[key.name] = instance;
     }
 

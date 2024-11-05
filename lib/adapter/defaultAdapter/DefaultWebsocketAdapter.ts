@@ -1,4 +1,10 @@
-import type { AsenaWebSocketService, WebSocketData, WSEvents, WSOptions } from '../../server/web/websocket';
+import {
+  AsenaSocket,
+  type AsenaWebSocketService,
+  type WebSocketData,
+  type WSEvents,
+  type WSOptions,
+} from '../../server/web/websocket';
 import { AsenaWebsocketAdapter } from '../AsenaWebsocketAdapter';
 import type { Context, Hono, MiddlewareHandler } from 'hono';
 import type { Server, ServerWebSocket, WebSocketHandler } from 'bun';
@@ -52,8 +58,6 @@ export class DefaultWebsocketAdapter extends AsenaWebsocketAdapter<Hono, Middlew
     return this._websocket;
   }
 
-  // eslint-disable-next-line accessor-pairs
-
   public setServer(server: Server) {
     this._server = server;
   }
@@ -86,8 +90,7 @@ export class DefaultWebsocketAdapter extends AsenaWebsocketAdapter<Hono, Middlew
       });
 
       if (websocket?.socket[type]) {
-        // @ts-ignore
-        websocket?.socket[type](ws, ...args);
+        (websocket?.socket[type] as (...args: any[]) => void)(new AsenaSocket(ws, websocket.socket), ...args);
       }
     };
   }
