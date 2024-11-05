@@ -1,5 +1,5 @@
-import type { Socket, WebSocketWithId } from './types';
 import type { AsenaWebSocketServer } from './AsenaWebSocketServer';
+import type { Socket } from './AsenaSocket';
 
 // TODO: server needs to be a generic , also write default implementation for server object it needs to have sockets
 
@@ -16,9 +16,14 @@ export class AsenaWebSocketService<T> {
   public server: AsenaWebSocketServer = null;
 
   /**
-   * An array to store WebSocket connections with their IDs.
+   * A map to store the WebSocket connections.
    */
-  private _sockets: WebSocketWithId<any>[] = [];
+  private _sockets: Map<string, Socket<T>> = new Map<string, Socket<T>>();
+
+  /**
+   * An map to store the rooms.
+   */
+  private _rooms: Map<string, Socket<T>[]>;
 
   /**
    * The namespace for the WebSocket connection.
@@ -48,6 +53,16 @@ export class AsenaWebSocketService<T> {
     let _nameSpace = nameSpace ? `${this.namespace}.${nameSpace}` : this.namespace;
 
     this.server.to(_nameSpace, data);
+  }
+
+  /**
+   * Retrieves the WebSocket connection by its ID.
+   *
+   * @param id - The ID of the WebSocket connection.
+   * @returns The WebSocket connection.
+   */
+  public getSocketsByRoom(room: string): Socket<T>[] {
+    return this.rooms.get(room);
   }
 
   /**
@@ -104,11 +119,11 @@ export class AsenaWebSocketService<T> {
   protected onOpen?(ws: Socket<T>): void | Promise<void>;
 
   protected async onOpenInternal(ws: Socket<T>): Promise<void> {
-    this.sockets.push({ id: ws.data.id, ws });
+    this.sockets.set(ws.id, ws);
 
-    ws.subscribe(`${ws.data.path}`);
+    ws.subscribe('');
 
-    ws.subscribe(`${ws.data.path}.${ws.data.id}`);
+    ws.subscribe(`${ws.data.id}`);
 
     if (this.onOpen) {
       await this.onOpen(ws);
@@ -116,22 +131,22 @@ export class AsenaWebSocketService<T> {
   }
 
   protected async onCloseInternal(ws: Socket<T>, _code: number, _reason: string): Promise<void> {
-    ws.unsubscribe(`${ws.data.path}`);
+    ws.unsubscribe(``);
 
-    ws.unsubscribe(`${ws.data.path}.${ws.data.id}`);
+    ws.unsubscribe(`.${ws.data.id}`);
 
-    this.sockets = this.sockets.filter((s) => s.id !== ws.data.id);
+    this.sockets.delete(ws.id);
 
     if (this.onClose) {
       await this.onClose(ws, _code, _reason);
     }
   }
 
-  public get sockets(): WebSocketWithId<any>[] {
+  public get sockets(): Map<string, Socket<T>> {
     return this._sockets;
   }
 
-  public set sockets(sockets: WebSocketWithId<any>[]) {
+  public set sockets(sockets: Map<string, Socket<T>>) {
     this._sockets = sockets;
   }
 
@@ -141,6 +156,14 @@ export class AsenaWebSocketService<T> {
 
   public set namespace(value: string) {
     this._namespace = value;
+  }
+
+  public get rooms(): Map<string, Socket<T>[]> {
+    return this._rooms;
+  }
+
+  public set rooms(value: Map<string, Socket<T>[]>) {
+    this._rooms = value;
   }
 
 }
