@@ -25,12 +25,12 @@ export class IocEngine {
   }
 
   public async searchAndRegister(components?: Component[]): Promise<void> {
-    if (components) {
+    if (components && components.length > 0) {
       this.injectables = components;
     } else if (this.config) {
       const files: string[] = getAllFiles(this.config.sourceFolder);
 
-      this.injectables = await this.getInjectables(files);
+      this.injectables = [...this.injectables, ...(await this.getInjectables(files))];
     } else {
       throw new Error('No components found');
     }
