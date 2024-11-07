@@ -1,6 +1,6 @@
 {
   "name": "@asenajs/asena",
-  "version": "0.1.9",
+  "version": "0.1.10",
   "description": "Asena is a spring like framework for building web applications built with hono and bun",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -15,7 +15,20 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "build": "tsc"
   },
-  "keywords": [],
+  "keywords": [
+    "asena",
+    "framework",
+    "ioc",
+    "hono",
+    "bun",
+    "rest",
+    "restful",
+    "websocket",
+    "dependency injection",
+    "typescript",
+    "app",
+    "api"
+  ],
   "author": "LibirSoft",
   "license": "MIT",
   "dependencies": {

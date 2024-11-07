@@ -11,6 +11,7 @@ import type { TypedResponse } from 'hono';
 export interface AsenaContext<R, S> {
   req: R;
   res: S;
+
   /**
    * Headers associated with the request.
    */
@@ -93,6 +94,15 @@ export interface AsenaContext<R, S> {
    * @returns {Promise<void>} A promise that resolves when the cookie is set.
    */
   setCookie: (name: string, value: string, options?: CookieExtra<any>) => Promise<void>;
+
+  /**
+   * Deletes a cookie from the response.
+   *
+   * @param {string} name - The name of the cookie to delete.
+   * @param {CookieExtra<any>} [options] - Optional settings for the cookie.
+   * @returns {Promise<void>} A promise that resolves when the cookie is deleted.
+   */
+  deleteCookie: (name: string, options?: CookieExtra<any>) => Promise<void>;
 
   /**
    * Retrieves a value from the context.

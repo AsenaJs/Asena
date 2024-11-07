@@ -1,7 +1,7 @@
 import type { Context, HonoRequest } from 'hono';
 import type { AsenaContext } from '../AsenaContext';
 import type { SendOptions } from '../types';
-import { getCookie, getSignedCookie, setCookie, setSignedCookie } from 'hono/cookie';
+import { getCookie, getSignedCookie, setCookie, setSignedCookie, deleteCookie } from 'hono/cookie'; // add delete cookie
 import type { CookieExtra } from '../types';
 import type { CookieOptions } from 'hono/utils/cookie';
 
@@ -79,12 +79,17 @@ export class DefaultContextWrapper implements AsenaContext<HonoRequest<any, any>
   }
 
   public async setCookie(name: string, value: string, options?: CookieExtra<CookieOptions>) {
-    const { secret, extraOptions } =
-      options || ({ secret: undefined, extraOptions: undefined } satisfies CookieExtra<CookieOptions>);
+    const { secret, extraOptions } = options ?? { secret: undefined, extraOptions: undefined };
 
     return secret
       ? setSignedCookie(this._context, name, value, secret, extraOptions)
       : setCookie(this._context, name, value, extraOptions);
+  }
+
+  public async deleteCookie(name: string, options?: CookieExtra<CookieOptions>) {
+    const { extraOptions } = options ?? { secret: undefined, extraOptions: undefined };
+
+    deleteCookie(this._context, name, extraOptions);
   }
 
   public redirect(url: string) {

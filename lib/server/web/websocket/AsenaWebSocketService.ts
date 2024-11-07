@@ -23,7 +23,7 @@ export class AsenaWebSocketService<T> {
   /**
    * An map to store the rooms.
    */
-  private _rooms: Map<string, Socket<T>[]>;
+  private _rooms: Map<string, Socket<T>[]> = new Map<string, Socket<T>[]>();
 
   /**
    * The namespace for the WebSocket connection.
