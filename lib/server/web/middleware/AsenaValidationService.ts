@@ -43,4 +43,4 @@ export abstract class AsenaValidationService<H> {
 
 }
 
-export type ValidationService = AsenaValidationService<MiddlewareHandler>;
+export abstract class ValidationService<H = MiddlewareHandler> extends AsenaValidationService<H> {}

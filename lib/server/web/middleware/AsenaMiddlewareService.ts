@@ -9,7 +9,6 @@ import type { HonoRequest } from 'hono';
  */
 export abstract class AsenaMiddlewareService<R, S> {
 
-
   /**
    * Handles the middleware logic.
    *
@@ -21,4 +20,7 @@ export abstract class AsenaMiddlewareService<R, S> {
 
 }
 
-export type MiddlewareService<P extends string = any, I = any> = AsenaMiddlewareService<HonoRequest<P, I>, Response>;
+export abstract class MiddlewareService<P extends string = any, I = any> extends AsenaMiddlewareService<
+  HonoRequest<P, I>,
+  Response
+> {}
