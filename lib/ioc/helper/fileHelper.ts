@@ -3,7 +3,6 @@ import * as path from 'node:path';
 import type { IocConfig } from '../types';
 // create file helper class
 
-
 export const getAllFiles = (dirPath: string, arrayOfFiles: string[] = []): string[] => {
   const files = fs.readdirSync(dirPath);
 

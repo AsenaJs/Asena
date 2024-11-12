@@ -1,34 +1,35 @@
 import { defineMetadata, getMetadata } from 'reflect-metadata/no-conflict';
 import type { Class } from '../../../server/types';
-import type { Injectable, Strategies } from '../../types';
+import type { Expression, Injectable } from '../../types';
 import { ComponentConstants } from '../../constants';
 
 /**
  * Property decorator to inject a dependency.
  *
- * @param {Class | string} Injection - The class or string identifier of the dependency to inject.
+ * @param {Class } Injection - The class of component to inject.
+ * @param expression - The expression to evaluate on the injected class.
  * @returns {PropertyDecorator} - The property decorator function.
  */
-export const Inject = (Injection: Class | string): PropertyDecorator => {
-  return (target: Object, propertyKey: string) => {
+export const Inject = (Injection: Class, expression?: (injectedClass:any) => any): PropertyDecorator => {
+  return (target: object, propertyKey: string):void => {
     const dependencies: Injectable = getMetadata(ComponentConstants.DependencyKey, target.constructor) || {};
 
     defineMetadata('design:type', Injection, target, propertyKey);
 
-    if (typeof Injection === 'string') {
-      const strategies: Strategies = getMetadata(ComponentConstants.StrategyKey, target.constructor) || {};
+    if (!dependencies[propertyKey]) {
+      dependencies[propertyKey] = Injection;
+    }
 
-      if (!strategies[propertyKey]) {
-        strategies[propertyKey] = Injection;
+    defineMetadata(ComponentConstants.DependencyKey, dependencies, target.constructor);
+
+    if (expression) {
+      const expressions: Expression = getMetadata(ComponentConstants.ExpressionKey, target.constructor) || {};
+
+      if (!expressions[propertyKey]) {
+        expressions[propertyKey] = expression;
       }
 
-      defineMetadata(ComponentConstants.StrategyKey, strategies, target.constructor);
-    } else {
-      if (!dependencies[propertyKey]) {
-        dependencies[propertyKey] = Injection;
-      }
-
-      defineMetadata(ComponentConstants.DependencyKey, dependencies, target.constructor);
+      defineMetadata(ComponentConstants.ExpressionKey, expressions, target.constructor);
     }
   };
 };

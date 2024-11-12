@@ -1,5 +1,5 @@
 import type { Class } from '../server/types';
-import type { ComponentType, ContainerService, Injectable } from './types';
+import type { ComponentType, ContainerService, Expression } from './types';
 import { getMetadata } from 'reflect-metadata/no-conflict';
 import { ComponentConstants } from './constants';
 
@@ -53,6 +53,10 @@ export class Container {
     }
 
     return service.instance as T;
+  }
+
+  public getStrategy<T>(key: string): T[] | null {
+    return this.get(key) as T[] | null;
   }
 
   /**
@@ -111,41 +115,14 @@ export class Container {
   private prepareInstance(Class: Class) {
     const newInstance = new Class();
 
-    const injects: Injectable = {};
+    this.injectDependencies(newInstance, Class); // dependency injection
 
-    for (const key of Object.values(getMetadata(ComponentConstants.DependencyKey, Class)) as Class[]) {
-      const name = getMetadata(ComponentConstants.NameKey, key) || key.name;
+    this.injectStrategies(newInstance, Class); // strategy injection
 
-      const instance = this.get<Class>(name);
+    return newInstance;
+  }
 
-      if (instance === null) {
-        throw new Error('Instance cant be null ' + key);
-      }
-
-      if (Array.isArray(instance) && instance.length < 1) {
-        throw new Error('instance error cannot be null');
-      }
-
-      injects[key.name] = instance;
-    }
-
-    // inject the services into the instance
-
-    for (const value of Object.values(injects)) {
-      for (const [k, v] of Object.entries(getMetadata(ComponentConstants.DependencyKey, Class))) {
-        // @ts-ignore
-        if (value instanceof v) {
-          if (getMetadata(ComponentConstants.IsMiddlewareKey, value.constructor)) {
-            continue;
-          }
-
-          (newInstance as any)[k] = value;
-        }
-      }
-    }
-
-    // strategy injection
-
+  private injectStrategies(newInstance: any, Class: Class) {
     for (const [propertyKey, interfaceName] of Object.entries(getMetadata(ComponentConstants.StrategyKey, Class))) {
       if (!interfaceName) {
         continue;
@@ -155,10 +132,41 @@ export class Container {
         throw new Error('interfaceName must be a string');
       }
 
-      (newInstance as any)[propertyKey] = this.get(interfaceName);
-    }
+      const strategy: Class[] = this.getStrategy<Class>(interfaceName);
 
-    return newInstance;
+      const expression: Expression = getMetadata(ComponentConstants.ExpressionKey, Class);
+
+      (newInstance as any)[propertyKey] =
+        expression && expression[propertyKey]
+          ? strategy.map((strategy) => expression[propertyKey](strategy))
+          : strategy;
+    }
+  }
+
+  private injectDependencies(newInstance: any, Class: Class) {
+    for (const [k, V] of Object.entries(getMetadata(ComponentConstants.DependencyKey, Class))) {
+      const name = getMetadata(ComponentConstants.NameKey, V) || (V as Class).name;
+
+      const instance = this.get<Class>(name);
+
+      if (instance === null) {
+        throw new Error('Instance cant be null ' + V);
+      }
+
+      if (Array.isArray(instance) && instance.length < 1) {
+        throw new Error('instance error cannot be null');
+      }
+
+      if (instance instanceof (V as Class)) {
+        if (getMetadata(ComponentConstants.IsMiddlewareKey, instance.constructor)) {
+          continue;
+        }
+
+        const expression: Expression = getMetadata(ComponentConstants.ExpressionKey, Class);
+
+        (newInstance as any)[k] = expression && expression[k] ? expression[k](instance) : instance;
+      }
+    }
   }
 
   public get services(): { [p: string]: ContainerService | ContainerService[] } {

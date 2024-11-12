@@ -25,24 +25,35 @@ export class IocEngine {
   }
 
   public async searchAndRegister(components?: Component[]): Promise<void> {
-    if (components && components.length > 0) {
-      this.injectables = components;
-    } else if (this.config) {
-      const files: string[] = getAllFiles(this.config.sourceFolder);
-
-      this.injectables = [...this.injectables, ...(await this.getInjectables(files))];
-    } else {
-      throw new Error('No components found');
-    }
+    // load components
+    await this.loadComponents(components);
 
     const injectableClasses = this.injectables.map((c) => c.Class);
 
-    const report = this.detectCycleAndReport(injectableClasses, this.injectables);
+    await this.validateAndRegisterComponents(injectableClasses);
+  }
 
-    if (report.hasCycle) {
-      throw new Error(`Dependency cycle detected: \n \n ${report.cyclePath}`);
+  private async loadComponents(components?: Component[]): Promise<void> {
+    if (components?.length) {
+      this.injectables = components;
+      return;
     }
 
+    if (!this.config) {
+      throw new Error('No components or configuration found');
+    }
+
+    const files = getAllFiles(this.config.sourceFolder);
+    const newInjectables = await this.getInjectables(files);
+
+    this.injectables = [...this.injectables, ...newInjectables];
+
+    if (!this.injectables.length) {
+      throw new Error('No components found');
+    }
+  }
+
+  private async validateAndRegisterComponents(injectableClasses: Class[]): Promise<void> {
     const sortedInjectables = this.topologicalSort(injectableClasses, this.injectables);
 
     this.register(sortedInjectables);
@@ -64,168 +75,199 @@ export class IocEngine {
     }
   }
 
-  private async getInjectables(files: string[]) {
-    const components = await Promise.all(
-      files.map(async (file) => {
-        if (file.endsWith('.ts') || file.endsWith('.js')) {
-          let fileContent: any;
-
-          try {
-            fileContent = await import(path.join(process.cwd(), file));
-          } catch (e) {
-            console.log(e);
-
-            return [];
-          }
-
-          return Object.values(fileContent);
-        }
-
-        return [] as Component[];
-      }),
+  private async getInjectables(files: string[]): Promise<Component[]> {
+    const validFiles = files.filter(
+      (file) => file.endsWith('.ts') || file.endsWith('.js') || file.endsWith('.tsx') || file.endsWith('.jsx'),
     );
 
-    return (
-      components
-        .flatMap((c) => c)
-        .filter((c) => {
-          try {
-            return !!getMetadata(ComponentConstants.IOCObjectKey, c as any);
-          } catch (e) {
-            return false;
-          }
-        })
-        // @ts-ignore
-        .map((_component: Class) => {
-          const face: string = getMetadata(ComponentConstants.InterfaceKey, _component);
-          const component: Component = {
-            Class: _component as Class,
-            interface: face,
-          };
+    const components = await this.importFiles(validFiles);
 
-          return component;
-        })
-        .flat() as Component[]
-    );
+    return this.processComponents(components);
+  }
+
+  private async importFiles(files: string[]): Promise<any[]> {
+    const importPromises = files.map(async (file) => {
+      try {
+        const filePath = path.join(process.cwd(), file);
+        const module = await import(filePath);
+
+        return Object.values(module);
+      } catch (error) {
+        // Use proper logging instead of console.log
+        console.error(`Failed to import file ${file}:`, error);
+        return [];
+      }
+    });
+
+    const results = await Promise.all(importPromises);
+
+    return results.flat();
+  }
+
+  private processComponents(components: any[]): Component[] {
+    return components
+      .filter((component) => this.isValidComponent(component))
+      .map((component) => this.createComponentObject(component))
+      .filter((component): component is Component => component !== null);
+  }
+
+  private isValidComponent(component: any): boolean {
+    try {
+      return !!getMetadata(ComponentConstants.IOCObjectKey, component);
+    } catch {
+      return false;
+    }
+  }
+
+  private createComponentObject(component: Class): Component | null {
+    try {
+      const interface_ = getMetadata(ComponentConstants.InterfaceKey, component);
+
+      return {
+        Class: component,
+        interface: interface_,
+      };
+    } catch (error) {
+      console.error('Failed to create component object:', error);
+      return null;
+    }
   }
 
   private topologicalSort(classes: Class[], injectables: Component[]): Class[] {
+    const inDegree = new Map<string, number>();
+    const adjacencyList = new Map<string, string[]>();
+    const nameToClass = new Map<string, Class>();
+
+    this.initializeGraph(classes, injectables, inDegree, adjacencyList, nameToClass);
+
+    const queue: string[] = [];
+
+    inDegree.forEach((degree, node) => {
+      if (degree === 0) queue.push(node);
+    });
+
     const sorted: Class[] = [];
-    const visited: Class[] = [];
+    let visitedCount = 0;
 
-    function visit(_component: Class | Class[]) {
-      let components = Array.isArray(_component) ? [..._component] : [_component];
+    while (queue.length > 0) {
+      const currentNode = queue.shift()!;
 
-      for (const component of components) {
-        if (visited.find((iter) => iter.name === component.name)) return;
+      visitedCount++;
 
-        visited.push(component);
+      const currentClass = nameToClass.get(currentNode);
 
-        const dependencies: Class[] = Object.values(
-          getMetadata(ComponentConstants.DependencyKey, component),
-        ) as Class[];
+      if (currentClass) {
+        sorted.push(currentClass);
+      }
 
-        const strategyDeps = getStrategyClass(
-          getMetadata(ComponentConstants.StrategyKey, component),
-          injectables,
-        ) as Class[];
+      const neighbors = adjacencyList.get(currentNode) || [];
 
-        const totalDeps: Class[] = [...dependencies, ...strategyDeps];
+      for (const neighbor of neighbors) {
+        const newDegree = inDegree.get(neighbor)! - 1;
 
-        for (const dep of totalDeps) {
-          visit(dep);
+        inDegree.set(neighbor, newDegree);
+
+        if (newDegree === 0) {
+          queue.push(neighbor);
         }
-
-        sorted.push(component);
       }
     }
 
-    for (const key of classes) {
-      visit(key);
+    if (visitedCount !== inDegree.size) {
+      const cycle = this.findCycle(adjacencyList);
+
+      throw new Error(`Circular dependency detected: ${cycle.join(' -> ')}`);
     }
 
-    return sorted;
+    return sorted.reverse();
   }
 
-  private detectCycleAndReport(
+  // eslint-disable-next-line max-params
+  private initializeGraph(
     classes: Class[],
     injectables: Component[],
-  ): { hasCycle: boolean; cyclePath: string | null } {
-    const visited: Set<Class> = new Set();
-    const recStack: Set<Class> = new Set();
-    const path: Map<Class, Class> = new Map();
+    inDegree: Map<string, number>,
+    adjacencyList: Map<string, string[]>,
+    nameToClass: Map<string, Class>,
+  ): void {
+    classes.forEach((cls) => {
+      const name = cls.name;
 
-    function visit(_component: Class | Class[]) {
-      let components = Array.isArray(_component) ? [..._component] : [_component];
+      nameToClass.set(name, cls);
+      inDegree.set(name, 0);
+      adjacencyList.set(name, []);
+    });
 
-      // eslint-disable-next-line no-unreachable-loop
-      for (const component of components) {
-        if (recStack.has(component)) {
-          let cycleComponent: Class | undefined = component;
-          const cyclePath: Class[] = [];
+    classes.forEach((cls) => {
+      const name = cls.name;
+      const dependencies = [...this.getDependencies(cls), ...this.getStrategyDependencies(cls, injectables)];
 
-          do {
-            cyclePath.push(cycleComponent!);
+      dependencies.forEach((dep) => {
+        if (dep) {
+          const depName = dep.name;
 
-            cycleComponent = path.get(cycleComponent!);
-          } while (cycleComponent && cycleComponent !== _component);
+          adjacencyList.get(name)?.push(depName);
+          inDegree.set(depName, (inDegree.get(depName) || 0) + 1);
+        }
+      });
+    });
+  }
 
-          cyclePath.push(component);
+  private findCycle(adjacencyList: Map<string, string[]>): string[] {
+    const visited = new Set<string>();
+    const recStack = new Set<string>();
+    const cycle: string[] = [];
+
+    const dfs = (node: string): boolean => {
+      if (recStack.has(node)) {
+        cycle.push(node);
+        return true;
+      }
+
+      if (visited.has(node)) return false;
+
+      visited.add(node);
+      recStack.add(node);
+
+      const neighbors = adjacencyList.get(node) || [];
+
+      for (const neighbor of neighbors) {
+        if (dfs(neighbor)) {
+          if (cycle[0] !== cycle[cycle.length - 1]) {
+            cycle.push(node);
+          }
 
           return true;
         }
-
-        if (visited.has(component)) {
-          return false;
-        }
-
-        visited.add(component);
-
-        recStack.add(component);
-
-        const dependencyDeps: Class[] = Object.values(
-          getMetadata(ComponentConstants.DependencyKey, component),
-        ) as Class[];
-
-        const strategyDeps = getStrategyClass(
-          getMetadata(ComponentConstants.StrategyKey, component),
-          injectables,
-        ) as Class[];
-
-        const totalDeps: Class[] = [...dependencyDeps, ...strategyDeps];
-
-        for (const _dep of totalDeps) {
-          if (!_dep) {
-            return true;
-          }
-
-          let deps = Array.isArray(_dep) ? [..._dep] : [_dep];
-
-          for (const dep of deps) {
-            path.set(dep, component);
-
-            if (visit(dep)) {
-              return true;
-            }
-          }
-        }
-
-        recStack.delete(component);
-
-        return false;
       }
+
+      recStack.delete(node);
+      return false;
+    };
+
+    for (const node of adjacencyList.keys()) {
+      if (dfs(node)) break;
     }
 
-    for (const component of classes) {
-      if (visit(component)) {
-        const recStackArray = Array.from(recStack);
-        const cyclePath = recStackArray.map((c) => c.name).join(' -> ');
+    return cycle.reverse();
+  }
 
-        return { hasCycle: true, cyclePath: recStackArray[recStackArray.length - 1].name + ' -> ' + cyclePath };
-      }
+  private getDependencies(component: Class): Class[] {
+    try {
+      return Object.values(getMetadata(ComponentConstants.DependencyKey, component) || {}) as Class[];
+    } catch {
+      return [];
     }
+  }
 
-    return { hasCycle: false, cyclePath: null };
+  private getStrategyDependencies(component: Class, injectables: Component[]): Class[] {
+    try {
+      const strategyMeta = getMetadata(ComponentConstants.StrategyKey, component);
+
+      return (getStrategyClass(strategyMeta, injectables) as Class[]) || [];
+    } catch {
+      return [];
+    }
   }
 
   public get container(): Container {
