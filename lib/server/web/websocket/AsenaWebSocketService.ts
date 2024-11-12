@@ -21,7 +21,7 @@ export class AsenaWebSocketService<T> {
   private _sockets: Map<string, Socket<T>> = new Map<string, Socket<T>>();
 
   /**
-   * An map to store the rooms.
+   * A map to store the rooms.
    */
   private _rooms: Map<string, Socket<T>[]> = new Map<string, Socket<T>[]>();
 
@@ -36,7 +36,7 @@ export class AsenaWebSocketService<T> {
    */
 
   public in(data?: any) {
-    this.server.to(this.namespace, data);
+    this.to(this.namespace, data);
   }
 
   /**
@@ -56,10 +56,10 @@ export class AsenaWebSocketService<T> {
   }
 
   /**
-   * Retrieves the WebSocket connection by its ID.
+   * Retrieves the sockets associated with a specific room.
    *
-   * @param id - The ID of the WebSocket connection.
-   * @returns The WebSocket connection.
+   * @param {string} room - The name of the room.
+   * @returns {Socket<T>[]} - An array of sockets in the specified room.
    */
   public getSocketsByRoom(room: string): Socket<T>[] {
     return this.rooms.get(room);

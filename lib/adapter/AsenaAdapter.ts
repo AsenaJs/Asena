@@ -51,8 +51,9 @@ export abstract class AsenaAdapter<
    * Uses a middleware.
    *
    * @param {BaseMiddleware<R, S>} middleware - The middleware to use.
+   * @param path - The path to use the middleware on.
    */
-  public abstract use(middleware: BaseMiddleware<R, S>): void;
+  public abstract use(middleware: BaseMiddleware<R, S>, path?: string): void;
 
   /**
    * Registers a route.

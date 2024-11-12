@@ -28,8 +28,15 @@ export abstract class AsenaWebsocketAdapter<A, MH> {
   public abstract prepareWebSocket(wsOptions?: WSOptions): void;
 
   /**
-   * Starts the WebSocket.
+   * Build the WebSocket object for the server.
    */
-  public abstract startWebSocket(): void;
+  public abstract buildWebsocket(): void;
+
+  /**
+   * Start the WebSocket server.
+   *
+   * @param {Server} server - The server to start.
+   */
+  public abstract startWebsocket(server: any): void;
 
 }
