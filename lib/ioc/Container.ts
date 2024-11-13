@@ -136,10 +136,23 @@ export class Container {
 
       const expression: Expression = getMetadata(ComponentConstants.ExpressionKey, Class);
 
-      (newInstance as any)[propertyKey] =
-        expression && expression[propertyKey]
-          ? strategy.map((strategy) => expression[propertyKey](strategy))
-          : strategy;
+      Object.defineProperty(newInstance, propertyKey, {
+        get() {
+          const value =
+            expression && expression[propertyKey] ? strategy.map((s) => expression[propertyKey](s)) : strategy;
+
+          Object.defineProperty(this, propertyKey, {
+            value,
+            writable: true,
+            enumerable: true,
+            configurable: false,
+          });
+
+          return value;
+        },
+        enumerable: true,
+        configurable: true,
+      });
     }
   }
 
@@ -164,7 +177,22 @@ export class Container {
 
         const expression: Expression = getMetadata(ComponentConstants.ExpressionKey, Class);
 
-        (newInstance as any)[k] = expression && expression[k] ? expression[k](instance) : instance;
+        Object.defineProperty(newInstance, k, {
+          get: () => {
+            const value = expression && expression[k] ? expression[k](instance) : instance;
+
+            Object.defineProperty(this, k, {
+              value,
+              writable: true,
+              enumerable: true,
+              configurable: false,
+            });
+
+            return value;
+          },
+          enumerable: true,
+          configurable: true,
+        });
       }
     }
   }

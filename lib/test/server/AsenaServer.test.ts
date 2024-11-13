@@ -8,7 +8,6 @@ import { Get } from '../../server/web/api';
 import type { Context } from '../../adapter/defaultAdapter';
 import { AsenaWebSocketService, type Socket } from '../../server/web/websocket';
 
-// Mock sınıflar
 @ServerService({
   name: 'TestService',
   scope: Scope.SINGLETON,
