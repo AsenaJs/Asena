@@ -9,7 +9,6 @@
     "allowJs": true,
     "experimentalDecorators": true,
     "emitDecoratorMetadata": true,
-
     // Bundler mode
     "moduleResolution": "bundler",
     "allowImportingTsExtensions": false,
@@ -23,10 +22,11 @@
     "strict": false,
     "skipLibCheck": true,
     "noFallthroughCasesInSwitch": true,
-
     // Some stricter flags
     "noUnusedLocals": true,
     "noUnusedParameters": true,
-    "noPropertyAccessFromIndexSignature": true,
-  }
+    "noPropertyAccessFromIndexSignature": true
+  },
+  "include": ["lib/**/*.ts"],
+  "exclude": ["node_modules", "lib/test/**/*.ts", "**/*.test.ts", "**/*.spec.ts"]
 }

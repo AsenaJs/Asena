@@ -20,8 +20,16 @@ export class DefaultAdapter extends AsenaAdapter<Hono, Handler, MiddlewareHandle
 
   private server: Server;
 
-  public use(middleware: BaseMiddleware<HonoRequest, Response>) {
-    this.app.use(...this.prepareMiddlewares(middleware));
+  public use(middleware: BaseMiddleware<HonoRequest, Response>, path?: string) {
+    const normalizedPath = path ? this.normalizePath(path) : undefined;
+    const preparedMiddlewares = this.prepareMiddlewares(middleware);
+
+    if (normalizedPath) {
+      this.app.use(normalizedPath, ...preparedMiddlewares);
+      return;
+    }
+
+    this.app.use(...preparedMiddlewares);
   }
 
   public registerRoute({
@@ -87,11 +95,11 @@ export class DefaultAdapter extends AsenaAdapter<Hono, Handler, MiddlewareHandle
   }
 
   public async start() {
-    this.websocketAdapter.startWebSocket();
+    this.websocketAdapter.buildWebsocket();
 
     this.server = bun.serve({ port: this.port, fetch: this.app.fetch, websocket: this.websocketAdapter.websocket });
 
-    this.websocketAdapter.setServer(this.server);
+    this.websocketAdapter.startWebsocket(this.server);
 
     return this.server;
   }
@@ -142,6 +150,10 @@ export class DefaultAdapter extends AsenaAdapter<Hono, Handler, MiddlewareHandle
       .map((key) => {
         return validatorInstance[key]().bind(validatorInstance);
       });
+  }
+
+  private normalizePath(path: string): string {
+    return `${path.endsWith('/') ? path : `${path}/`}*`;
   }
 
 }

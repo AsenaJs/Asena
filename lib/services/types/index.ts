@@ -1,2 +1,2 @@
 export * from './Logger';
-export * from './AsenaService';
+export * from '../serverService/AsenaService';

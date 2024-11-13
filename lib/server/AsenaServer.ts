@@ -1,20 +1,18 @@
-import type { Class, MiddlewareClass } from './types';
+import type { Class } from './types';
 import { IocEngine } from '../ioc';
 import { readConfigFile } from '../ioc/helper/fileHelper';
 import { type Component, ComponentType } from '../ioc/types';
 import { getMetadata } from 'reflect-metadata/no-conflict';
-import type { ApiHandler, BaseMiddleware, Route } from './web/types';
+import type { ApiHandler, BaseMiddleware, PrepareMiddlewareParams, Route } from './web/types';
 import * as path from 'node:path';
 import type { AsenaService, ServerLogger } from '../services';
 import { green, yellow } from '../services';
 import type { AsenaMiddlewareService } from './web/middleware';
 import type { AsenaAdapter } from '../adapter';
 import { DefaultAdapter } from '../adapter/defaultAdapter';
-import type { AsenaWebSocketService, WebSocketData } from './web/websocket';
-import type { Server } from 'bun';
+import type { AsenaWebSocketService, WebSocketData, WSOptions } from './web/websocket';
 import type { AsenaWebsocketAdapter } from '../adapter/AsenaWebsocketAdapter';
 import { ComponentConstants } from '../ioc/constants';
-import { AsenaWebSocketServer } from './web/websocket/AsenaWebSocketServer';
 
 export class AsenaServer {
 
@@ -30,7 +28,7 @@ export class AsenaServer {
 
   private _adapter: AsenaAdapter<any, any, any, any, any, any, AsenaWebsocketAdapter<any, any>>;
 
-  private server: Server;
+  private _wsOptions: WSOptions;
 
   public constructor(adapter?: AsenaAdapter<any, any, any, any, any>) {
     this.prepareLogger();
@@ -73,9 +71,7 @@ export class AsenaServer {
 
     this._logger.info('Server started on port ' + this._port);
 
-    this.server = await this._adapter.start();
-
-    this.updateWebSockets();
+    await this._adapter.start();
   }
 
   public components(components: Class[]): AsenaServer {
@@ -106,6 +102,12 @@ export class AsenaServer {
     return this;
   }
 
+  public wsOptions(options: WSOptions): AsenaServer {
+    this._wsOptions = options;
+
+    return this;
+  }
+
   private initializeControllers() {
     const controllers = this._ioc.container.getAll<Class>(ComponentType.CONTROLLER);
 
@@ -127,6 +129,8 @@ export class AsenaServer {
 
       const routePath: string = getMetadata(ComponentConstants.PathKey, controller.constructor) || '';
 
+      this.prepareTopMiddlewares({ controller, routePath });
+
       for (const [name, params] of Object.entries(routes)) {
         const lastPath = path.join(`${routePath}/`, params.path);
 
@@ -134,7 +138,7 @@ export class AsenaServer {
           `METHOD: ${yellow(params.method.toUpperCase())}, PATH: ${yellow(lastPath)}${params.description ? `, DESCRIPTION: ${params.description}` : ''}, ${green('READY')}`,
         );
 
-        const middlewares = this.prepareMiddleware(controller, params);
+        const middlewares = this.prepareMiddleware(params);
 
         this._adapter.registerRoute({
           method: params.method,
@@ -148,26 +152,54 @@ export class AsenaServer {
     }
   }
 
-  private prepareMiddleware(controller: Class, params?: ApiHandler) {
+  private prepareTopMiddlewares(
+    { controller, routePath }: PrepareMiddlewareParams,
+    websocket = false,
+  ): BaseMiddleware<any, any>[] {
     const topMiddlewares = getMetadata(ComponentConstants.MiddlewaresKey, controller.constructor) || [];
-    const middleWareClasses: MiddlewareClass[] = [...topMiddlewares, ...(params?.middlewares || [])];
+    const middlewareInstances: BaseMiddleware<any, any>[] = [];
 
+    for (const middleware of topMiddlewares) {
+      const name = getMetadata(ComponentConstants.NameKey, middleware);
+      const instances = this._ioc.container.get<AsenaMiddlewareService<any, any>>(name);
+
+      if (!instances) continue;
+
+      const normalizedInstances = Array.isArray(instances) ? instances : [instances];
+
+      for (const instance of normalizedInstances) {
+        const override = getMetadata(ComponentConstants.OverrideKey, instance);
+        const middlewareConfig = { middlewareService: instance, override };
+
+        if (websocket) {
+          middlewareInstances.push(middlewareConfig);
+        } else {
+          this._adapter.use(middlewareConfig, routePath);
+        }
+      }
+    }
+
+    return websocket ? middlewareInstances : [];
+  }
+
+  private prepareMiddleware(middlewareParams: ApiHandler): BaseMiddleware<any, any>[] {
     const middlewares: BaseMiddleware<any, any>[] = [];
+    const routeMiddlewares = middlewareParams?.middlewares || [];
 
-    for (const middleware of middleWareClasses) {
+    for (const middleware of routeMiddlewares) {
       const name = getMetadata(ComponentConstants.NameKey, middleware);
       const override = getMetadata(ComponentConstants.OverrideKey, middleware);
+      const instances = this._ioc.container.get<AsenaMiddlewareService<any, any>>(name);
 
-      let instances = this._ioc.container.get<AsenaMiddlewareService<any, any>>(name);
+      if (!instances) continue;
 
-      if (!instances) {
-        continue;
-      }
+      const normalizedInstances = Array.isArray(instances) ? instances : [instances];
 
-      instances = Array.isArray(instances) ? instances : [instances];
-
-      for (const instance of instances) {
-        middlewares.push({ middlewareService: instance, override });
+      for (const instance of normalizedInstances) {
+        middlewares.push({
+          middlewareService: instance,
+          override,
+        });
       }
     }
 
@@ -177,9 +209,8 @@ export class AsenaServer {
   private prepareWebSocket() {
     const webSockets = this._ioc.container.getAll<AsenaWebSocketService<WebSocketData>>(ComponentType.WEBSOCKET);
 
-    if (!webSockets) {
+    if (!webSockets?.length) {
       this._logger.info('No websockets found');
-
       return;
     }
 
@@ -200,46 +231,25 @@ export class AsenaServer {
 
       registeredPaths.add(path);
 
-      const middlewares = this.prepareMiddleware(webSocket as unknown as Class);
+      const middlewares = this.prepareTopMiddlewares({ controller: webSocket as unknown as Class }, true);
 
       this._adapter.websocketAdapter.registerWebSocket(webSocket, this._adapter.prepareMiddlewares(middlewares));
 
       this._logger.info(
         `WebSocket: ${green(webSocket.constructor.name)} initialized with path: ${yellow(`/${path}`)} ${green('READY')}`,
       );
-
-      if (flatWebSockets.length > 0) {
-        this._adapter.websocketAdapter.prepareWebSocket();
-      }
-    }
-  }
-
-  private updateWebSockets() {
-    const webSockets = this._ioc.container.getAll<AsenaWebSocketService<WebSocketData>>(ComponentType.WEBSOCKET);
-
-    if (!webSockets) {
-      return;
     }
 
-    // flat the array
-    const flatWebSockets = webSockets.flat();
-
-    for (const webSocket of flatWebSockets) {
-      // getPath key
-      const path = getMetadata(ComponentConstants.PathKey, webSocket.constructor);
-
-      webSocket.server = new AsenaWebSocketServer(this.server, path);
+    if (flatWebSockets.length > 0) {
+      this._adapter.websocketAdapter.prepareWebSocket(this._wsOptions);
     }
   }
 
   private async prepareServerServices() {
-    const serverServices: (AsenaService | AsenaService[])[] = this._ioc.container.getAll<AsenaService>(
-      ComponentType.SERVER_SERVICE,
-    );
+    const serverServices = this._ioc.container.getAll<AsenaService>(ComponentType.SERVER_SERVICE);
 
-    if (!serverServices) {
+    if (!serverServices?.length) {
       this._logger.info('No server services found');
-
       return;
     }
 
@@ -247,14 +257,21 @@ export class AsenaServer {
     const flatServerServices = serverServices.flat();
 
     for (const service of flatServerServices) {
-      this._logger.info(`Service: ${green(service.constructor.name)} found`);
+      const serviceName = green(service.constructor.name);
 
-      // Todo: This is a temporary solution. We need to find a better way to handle this. Maybe create a interface with then using it with proxy idk.
-      if (service['onStart']) {
-        await service['onStart']();
+      try {
+        this._logger.info(`Service: ${serviceName} found`);
+
+        // Type guard to check if service has onStart method
+        if (service['onStart']) {
+          await service['onStart']();
+        }
+
+        this._logger.info(`Service: ${serviceName} initialized`);
+      } catch (error) {
+        this._logger.error(`Failed to initialize service ${serviceName}: ${error.message}`);
+        throw error;
       }
-
-      this._logger.info(`Service: ${green(service.constructor.name)} initialized`);
     }
   }
 

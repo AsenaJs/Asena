@@ -11,6 +11,7 @@ import type { Server, ServerWebSocket, WebSocketHandler } from 'bun';
 import * as crypto from 'node:crypto';
 import { getMetadata } from 'reflect-metadata/no-conflict';
 import { ComponentConstants } from '../../ioc/constants';
+import { AsenaWebSocketServer } from '../../server/web/websocket/AsenaWebSocketServer';
 
 export class DefaultWebsocketAdapter extends AsenaWebsocketAdapter<Hono, MiddlewareHandler> {
 
@@ -46,7 +47,7 @@ export class DefaultWebsocketAdapter extends AsenaWebsocketAdapter<Hono, Middlew
     };
   }
 
-  public startWebSocket(): void {
+  public buildWebsocket(): void {
     if (!this._websocket) return;
 
     for (const websocket of this.websockets) {
@@ -54,16 +55,16 @@ export class DefaultWebsocketAdapter extends AsenaWebsocketAdapter<Hono, Middlew
     }
   }
 
-  public get websocket(): WebSocketHandler {
-    return this._websocket;
-  }
-
-  public setServer(server: Server) {
+  public startWebsocket(server: Server) {
     this._server = server;
+
+    for (const websocket of this.websockets) {
+      websocket.socket.server = new AsenaWebSocketServer(server, websocket.socket.namespace);
+    }
   }
 
   private upgradeWebSocket(websocket: AsenaWebSocketService<any>, middlewares: MiddlewareHandler[]): void {
-    const path = getMetadata(ComponentConstants.PathKey, websocket.constructor);
+    const path = websocket.namespace;
 
     this.app.get(`/${path}`, ...middlewares, async (c: Context, next) => {
       const websocketData = c.get('_websocketData') || {};
@@ -93,6 +94,10 @@ export class DefaultWebsocketAdapter extends AsenaWebsocketAdapter<Hono, Middlew
         (websocket?.socket[type] as (...args: any[]) => void)(new AsenaSocket(ws, websocket.socket), ...args);
       }
     };
+  }
+
+  public get websocket(): WebSocketHandler {
+    return this._websocket;
   }
 
 }
