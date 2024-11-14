@@ -6,6 +6,7 @@ import { Inject } from '../../ioc/component/decorators';
 import { AsenaService } from '../../services';
 import { Get } from '../../server/web/api';
 import type { Context } from '../../adapter/defaultAdapter';
+import type { WSOptions } from '../../server/web/websocket';
 import { AsenaWebSocketService, type Socket } from '../../server/web/websocket';
 
 @ServerService({
@@ -91,6 +92,21 @@ describe('AsenaServer', () => {
     expect(mockAdapter.setPort).toHaveBeenCalledWith(port);
   });
 
+  test('should register wsOptions correctly', async () => {
+    const options: WSOptions = {
+      perMessageDeflate: undefined,
+      maxPayloadLimit: 1000,
+    };
+
+    const components = [TestServerService, TestController, TestWebSocket];
+
+    server.components(components);
+    server.wsOptions(options);
+    await server.start();
+
+    expect(mockAdapter.websocketAdapter.prepareWebSocket).toHaveBeenCalledWith(options);
+  });
+
   test('should register components', async () => {
     const components = [TestServerService, TestController, TestWebSocket];
 
@@ -126,6 +142,15 @@ describe('AsenaServer', () => {
 
     expect(mockLogger.info).toHaveBeenCalled();
     expect(mockAdapter.start).toHaveBeenCalled();
+  });
+
+  test('should register websockets', async () => {
+    const components = [TestServerService, TestWebSocket];
+
+    server.components(components);
+    await server.start();
+
+    expect(mockAdapter.websocketAdapter.registerWebSocket).toHaveBeenCalledWith(expect.any(TestWebSocket), []);
   });
 
   test('should handle server services', async () => {
