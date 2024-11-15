@@ -144,7 +144,7 @@ export class AsenaServer {
           method: params.method,
           path: lastPath,
           middleware: this._adapter.prepareMiddlewares(middlewares),
-          handler: this._adapter.prepareHandler(controller[name].bind(controller)),
+          handler: this._adapter.prepareHandler(()=>controller[name]),
           staticServe: params.staticServe,
           validator: this._adapter.prepareValidator(params.validator),
         });

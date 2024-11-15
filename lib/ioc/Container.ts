@@ -7,6 +7,10 @@ export class Container {
 
   private _services: { [key: string]: ContainerService | ContainerService[] } = {};
 
+  public constructor(services?: { [key: string]: ContainerService | ContainerService[] }) {
+    this._services = services || {};
+  }
+
   public register(key: string, Class: Class, singleton: boolean) {
     if (this._services[key]) {
       if (Array.isArray(this._services[key])) {
