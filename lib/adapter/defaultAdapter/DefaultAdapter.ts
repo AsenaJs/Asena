@@ -14,6 +14,8 @@ import { DefaultWebsocketAdapter } from './DefaultWebsocketAdapter';
 
 export class DefaultAdapter extends AsenaAdapter<Hono, Handler, MiddlewareHandler, H> {
 
+  private static readonly VALIDATOR_METHODS = ['json', 'query', 'form', 'param', 'header'] as const;
+
   public app = new Hono();
 
   public websocketAdapter = new DefaultWebsocketAdapter(this.app);
@@ -143,11 +145,9 @@ export class DefaultAdapter extends AsenaAdapter<Hono, Handler, MiddlewareHandle
 
     const validatorInstance = new Validator();
 
-    return ['json', 'query', 'form', 'param', 'header']
-      .filter((key) => validatorInstance[key])
-      .map((key) => {
-        return validatorInstance[key];
-      });
+    return DefaultAdapter.VALIDATOR_METHODS.filter((key) => validatorInstance[key]).map((key) => {
+      return validatorInstance[key]();
+    });
   }
 
   private normalizePath(path: string): string {
