@@ -113,7 +113,7 @@ export class DefaultAdapter extends AsenaAdapter<Hono, Handler, MiddlewareHandle
 
     return _middlewares.map((middleware) => {
       if (middleware.override) {
-        return middleware.middlewareService.handle.bind(middleware.middlewareService);
+        return (c, next) => middleware.middlewareService.handle(c, next);
       }
 
       return factory.createMiddleware(async (context: Context, next: Next) => {
@@ -122,10 +122,8 @@ export class DefaultAdapter extends AsenaAdapter<Hono, Handler, MiddlewareHandle
     });
   }
 
-  public prepareHandler(handler: Handler) {
-    return async function (context: Context) {
-      return await handler(new DefaultContextWrapper(context));
-    };
+  public prepareHandler(handler: () => Handler) {
+    return (c: Context) => handler()(new DefaultContextWrapper(c));
   }
 
   public onError(errorHandler: ErrorHandler) {
@@ -148,7 +146,7 @@ export class DefaultAdapter extends AsenaAdapter<Hono, Handler, MiddlewareHandle
     return ['json', 'query', 'form', 'param', 'header']
       .filter((key) => validatorInstance[key])
       .map((key) => {
-        return validatorInstance[key]().bind(validatorInstance);
+        return (c: Context) => validatorInstance[key](c);
       });
   }
 

@@ -58,6 +58,10 @@ export class DefaultWebsocketAdapter extends AsenaWebsocketAdapter<Hono, Middlew
   public startWebsocket(server: Server) {
     this._server = server;
 
+    if (!this.websockets) {
+      return;
+    }
+
     for (const websocket of this.websockets) {
       websocket.socket.server = new AsenaWebSocketServer(server, websocket.socket.namespace);
     }

@@ -8,7 +8,7 @@ import * as path from 'node:path';
 import type { AsenaService, ServerLogger } from '../services';
 import { green, yellow } from '../services';
 import type { AsenaMiddlewareService } from './web/middleware';
-import type { AsenaAdapter } from '../adapter';
+import type { AsenaAdapter, AsenaContext } from '../adapter';
 import { DefaultAdapter } from '../adapter/defaultAdapter';
 import type { AsenaWebSocketService, WebSocketData, WSOptions } from './web/websocket';
 import type { AsenaWebsocketAdapter } from '../adapter/AsenaWebsocketAdapter';
@@ -144,7 +144,7 @@ export class AsenaServer {
           method: params.method,
           path: lastPath,
           middleware: this._adapter.prepareMiddlewares(middlewares),
-          handler: this._adapter.prepareHandler(()=>controller[name]),
+          handler: this._adapter.prepareHandler(() => (ctx: AsenaContext<any, any>) => controller[name](ctx)),
           staticServe: params.staticServe,
           validator: this._adapter.prepareValidator(params.validator),
         });
