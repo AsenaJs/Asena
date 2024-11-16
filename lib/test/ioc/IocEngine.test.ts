@@ -4,8 +4,10 @@ import type { Component as ComponentType } from '../../ioc/types';
 import { Scope } from '../../ioc/types';
 import { Component } from '../../server/decorators';
 import { Inject } from '../../ioc/component/decorators';
-import { ExportedTestService } from './src/ExportedTestService';
-import { ExportedTestController } from './src/ExportedTestController';
+import { ExportedTestService } from '../example-app-structure/service/ExportedTestService';
+import { ExportedTestController } from '../example-app-structure/controller/ExportedTestController';
+import type { AsenaContext } from '../../adapter';
+import { createMockContext } from '../utils/createMockContext';
 
 @Component({
   name: 'TestService',
@@ -36,9 +38,11 @@ class TestController {
 
 describe('IocEngine', () => {
   let iocEngine: IocEngine;
+  let mockContext: AsenaContext<Request, Response>;
 
   beforeEach(() => {
     iocEngine = new IocEngine();
+    mockContext = createMockContext();
   });
 
   test('should create instance', () => {
@@ -63,14 +67,14 @@ describe('IocEngine', () => {
   });
 
   test('should register components automatically', async () => {
-    iocEngine = new IocEngine({ sourceFolder: 'lib/test/ioc/src' });
+    iocEngine = new IocEngine({ sourceFolder: 'lib/test/example-app-structure' });
     await iocEngine.searchAndRegister();
     const testService = iocEngine.container.get<ExportedTestService>('ExportedTestService');
     const testController = iocEngine.container.get<ExportedTestController>('ExportedTestController');
 
     expect(testService).toBeInstanceOf(ExportedTestService);
     expect(testController).toBeInstanceOf(ExportedTestController);
-    expect((testController as ExportedTestController).getData()).toBe('test');
+    expect((testController as ExportedTestController).getData(mockContext)).toBeInstanceOf(Response);
   });
 
   test('should throw error when no components provided', async () => {
