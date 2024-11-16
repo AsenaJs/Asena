@@ -146,7 +146,7 @@ export class DefaultAdapter extends AsenaAdapter<Hono, Handler, MiddlewareHandle
     return ['json', 'query', 'form', 'param', 'header']
       .filter((key) => validatorInstance[key])
       .map((key) => {
-        return (c: Context) => validatorInstance[key](c);
+        return validatorInstance[key];
       });
   }
 
