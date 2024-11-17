@@ -43,4 +43,8 @@ export class DefaultLogger implements ServerLogger {
     this.logger.error(message, meta);
   }
 
+  public profile(message: string): void {
+    this.logger.profile(message);
+  }
+
 }

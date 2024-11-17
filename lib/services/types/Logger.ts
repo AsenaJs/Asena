@@ -22,4 +22,10 @@ export interface ServerLogger {
    * @param meta - Optional metadata to include with the log.
    */
   error: (message: string, meta?: any) => void;
+
+  /**
+   * Logs a debug message.
+   * @param message - The message to log.
+   */
+  profile: (message: string) => void;
 }

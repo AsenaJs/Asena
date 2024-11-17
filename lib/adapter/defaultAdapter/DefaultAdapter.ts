@@ -10,7 +10,8 @@ import { HttpMethod } from '../../server/web/http';
 import type { BaseMiddleware } from '../../server/web/types';
 import type { ErrorHandler, Handler } from './types';
 import type { ValidatorClass } from '../../server/types';
-import { DefaultWebsocketAdapter } from './DefaultWebsocketAdapter';
+import { green, type ServerLogger, yellow } from '../../services';
+import type { AsenaWebsocketAdapter } from '../AsenaWebsocketAdapter';
 
 export class DefaultAdapter extends AsenaAdapter<Hono, Handler, MiddlewareHandler, H> {
 
@@ -18,9 +19,32 @@ export class DefaultAdapter extends AsenaAdapter<Hono, Handler, MiddlewareHandle
 
   public app = new Hono();
 
-  public websocketAdapter = new DefaultWebsocketAdapter(this.app);
-
   private server: Server;
+
+  private readonly methodMap = {
+    [HttpMethod.GET]: (path: string, ...handlers: any[]) => this.app.get(path, ...handlers),
+    [HttpMethod.POST]: (path: string, ...handlers: any[]) => this.app.post(path, ...handlers),
+    [HttpMethod.PUT]: (path: string, ...handlers: any[]) => this.app.put(path, ...handlers),
+    [HttpMethod.DELETE]: (path: string, ...handlers: any[]) => this.app.delete(path, ...handlers),
+    [HttpMethod.PATCH]: (path: string, ...handlers: any[]) => this.app.patch(path, ...handlers),
+    [HttpMethod.OPTIONS]: (path: string, ...handlers: any[]) => this.app.options(path, ...handlers),
+    [HttpMethod.CONNECT]: (path: string, ...handlers: any[]) =>
+      this.app.on(HttpMethod.CONNECT.toUpperCase(), path, ...handlers),
+    [HttpMethod.HEAD]: (path: string, ...handlers: any[]) =>
+      this.app.on(HttpMethod.HEAD.toUpperCase(), path, ...handlers),
+    [HttpMethod.TRACE]: (path: string, ...handlers: any[]) =>
+      this.app.on(HttpMethod.TRACE.toUpperCase(), path, ...handlers),
+  };
+
+  public constructor(websocketAdapter: AsenaWebsocketAdapter<any, any>, logger?: ServerLogger) {
+    super(websocketAdapter, logger);
+    this.websocketAdapter.app = this.app;
+
+    // to ensure that the logger is set
+    if (!this.websocketAdapter.logger && logger) {
+      this.websocketAdapter.logger = this.logger;
+    }
+  }
 
   public use(middleware: BaseMiddleware<HonoRequest, Response>, path?: string) {
     const normalizedPath = path ? this.normalizePath(path) : undefined;
@@ -45,55 +69,16 @@ export class DefaultAdapter extends AsenaAdapter<Hono, Handler, MiddlewareHandle
     const middlewares = validator ? [...validator, ...middleware] : middleware;
     const routeHandler = staticServe ? middleware : [...middlewares, handler];
 
-    switch (method) {
-      case HttpMethod.GET:
-        this.app.get(path, ...routeHandler);
+    const methodHandler = this.methodMap[method];
 
-        break;
-
-      case HttpMethod.POST:
-        this.app.post(path, ...routeHandler);
-
-        break;
-
-      case HttpMethod.PUT:
-        this.app.put(path, ...routeHandler);
-
-        break;
-
-      case HttpMethod.DELETE:
-        this.app.delete(path, ...routeHandler);
-
-        break;
-
-      case HttpMethod.PATCH:
-        this.app.patch(path, ...routeHandler);
-
-        break;
-
-      case HttpMethod.OPTIONS:
-        this.app.options(path, ...routeHandler);
-
-        break;
-
-      case HttpMethod.CONNECT:
-        this.app.on(HttpMethod.CONNECT.toUpperCase(), path, ...routeHandler);
-
-        break;
-
-      case HttpMethod.HEAD:
-        this.app.on(HttpMethod.HEAD.toUpperCase(), path, ...routeHandler);
-
-        break;
-
-      case HttpMethod.TRACE:
-        this.app.on(HttpMethod.TRACE.toUpperCase(), path, ...routeHandler);
-
-        break;
-
-      default:
-        throw new Error('Invalid method');
+    if (!methodHandler) {
+      throw new Error('Invalid method');
     }
+
+    methodHandler(path, ...routeHandler);
+    this.logger.info(
+      `${green('Successfully')} registered ${yellow(method.toUpperCase())} route for PATH: ${green(`/${path}`)}`,
+    );
   }
 
   public async start() {

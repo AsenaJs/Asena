@@ -41,6 +41,7 @@ export class AsenaSocket<T> implements ServerWebSocket<WebSocketData<T>> {
   }
 
   public close(code?: number, reason?: string): void {
+    this.cleanup();
     this.ws.close(code, reason);
   }
 
@@ -92,15 +93,20 @@ export class AsenaSocket<T> implements ServerWebSocket<WebSocketData<T>> {
 
       if (index !== -1) {
         room.splice(index, 1);
+
         if (room.length === 0) {
           this._websocketService.rooms.delete(topic);
-        } else {
-          this._websocketService.rooms.set(topic, room);
         }
       }
     }
 
     this.ws.unsubscribe(this.createTopic(topic));
+  }
+
+  public cleanup(): void {
+    this._websocketService.rooms.forEach((_, topic) => {
+      this.unsubscribe(topic);
+    });
   }
 
   public isSubscribed(topic: string): boolean {

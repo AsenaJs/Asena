@@ -6,13 +6,15 @@ import { getMetadata } from 'reflect-metadata/no-conflict';
 import type { ApiHandler, BaseMiddleware, PrepareMiddlewareParams, Route } from './web/types';
 import * as path from 'node:path';
 import type { AsenaService, ServerLogger } from '../services';
-import { green, yellow } from '../services';
+import { green } from '../services';
 import type { AsenaMiddlewareService } from './web/middleware';
 import type { AsenaAdapter, AsenaContext } from '../adapter';
 import { DefaultAdapter } from '../adapter/defaultAdapter';
 import type { AsenaWebSocketService, WebSocketData, WSOptions } from './web/websocket';
 import type { AsenaWebsocketAdapter } from '../adapter/AsenaWebsocketAdapter';
 import { ComponentConstants } from '../ioc/constants';
+import { DefaultWebsocketAdapter } from '../adapter/defaultAdapter/DefaultWebsocketAdapter';
+import * as bun from 'bun';
 
 export class AsenaServer {
 
@@ -41,14 +43,18 @@ export class AsenaServer {
 
     this._ioc = new IocEngine(config);
 
-    if (!adapter) {
-      this._adapter = new DefaultAdapter();
-    } else {
+    if (adapter) {
       this._adapter = adapter;
     }
   }
 
-  public async start(): Promise<void> {
+  public async start(gc = false): Promise<void> {
+    // Setting default adapter if not provided
+    if (!this._adapter) {
+      this._adapter = new DefaultAdapter(new DefaultWebsocketAdapter(), this._logger);
+      this._adapter.setPort(this._port);
+    }
+
     await this._ioc.searchAndRegister(this._components);
 
     this._logger.info(`
@@ -72,6 +78,11 @@ export class AsenaServer {
     this._logger.info('Server started on port ' + this._port);
 
     await this._adapter.start();
+
+    // TODO: this is wierd but when we call gc asena uses less memory rest of the time
+    if (gc) {
+      bun.gc(true);
+    }
   }
 
   public components(components: Class[]): AsenaServer {
@@ -90,8 +101,6 @@ export class AsenaServer {
 
   public port(port: number): AsenaServer {
     this._port = port;
-
-    this._adapter.setPort(port);
 
     return this;
   }
@@ -133,10 +142,6 @@ export class AsenaServer {
 
       for (const [name, params] of Object.entries(routes)) {
         const lastPath = path.join(`${routePath}/`, params.path);
-
-        this._logger.info(
-          `METHOD: ${yellow(params.method.toUpperCase())}, PATH: ${yellow(lastPath)}${params.description ? `, DESCRIPTION: ${params.description}` : ''}, ${green('READY')}`,
-        );
 
         const middlewares = this.prepareMiddleware(params);
 
@@ -234,10 +239,6 @@ export class AsenaServer {
       const middlewares = this.prepareTopMiddlewares({ controller: webSocket as unknown as Class }, true);
 
       this._adapter.websocketAdapter.registerWebSocket(webSocket, this._adapter.prepareMiddlewares(middlewares));
-
-      this._logger.info(
-        `WebSocket: ${green(webSocket.constructor.name)} initialized with path: ${yellow(`/${path}`)} ${green('READY')}`,
-      );
     }
 
     if (flatWebSockets.length > 0) {

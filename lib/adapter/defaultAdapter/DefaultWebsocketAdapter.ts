@@ -7,36 +7,48 @@ import {
 } from '../../server/web/websocket';
 import { AsenaWebsocketAdapter } from '../AsenaWebsocketAdapter';
 import type { Context, Hono, MiddlewareHandler } from 'hono';
-import type { Server, ServerWebSocket, WebSocketHandler } from 'bun';
-import * as crypto from 'node:crypto';
+import type { Server, ServerWebSocket } from 'bun';
+import * as bun from 'bun';
 import { getMetadata } from 'reflect-metadata/no-conflict';
 import { ComponentConstants } from '../../ioc/constants';
 import { AsenaWebSocketServer } from '../../server/web/websocket/AsenaWebSocketServer';
+import type { WebsocketAdapterParams, WebsocketServiceRegistry } from '../types';
+import { green, yellow } from '../../services';
 
 export class DefaultWebsocketAdapter extends AsenaWebsocketAdapter<Hono, MiddlewareHandler> {
 
-  private _websocket: WebSocketHandler;
-
   private _server: Server;
 
-  public constructor(app: Hono) {
-    super();
-
-    this.app = app;
+  public constructor(params?: WebsocketAdapterParams<Hono>) {
+    super(params);
   }
 
-  public registerWebSocket(websocketHandlers: AsenaWebSocketService<any>, middlewares: MiddlewareHandler[]): void {
-    if (this.websockets === undefined) {
-      this.websockets = [];
+  public registerWebSocket(webSocketService: AsenaWebSocketService<any>, middlewares: MiddlewareHandler[]): void {
+    if (!webSocketService) {
+      throw new Error('Websocket service is not provided');
     }
 
-    websocketHandlers.namespace = getMetadata(ComponentConstants.PathKey, websocketHandlers.constructor);
+    if (this.websockets === undefined) {
+      this.websockets = new Map<string, WebsocketServiceRegistry<MiddlewareHandler>>();
+    }
 
-    this.websockets.push({ socket: websocketHandlers, middlewares });
+    const namespace = getMetadata(ComponentConstants.PathKey, webSocketService.constructor);
+
+    if (!namespace) {
+      throw new Error('Namespace is not provided');
+    }
+
+    webSocketService.namespace = namespace;
+
+    this.logger.info(
+      `${green('Successfully')} registered ${yellow('WEBSOCKET')} route for PATH: ${green(`/${webSocketService.namespace}`)} (${webSocketService.constructor.name})`,
+    );
+
+    this.websockets.set(namespace, { socket: webSocketService, middlewares });
   }
 
   public prepareWebSocket(options?: WSOptions): void {
-    this._websocket = {
+    this.websocket = {
       open: this.createHandler('onOpenInternal'),
       message: this.createHandler('onMessage'),
       drain: this.createHandler('onDrain'),
@@ -48,9 +60,9 @@ export class DefaultWebsocketAdapter extends AsenaWebsocketAdapter<Hono, Middlew
   }
 
   public buildWebsocket(): void {
-    if (!this._websocket) return;
+    if (!this.websocket || !this.websockets?.size) return;
 
-    for (const websocket of this.websockets) {
+    for (const [, websocket] of this.websockets) {
       this.upgradeWebSocket(websocket.socket, websocket.middlewares);
     }
   }
@@ -62,8 +74,8 @@ export class DefaultWebsocketAdapter extends AsenaWebsocketAdapter<Hono, Middlew
       return;
     }
 
-    for (const websocket of this.websockets) {
-      websocket.socket.server = new AsenaWebSocketServer(server, websocket.socket.namespace);
+    for (const [namespace, websocket] of this.websockets) {
+      websocket.socket.server = new AsenaWebSocketServer(server, namespace);
     }
   }
 
@@ -73,7 +85,7 @@ export class DefaultWebsocketAdapter extends AsenaWebsocketAdapter<Hono, Middlew
     this.app.get(`/${path}`, ...middlewares, async (c: Context, next) => {
       const websocketData = c.get('_websocketData') || {};
 
-      const id = crypto.randomUUID();
+      const id = bun.randomUUIDv7();
 
       const data: WebSocketData = { values: websocketData, id, path: path };
       const upgradeResult = this._server.upgrade(c.req.raw, { data });
@@ -88,20 +100,12 @@ export class DefaultWebsocketAdapter extends AsenaWebsocketAdapter<Hono, Middlew
 
   private createHandler(type: keyof WSEvents) {
     return (ws: ServerWebSocket<WebSocketData>, ...args: any[]) => {
-      const websocket = this.websockets.find((h) => {
-        const path = h.socket.namespace;
-
-        return path === ws.data.path;
-      });
+      const websocket = this.websockets.get(ws.data.path);
 
       if (websocket?.socket[type]) {
         (websocket?.socket[type] as (...args: any[]) => void)(new AsenaSocket(ws, websocket.socket), ...args);
       }
     };
-  }
-
-  public get websocket(): WebSocketHandler {
-    return this._websocket;
   }
 
 }

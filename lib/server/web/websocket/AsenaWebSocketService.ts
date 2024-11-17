@@ -131,6 +131,8 @@ export class AsenaWebSocketService<T> {
   }
 
   protected async onCloseInternal(ws: Socket<T>, _code: number, _reason: string): Promise<void> {
+    ws.cleanup();
+
     ws.unsubscribe(``);
 
     ws.unsubscribe(`.${ws.data.id}`);

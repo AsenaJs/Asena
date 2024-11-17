@@ -1,4 +1,8 @@
 import type { AsenaWebSocketService, WSOptions } from '../server/web/websocket';
+import type { WebSocketHandler } from 'bun';
+import type { ServerLogger } from '../services';
+import type { WebsocketAdapterParams } from './types';
+import type { WebSocketRegistry } from './types';
 
 /**
  * Abstract class representing a WebSocket adapter.
@@ -8,9 +12,40 @@ import type { AsenaWebSocketService, WSOptions } from '../server/web/websocket';
  */
 export abstract class AsenaWebsocketAdapter<A, MH> {
 
-  public app: A;
+  /**
+   * The WebSocket services.
+   * @ string - The namespace of the WebSocket.
+   * @ AsenaWebSocketService<any> - The WebSocket service.
+   * @ MH[] - The middlewares to use.
+   * @protected
+   */
+  protected _websockets: WebSocketRegistry;
 
-  protected websockets: { socket: AsenaWebSocketService<any>; middlewares: MH[] }[];
+  /**
+   * The application instance.
+   * @private
+   */
+  private _app: A;
+
+  /**
+   * The WebSocket handler.
+   * @private
+   */
+  private _websocket: WebSocketHandler;
+
+  /**
+   * The logger instance.
+   */
+  private _logger: ServerLogger = console;
+
+  /**
+   * Constructor for the AsenaWebSocketAdapter class.
+   * @param params - The parameters for the constructor.
+   */
+  protected constructor(params?: WebsocketAdapterParams<A>) {
+    this._app = params?.app;
+    this._logger = params?.logger;
+  }
 
   /**
    * Registers a WebSocket handler.
@@ -38,5 +73,37 @@ export abstract class AsenaWebsocketAdapter<A, MH> {
    * @param {Server} server - The server to start.
    */
   public abstract startWebsocket(server: any): void;
+
+  public get app(): A {
+    return this._app;
+  }
+
+  public set app(value: A) {
+    this._app = value;
+  }
+
+  protected get websockets(): WebSocketRegistry {
+    return this._websockets;
+  }
+
+  protected set websockets(value: WebSocketRegistry) {
+    this._websockets = value;
+  }
+
+  public get websocket(): WebSocketHandler {
+    return this._websocket;
+  }
+
+  public set websocket(value: WebSocketHandler) {
+    this._websocket = value;
+  }
+
+  public get logger(): ServerLogger {
+    return this._logger;
+  }
+
+  public set logger(value: ServerLogger) {
+    this._logger = value;
+  }
 
 }

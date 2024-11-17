@@ -3,6 +3,7 @@ import type { BaseMiddleware } from '../server/web/types';
 import type { ValidatorClass } from '../server/types';
 import type { Server } from 'bun';
 import type { AsenaWebsocketAdapter } from './AsenaWebsocketAdapter';
+import type { ServerLogger } from '../services';
 
 /**
  * Abstract class representing an adapter for the Asena framework.
@@ -39,6 +40,18 @@ export abstract class AsenaAdapter<
    * The port number.
    */
   protected port: number;
+
+  /**
+   * The logger instance.
+   */
+  protected logger: ServerLogger = console;
+
+  protected constructor(websocketAdapter: WSA, logger?: ServerLogger) {
+    this.websocketAdapter = websocketAdapter;
+    if (logger) {
+      this.logger = logger;
+    }
+  }
 
   /**
    * Sets the port number.
