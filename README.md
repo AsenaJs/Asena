@@ -14,7 +14,7 @@ with the performance of Bun runtime and the flexibility of Hono web framework.
 
 ## Quick Start
 
-First, install the required packages:
+First, create a new project using Bun:
 
 ```bash
 bun init
@@ -80,6 +80,7 @@ options. [Bun Documentation](https://bun.sh/docs/bundler#reference)
 Create index.ts file under your src folder:
 
 ```typescript
+// src/index.ts
 import {AsenaServer, DefaultLogger} from "@asenajs/asena";
 
 await new AsenaServer().logger(new DefaultLogger()).port(3000).start();
@@ -107,13 +108,11 @@ Finally, run the project:
 
 ## only for fast developing purposes
 asena-cli dev start 
-
+````
+```bash
 ## or you can simply build then run your bundled project
-
 asena-cli build
-
 ## then go to dist folder and run the project this way it will consume less memory 
-
 bun index.asena.js
 ```
 
