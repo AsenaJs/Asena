@@ -3,6 +3,10 @@
 Asena is a NestJS-like IoC web framework built on top of Hono and Bun. It combines the power of dependency injection
 with the performance of Bun runtime and the flexibility of Hono web framework.
 
+## Documentation
+
+For detailed documentation, please visit [not ready yet](https://asena.sh). Documentation is still in progress, but updates are being made regularly.
+
 ## Key Features
 
 - **Dependency Injection**: Built-in IoC container for managing dependencies
@@ -280,7 +284,3 @@ the project:
 > - Running on same hardware
 
 _Note: Lower latency and higher requests/sec indicate better performance_
-
-## Documentation
-
-For detailed documentation, please visit [not ready yet](https://asena.sh).
