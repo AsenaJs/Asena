@@ -1,6 +1,4 @@
-import type { CookieExtra } from './types';
-import type { SendOptions } from './types';
-import type { TypedResponse } from 'hono';
+import type { CookieExtra, SendOptions } from './types';
 
 /**
  * Interface representing the context for Asena.
@@ -140,21 +138,18 @@ export interface AsenaContext<R, S> {
    * Sends an HTML response.
    *
    * @param {string} data - The HTML data to send.
-   * @returns {Response | Promise<Response> | TypedResponse | Promise<TypedResponse>} The response object.
+   * @returns {Response | Promise<Response> } The response object.
    */
-  html: (data: string) => Response | Promise<Response> | TypedResponse | Promise<TypedResponse>;
+  html: (data: string) => Response | Promise<Response>;
 
   /**
    * Sends a response.
    *
    * @param {string | any} data - The data to send.
    * @param {SendOptions | number} [status] - Optional status code or send options.
-   * @returns {Response | Promise<Response> | TypedResponse | Promise<TypedResponse>} The response object.
+   * @returns {Response | Promise<Response>} The response object.
    */
-  send: (
-    data: string | any,
-    status?: SendOptions | number,
-  ) => Response | Promise<Response> | TypedResponse | Promise<TypedResponse>;
+  send: (data: string | any, status?: SendOptions | number) => Response | Promise<Response>;
 
   /**
    * Redirects the request to a new URL.

@@ -3,10 +3,10 @@ import { MiddlewareService } from '../../../server/web/middleware';
 import type { Context } from '../../../adapter/defaultAdapter';
 
 @Middleware()
-export class ExportedTestMiddleware extends MiddlewareService {
+export class ExportedTopMiddlewareTest extends MiddlewareService {
 
   public handle(context: Context, next: Function): any {
-    context.setValue('test', 'Test Value');
+    context.setValue('top', 'Test Value');
     next();
   }
 

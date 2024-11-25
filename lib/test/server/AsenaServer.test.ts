@@ -63,7 +63,9 @@ describe('AsenaServer', () => {
 
     // Mock adapter
     mockAdapter = {
-      setPort: mock(() => {}),
+      setPort: mock((data) => {
+        console.log(data);
+      }),
       start: mock(async () => {}),
       registerRoute: mock(() => {}),
       prepareMiddlewares: mock(() => []),
@@ -89,6 +91,9 @@ describe('AsenaServer', () => {
 
     server.port(port);
 
+    server.components([TestServerService, TestController, TestWebSocket]);
+
+    server.start();
     expect(mockAdapter.setPort).toHaveBeenCalledWith(port);
   });
 
@@ -154,8 +159,10 @@ describe('AsenaServer', () => {
   });
 
   test('should handle server services', async () => {
-    const mockIoc = {
+    // @ts-ignore - private property access for testing
+    server._ioc = {
       container: {
+        // @ts-ignore
         getAll: mock((type: ComponentType) => {
           if (type === ComponentType.SERVER_SERVICE) {
             return [new TestServerService()];
@@ -167,17 +174,16 @@ describe('AsenaServer', () => {
       searchAndRegister: mock(async () => {}),
     };
 
-    // @ts-ignore - private property access for testing
-    server._ioc = mockIoc;
-
     await server.start();
 
     expect(mockLogger.info).toHaveBeenCalledWith(expect.stringContaining('Service:'));
   });
 
   test('should handle websocket registration', async () => {
-    const mockIoc = {
+    // @ts-ignore - private property access for testing
+    server._ioc = {
       container: {
+        // @ts-ignore
         getAll: mock((type: ComponentType) => {
           if (type === ComponentType.WEBSOCKET) {
             return [new TestWebSocket()];
@@ -189,16 +195,15 @@ describe('AsenaServer', () => {
       searchAndRegister: mock(async () => {}),
     };
 
-    // @ts-ignore - private property access for testing
-    server._ioc = mockIoc;
-
     await server.start();
 
     expect(mockAdapter.websocketAdapter.registerWebSocket).toHaveBeenCalled();
   });
 
   test('should handle errors during initialization', async () => {
-    const mockIoc = {
+    // @ts-ignore - private property access for testing
+    server._ioc = {
+      // @ts-ignore
       container: {
         getAll: mock(() => {
           throw new Error('Test error');
@@ -206,9 +211,6 @@ describe('AsenaServer', () => {
       },
       searchAndRegister: mock(async () => {}),
     };
-
-    // @ts-ignore - private property access for testing
-    server._ioc = mockIoc;
 
     expect(server.start()).rejects.toThrow('Test error');
   });

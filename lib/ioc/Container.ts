@@ -142,17 +142,7 @@ export class Container {
 
       Object.defineProperty(newInstance, propertyKey, {
         get() {
-          const value =
-            expression && expression[propertyKey] ? strategy.map((s) => expression[propertyKey](s)) : strategy;
-
-          Object.defineProperty(this, propertyKey, {
-            value,
-            writable: true,
-            enumerable: true,
-            configurable: false,
-          });
-
-          return value;
+          return expression && expression[propertyKey] ? strategy.map((s) => expression[propertyKey](s)) : strategy;
         },
         enumerable: true,
         configurable: true,
@@ -183,16 +173,7 @@ export class Container {
 
         Object.defineProperty(newInstance, k, {
           get: () => {
-            const value = expression && expression[k] ? expression[k](instance) : instance;
-
-            Object.defineProperty(this, k, {
-              value,
-              writable: true,
-              enumerable: true,
-              configurable: false,
-            });
-
-            return value;
+            return expression && expression[k] ? expression[k](instance) : instance;
           },
           enumerable: true,
           configurable: true,

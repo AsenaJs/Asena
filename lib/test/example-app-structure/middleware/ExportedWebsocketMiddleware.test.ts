@@ -3,7 +3,7 @@ import { MiddlewareService } from '../../../server/web/middleware';
 import type { Context } from '../../../adapter/defaultAdapter';
 
 @Middleware()
-export class ExportedWebsocketMiddleware extends MiddlewareService {
+export class ExportedWebsocketMiddlewareTest extends MiddlewareService {
 
   public handle(context: Context, next: Function): any {
     context.setWebSocketValue('websocketValue');

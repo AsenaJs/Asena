@@ -5,7 +5,7 @@ import { Scope } from '../../../ioc/types';
   name: 'ExportedTestService',
   scope: Scope.SINGLETON,
 })
-export class ExportedTestService {
+export class ExportedTestServiceTest {
 
   public getValue(): string {
     return 'test';

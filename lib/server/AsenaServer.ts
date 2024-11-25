@@ -52,8 +52,9 @@ export class AsenaServer {
     // Setting default adapter if not provided
     if (!this._adapter) {
       this._adapter = new DefaultAdapter(new DefaultWebsocketAdapter(), this._logger);
-      this._adapter.setPort(this._port);
     }
+
+    this._adapter.setPort(this._port);
 
     await this._ioc.searchAndRegister(this._components);
 

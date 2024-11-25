@@ -2,7 +2,7 @@ import { ServerService } from '../../../server/decorators';
 import { AsenaService } from '../../../services';
 
 @ServerService()
-export class ExportedServerService extends AsenaService {
+export class ExportedServerServiceTest extends AsenaService {
 
   public testValue: string;
 

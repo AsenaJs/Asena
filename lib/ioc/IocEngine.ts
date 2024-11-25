@@ -121,11 +121,11 @@ export class IocEngine {
 
   private createComponentObject(component: Class): Component | null {
     try {
-      const interface_ = getMetadata(ComponentConstants.InterfaceKey, component);
+      const _interface = getMetadata(ComponentConstants.InterfaceKey, component);
 
       return {
         Class: component,
-        interface: interface_,
+        interface: _interface,
       };
     } catch (error) {
       console.error('Failed to create component object:', error);
@@ -254,7 +254,19 @@ export class IocEngine {
 
   private getDependencies(component: Class): Class[] {
     try {
-      return Object.values(getMetadata(ComponentConstants.DependencyKey, component) || {}) as Class[];
+      const directDependencies = Object.values(
+        getMetadata(ComponentConstants.DependencyKey, component) || {},
+      ) as Class[];
+
+      const parentClass = Object.getPrototypeOf(component);
+
+      if (parentClass && parentClass !== Object.prototype) {
+        const parentDependencies = this.getDependencies(parentClass);
+
+        return [...new Set([...directDependencies, ...parentDependencies])];
+      }
+
+      return directDependencies;
     } catch {
       return [];
     }
@@ -264,7 +276,17 @@ export class IocEngine {
     try {
       const strategyMeta = getMetadata(ComponentConstants.StrategyKey, component);
 
-      return (getStrategyClass(strategyMeta, injectables) as Class[]) || [];
+      const directStrategies = getStrategyClass(strategyMeta, injectables);
+
+      const parentClass = Object.getPrototypeOf(component);
+
+      if (parentClass && parentClass !== Object.prototype) {
+        const parentStrategies = this.getStrategyDependencies(parentClass.constructor, injectables);
+
+        return [...new Set([...directStrategies, ...parentStrategies])];
+      }
+
+      return directStrategies;
     } catch {
       return [];
     }
