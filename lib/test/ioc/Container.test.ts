@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, spyOn, test } from 'bun:test';
 import { Container } from '../../ioc';
 import { Component } from '../../server/decorators';
-import { Inject, Strategy } from '../../ioc/component/decorators';
+import { Inject, Strategy } from '../../ioc/component';
 import { ComponentType } from '../../ioc/types';
 
 @Component()
@@ -174,6 +174,8 @@ describe('Container', () => {
       let instance = container.get('TestClass3') as TestClass3;
 
       expect(instance).toBeInstanceOf(TestClass3);
+
+      instance.testMethod();
 
       (instance as any) = null;
     }

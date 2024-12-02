@@ -3,7 +3,6 @@
  *
  *
  */
-import type { MiddlewareHandler } from 'hono';
 
 /**
  * Abstract class representing a validation service.
@@ -42,5 +41,3 @@ export abstract class AsenaValidationService<H> {
   public abstract header?(): H;
 
 }
-
-export abstract class ValidationService<H = MiddlewareHandler> extends AsenaValidationService<H> {}

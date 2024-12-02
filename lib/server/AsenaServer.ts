@@ -9,12 +9,12 @@ import type { AsenaService, ServerLogger } from '../services';
 import { green } from '../services';
 import type { AsenaMiddlewareService } from './web/middleware';
 import type { AsenaAdapter, AsenaContext } from '../adapter';
-import { DefaultAdapter } from '../adapter/defaultAdapter';
 import type { AsenaWebSocketService, WebSocketData, WSOptions } from './web/websocket';
 import type { AsenaWebsocketAdapter } from '../adapter/AsenaWebsocketAdapter';
 import { ComponentConstants } from '../ioc/constants';
-import { DefaultWebsocketAdapter } from '../adapter/defaultAdapter/DefaultWebsocketAdapter';
 import * as bun from 'bun';
+import { HonoAdapter } from '../adapter/hono';
+import { HonoWebsocketAdapter } from '../adapter/hono/HonoWebsocketAdapter';
 
 export class AsenaServer {
 
@@ -51,7 +51,7 @@ export class AsenaServer {
   public async start(gc = false): Promise<void> {
     // Setting default adapter if not provided
     if (!this._adapter) {
-      this._adapter = new DefaultAdapter(new DefaultWebsocketAdapter(), this._logger);
+      this._adapter = new HonoAdapter(new HonoWebsocketAdapter(), this._logger);
     }
 
     this._adapter.setPort(this._port);

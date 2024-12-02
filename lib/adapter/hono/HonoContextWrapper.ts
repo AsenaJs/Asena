@@ -1,11 +1,10 @@
 import type { Context, HonoRequest } from 'hono';
 import type { AsenaContext } from '../AsenaContext';
-import type { SendOptions } from '../types';
-import { getCookie, getSignedCookie, setCookie, setSignedCookie, deleteCookie } from 'hono/cookie'; // add delete cookie
-import type { CookieExtra } from '../types';
+import type { CookieExtra, SendOptions } from '../types';
+import { deleteCookie, getCookie, getSignedCookie, setCookie, setSignedCookie } from 'hono/cookie'; // add delete cookie
 import type { CookieOptions } from 'hono/utils/cookie';
 
-export class DefaultContextWrapper implements AsenaContext<HonoRequest<any, any>, Response> {
+export class HonoContextWrapper implements AsenaContext<HonoRequest<any, any>, Response> {
 
   private _context: Context;
 

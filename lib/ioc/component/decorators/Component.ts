@@ -1,5 +1,5 @@
-import {type ComponentParams, ComponentType} from "../../../ioc/types";
-import {defineComponent} from "../../../ioc/component/componentUtils";
+import { type ComponentParams, ComponentType } from '../../types';
+import { defineComponent } from '../componentUtils';
 
 /**
  * Decorator for defining a generic Component.
@@ -8,5 +8,5 @@ import {defineComponent} from "../../../ioc/component/componentUtils";
  * @returns {ClassDecorator} - The class decorator for the component.
  */
 export const Component = (params?: ComponentParams | string): ClassDecorator => {
-    return defineComponent(ComponentType.COMPONENT, params);
+  return defineComponent(ComponentType.COMPONENT, params);
 };

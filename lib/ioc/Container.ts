@@ -165,10 +165,6 @@ export class Container {
       }
 
       if (instance instanceof (V as Class)) {
-        if (getMetadata(ComponentConstants.IsMiddlewareKey, instance.constructor)) {
-          continue;
-        }
-
         const expression: Expression = getMetadata(ComponentConstants.ExpressionKey, Class);
 
         Object.defineProperty(newInstance, k, {

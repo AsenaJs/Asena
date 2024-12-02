@@ -1,8 +1,7 @@
 import type { AsenaWebSocketService, WSOptions } from '../server/web/websocket';
 import type { WebSocketHandler } from 'bun';
 import type { ServerLogger } from '../services';
-import type { WebsocketAdapterParams } from './types';
-import type { WebSocketRegistry } from './types';
+import type { WebsocketAdapterParams, WebSocketRegistry } from './types';
 
 /**
  * Abstract class representing a WebSocket adapter.

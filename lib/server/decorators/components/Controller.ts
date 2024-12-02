@@ -1,5 +1,5 @@
 import { ComponentType, type ControllerParams } from '../../../ioc/types';
-import { defineComponent } from '../../../ioc/component/componentUtils';
+import { defineComponent } from '../../../ioc/component';
 import { defineMetadata } from 'reflect-metadata/no-conflict';
 import { ComponentConstants } from '../../../ioc/constants';
 import { defineMiddleware } from '../../web/helper';
@@ -15,7 +15,7 @@ export const Controller = (params?: ControllerParams | string): ClassDecorator =
     typeof params === 'string' ? { path: params, name: undefined } : params || { path: '', name: undefined };
 
   return defineComponent(ComponentType.CONTROLLER, _params, (target) => {
-    defineMetadata(ComponentConstants.PathKey, (_params as ControllerParams).path.replace(/^\/+/, '') || '', target);
+    defineMetadata(ComponentConstants.PathKey, (_params as ControllerParams).path.replace(/^\/+/, '/') || '/', target);
 
     defineMiddleware(target, (_params as ControllerParams).middlewares || []);
 

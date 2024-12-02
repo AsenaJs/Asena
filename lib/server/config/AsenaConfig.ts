@@ -1,3 +1,1 @@
-export abstract class AsenaConfig {
-    
-}
+export abstract class AsenaConfig {}

@@ -1,5 +1,5 @@
-import {type ComponentParams, ComponentType} from "../../../ioc/types";
-import {defineComponent} from "../../../ioc/component/componentUtils";
+import { type ComponentParams, ComponentType } from '../../../ioc/types';
+import { defineComponent } from '../../../ioc/component';
 
 /**
  * Decorator for defining a Server Service component.
@@ -9,5 +9,5 @@ import {defineComponent} from "../../../ioc/component/componentUtils";
  * @returns {ClassDecorator} - The class decorator for the server service.
  */
 export const ServerService = (params?: ComponentParams): ClassDecorator => {
-    return defineComponent(ComponentType.SERVER_SERVICE, params);
+  return defineComponent(ComponentType.SERVER_SERVICE, params);
 };

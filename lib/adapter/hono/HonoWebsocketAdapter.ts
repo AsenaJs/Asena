@@ -15,7 +15,7 @@ import { AsenaWebSocketServer } from '../../server/web/websocket/AsenaWebSocketS
 import type { WebsocketAdapterParams, WebsocketServiceRegistry } from '../types';
 import { green, yellow } from '../../services';
 
-export class DefaultWebsocketAdapter extends AsenaWebsocketAdapter<Hono, MiddlewareHandler> {
+export class HonoWebsocketAdapter extends AsenaWebsocketAdapter<Hono, MiddlewareHandler> {
 
   private _server: Server;
 

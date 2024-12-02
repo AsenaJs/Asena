@@ -2,12 +2,12 @@ import { beforeEach, describe, expect, mock, test } from 'bun:test';
 import { AsenaServer } from '../../server';
 import { Controller, ServerService, WebSocket } from '../../server/decorators';
 import { ComponentType, Scope } from '../../ioc/types';
-import { Inject } from '../../ioc/component/decorators';
+import { Inject } from '../../ioc/component';
 import { AsenaService } from '../../services';
-import { Get } from '../../server/web/api';
-import type { Context } from '../../adapter/defaultAdapter';
 import type { WSOptions } from '../../server/web/websocket';
 import { AsenaWebSocketService, type Socket } from '../../server/web/websocket';
+import { Get } from '../../server/web/decorators';
+import type { Context } from '../../adapter/hono';
 
 @ServerService({
   name: 'TestService',
@@ -63,9 +63,7 @@ describe('AsenaServer', () => {
 
     // Mock adapter
     mockAdapter = {
-      setPort: mock((data) => {
-        console.log(data);
-      }),
+      setPort: mock(() => {}),
       start: mock(async () => {}),
       registerRoute: mock(() => {}),
       prepareMiddlewares: mock(() => []),
@@ -139,7 +137,7 @@ describe('AsenaServer', () => {
 
     expect(mockAdapter.registerRoute).toHaveBeenCalledWith(
       expect.objectContaining({
-        path: 'test/',
+        path: '/test/',
         method: 'get',
         staticServe: false,
       }),
