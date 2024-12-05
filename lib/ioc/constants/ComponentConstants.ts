@@ -5,6 +5,7 @@ export enum ComponentConstants {
   RouteKey = '_routeKey',
   DependencyKey = '_IDependencies',
   SoftDependencyKey = '_ISoftDependencies',
+  PostConstructKey = '_IPostConstruct',
   ScopeKey = '_IScope',
   NameKey = '_IName',
   StrategyKey = '_IStrategy',

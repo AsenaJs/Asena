@@ -10,8 +10,8 @@ import { HttpMethod } from '../../server/web/http';
 import type { BaseMiddleware } from '../../server/web/types';
 import type { ErrorHandler, Handler } from './types';
 import type { ValidatorClass } from '../../server/types';
-import { green, type ServerLogger, yellow } from '../../services';
 import type { AsenaWebsocketAdapter } from '../AsenaWebsocketAdapter';
+import { green, type ServerLogger, yellow } from '../../logger';
 
 export class HonoAdapter extends AsenaAdapter<Hono, Handler, MiddlewareHandler, H> {
 
@@ -100,7 +100,8 @@ export class HonoAdapter extends AsenaAdapter<Hono, Handler, MiddlewareHandler, 
 
     return _middlewares.map((middleware) => {
       if (middleware.override) {
-        return (c, next) => middleware.middlewareService.handle(c, next);
+        // @ts-ignore
+        return (c: Context, next: Function) => middleware.middlewareService.handle(c, next);
       }
 
       return factory.createMiddleware(async (context: Context, next: Next) => {

@@ -30,45 +30,50 @@ export class Container {
     this._services[key] = { Class, instance: singleton ? this.prepareInstance(Class) : null, singleton };
   }
 
-  public get<T>(key: string): (T | T[]) | null {
-    // Todo: return error
+  public async resolve<T>(key: string): Promise<(T | T[]) | null> {
     const service = this._services[key];
 
     if (!service) {
-      return null;
+      throw new Error('Service not found');
     }
 
     if (Array.isArray(service)) {
-      return service.map((containerService): T => {
-        if (!containerService.singleton) {
-          return this.prepareInstance(containerService.Class) as T;
-        }
-
-        if (!containerService.instance) {
-          throw new Error('instance cannot be null');
-        }
-
-        return containerService.instance as T;
-      });
+      return await this.resolveMultipleContainerService<T>(service);
     }
 
-    if (!service.singleton) {
-      return this.prepareInstance(service.Class) as T;
-    }
-
-    return service.instance as T;
+    return await this.resolveContainerService<T>(service);
   }
 
-  public getStrategy<T>(key: string): T[] | null {
-    return this.get(key) as T[] | null;
+  public resolveStrategy<T>(key: string): Promise<T[] | null> {
+    return this.resolve<T>(key) as Promise<T[] | null>;
   }
 
   /**
    * @typeOfComponent is the type of the component
    *
    * */
-  public getAll<T>(typeOfComponent: ComponentType): (T | T[])[] | null {
-    const service = Object.entries(this._services)
+  public async resolveAll<T>(typeOfComponent: ComponentType) {
+    const matchingServices = this.filterServices(typeOfComponent);
+
+    if (!matchingServices.length) {
+      return null;
+    }
+
+    const instances: (T | T[])[] = [];
+
+    for (const containerService of matchingServices) {
+      if (Array.isArray(containerService)) {
+        instances.push(await this.resolveMultipleContainerService<T>(containerService));
+      } else {
+        instances.push(await this.resolveContainerService<T>(containerService));
+      }
+    }
+
+    return instances;
+  }
+
+  private filterServices(typeOfComponent: ComponentType) {
+    return Object.entries(this._services)
       .filter(([, value]) => {
         if (Array.isArray(value)) {
           // check every element in the array is the same type
@@ -80,53 +85,49 @@ export class Container {
         return getMetadata(typeOfComponent, value.Class);
       })
       .map(([, value]) => value);
-
-    if (!service) {
-      return null;
-    }
-
-    if (service.length > 0) {
-      return service.map((containerService) => {
-        if (Array.isArray(containerService)) {
-          return containerService.map((_service) => {
-            if (!_service.singleton) {
-              return this.prepareInstance(_service.Class) as T;
-            }
-
-            if (!_service.instance) {
-              throw new Error('instance cannot be null');
-            }
-
-            return _service.instance as T;
-          });
-        }
-
-        if (!containerService.singleton) {
-          return this.prepareInstance(containerService.Class) as T;
-        }
-
-        if (!containerService.instance) {
-          throw new Error('instance cannot be null');
-        }
-
-        return containerService.instance as T;
-      });
-    }
-
-    return null;
   }
 
-  private prepareInstance(Class: Class) {
+  private async resolveContainerService<T>(containerService: ContainerService): Promise<T> {
+    if (!containerService.singleton) {
+      return await this.prepareInstance<T>(containerService.Class);
+    }
+
+    if (!containerService.instance) {
+      throw new Error('instance cannot be null');
+    }
+
+    return containerService.instance as T;
+  }
+
+  private async resolveMultipleContainerService<T>(containerService: ContainerService[]): Promise<T[]> {
+    return Promise.all(containerService.map(async (_service) => this.resolveContainerService<T>(_service)));
+  }
+
+  private async prepareInstance<T>(Class: Class) {
     const newInstance = new Class();
 
-    this.injectDependencies(newInstance, Class); // dependency injection
+    await this.injectDependencies(newInstance, Class); // dependency injection
 
-    this.injectStrategies(newInstance, Class); // strategy injection
+    await this.injectStrategies(newInstance, Class); // strategy injection
 
-    return newInstance;
+    await this.executePostConstructs(newInstance, Class); // post construct
+
+    return newInstance as T;
   }
 
-  private injectStrategies(newInstance: any, Class: Class) {
+  private async executePostConstructs(newInstance: any, Class: Class) {
+    const postConstructs: string[] = getMetadata(ComponentConstants.PostConstructKey, Class);
+
+    if (!postConstructs) {
+      return;
+    }
+
+    for (const postConstruct of postConstructs) {
+      await newInstance[postConstruct]();
+    }
+  }
+
+  private async injectStrategies(newInstance: any, Class: Class) {
     for (const [propertyKey, interfaceName] of Object.entries(getMetadata(ComponentConstants.StrategyKey, Class))) {
       if (!interfaceName) {
         continue;
@@ -136,7 +137,7 @@ export class Container {
         throw new Error('interfaceName must be a string');
       }
 
-      const strategy: Class[] = this.getStrategy<Class>(interfaceName);
+      const strategy: Class[] = await this.resolveStrategy<Class>(interfaceName);
 
       const expression: Expression = getMetadata(ComponentConstants.ExpressionKey, Class);
 
@@ -150,11 +151,11 @@ export class Container {
     }
   }
 
-  private injectDependencies(newInstance: any, Class: Class) {
+  private async injectDependencies(newInstance: any, Class: Class) {
     for (const [k, V] of Object.entries(getMetadata(ComponentConstants.DependencyKey, Class))) {
       const name = getMetadata(ComponentConstants.NameKey, V) || (V as Class).name;
 
-      const instance = this.get<Class>(name);
+      const instance: Class | Class[] = await this.resolve<Class>(name);
 
       if (instance === null) {
         throw new Error('Instance cant be null ' + V);

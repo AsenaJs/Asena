@@ -3,7 +3,7 @@ import { IocEngine } from '../../ioc';
 import type { Component as ComponentType } from '../../ioc/types';
 import { Scope } from '../../ioc/types';
 import { Component } from '../../server/decorators';
-import { Inject } from '../../ioc/component/decorators';
+import { Inject } from '../../ioc/component';
 import { ExportedTestServiceTest } from '../example-app-structure/service/ExportedTestService.test';
 import { ExportedTestControllerTest } from '../example-app-structure/controller/ExportedTestController.test';
 import type { AsenaContext } from '../../adapter';
@@ -70,8 +70,8 @@ describe('IocEngine', () => {
 
     await iocEngine.searchAndRegister(components);
 
-    const testService = iocEngine.container.get<TestService>(TestService.name);
-    const testController = iocEngine.container.get<TestController>(TestController.name);
+    const testService = await iocEngine.container.resolve<TestService>(TestService.name);
+    const testController = await iocEngine.container.resolve<TestController>(TestController.name);
 
     expect(testService).toBeInstanceOf(TestService);
     expect(testController).toBeInstanceOf(TestController);
@@ -81,8 +81,8 @@ describe('IocEngine', () => {
   test('should register components automatically', async () => {
     iocEngine = new IocEngine({ sourceFolder: 'lib/test/example-app-structure' });
     await iocEngine.searchAndRegister();
-    const testService = iocEngine.container.get<ExportedTestServiceTest>('ExportedTestService');
-    const testController = iocEngine.container.get<ExportedTestControllerTest>('ExportedTestController');
+    const testService = await iocEngine.container.resolve<ExportedTestServiceTest>('ExportedTestService');
+    const testController = await iocEngine.container.resolve<ExportedTestControllerTest>('ExportedTestController');
 
     expect(testService).toBeInstanceOf(ExportedTestServiceTest);
     expect(testController).toBeInstanceOf(ExportedTestControllerTest);
@@ -107,8 +107,8 @@ describe('IocEngine', () => {
 
     await iocEngine.searchAndRegister(components);
 
-    const testService = iocEngine.container.get<TestService>(TestService.name);
-    const testService2 = iocEngine.container.get<TestService2>(TestService2.name);
+    const testService = await iocEngine.container.resolve<TestService>(TestService.name);
+    const testService2 = await iocEngine.container.resolve<TestService2>(TestService2.name);
 
     expect(testService).toBeInstanceOf(TestService);
     expect(testService2).toBeInstanceOf(TestService2);

@@ -3,7 +3,7 @@ import type { BaseMiddleware } from '../server/web/types';
 import type { ValidatorClass } from '../server/types';
 import type { Server } from 'bun';
 import type { AsenaWebsocketAdapter } from './AsenaWebsocketAdapter';
-import type { ServerLogger } from '../services';
+import type { ServerLogger } from '../logger';
 
 /**
  * Abstract class representing an adapter for the Asena framework.

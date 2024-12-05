@@ -13,7 +13,7 @@ import { getMetadata } from 'reflect-metadata/no-conflict';
 import { ComponentConstants } from '../../ioc/constants';
 import { AsenaWebSocketServer } from '../../server/web/websocket/AsenaWebSocketServer';
 import type { WebsocketAdapterParams, WebsocketServiceRegistry } from '../types';
-import { green, yellow } from '../../services';
+import {green, yellow} from "../../logger";
 
 export class HonoWebsocketAdapter extends AsenaWebsocketAdapter<Hono, MiddlewareHandler> {
 

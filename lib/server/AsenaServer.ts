@@ -5,8 +5,6 @@ import { type Component, ComponentType } from '../ioc/types';
 import { getMetadata } from 'reflect-metadata/no-conflict';
 import type { ApiHandler, BaseMiddleware, PrepareMiddlewareParams, Route } from './web/types';
 import * as path from 'node:path';
-import type { AsenaService, ServerLogger } from '../services';
-import { green } from '../services';
 import type { AsenaMiddlewareService } from './web/middleware';
 import type { AsenaAdapter, AsenaContext } from '../adapter';
 import type { AsenaWebSocketService, WebSocketData, WSOptions } from './web/websocket';
@@ -15,6 +13,7 @@ import { ComponentConstants } from '../ioc/constants';
 import * as bun from 'bun';
 import { HonoAdapter } from '../adapter/hono';
 import { HonoWebsocketAdapter } from '../adapter/hono/HonoWebsocketAdapter';
+import { green, type ServerLogger } from '../logger';
 
 export class AsenaServer {
 
@@ -68,11 +67,9 @@ export class AsenaServer {
 
     this._logger.info('IoC initialized');
 
-    await this.prepareServerServices();
+    await this.initializeControllers();
 
-    this.initializeControllers();
-
-    this.prepareWebSocket();
+    await this.prepareWebSocket();
 
     this.configureErrorHandling();
 
@@ -118,8 +115,8 @@ export class AsenaServer {
     return this;
   }
 
-  private initializeControllers() {
-    const controllers = this._ioc.container.getAll<Class>(ComponentType.CONTROLLER);
+  private async initializeControllers() {
+    const controllers = await this._ioc.container.resolveAll<Class>(ComponentType.CONTROLLER);
 
     if (controllers !== null) {
       // check if any controller is array or not
@@ -139,7 +136,7 @@ export class AsenaServer {
 
       const routePath: string = getMetadata(ComponentConstants.PathKey, controller.constructor) || '';
 
-      this.prepareTopMiddlewares({ controller, routePath });
+      await this.prepareTopMiddlewares({ controller, routePath });
 
       for (const [name, params] of Object.entries(routes)) {
         const lastPath = path.join(`${routePath}/`, params.path);
@@ -158,16 +155,16 @@ export class AsenaServer {
     }
   }
 
-  private prepareTopMiddlewares(
+  private async prepareTopMiddlewares(
     { controller, routePath }: PrepareMiddlewareParams,
     websocket = false,
-  ): BaseMiddleware<any, any>[] {
+  ): Promise<BaseMiddleware<any, any>[]> {
     const topMiddlewares = getMetadata(ComponentConstants.MiddlewaresKey, controller.constructor) || [];
     const middlewareInstances: BaseMiddleware<any, any>[] = [];
 
     for (const middleware of topMiddlewares) {
       const name = getMetadata(ComponentConstants.NameKey, middleware);
-      const instances = this._ioc.container.get<AsenaMiddlewareService<any, any>>(name);
+      const instances = await this._ioc.container.resolve<AsenaMiddlewareService<any, any>>(name);
 
       if (!instances) continue;
 
@@ -195,7 +192,7 @@ export class AsenaServer {
     for (const middleware of routeMiddlewares) {
       const name = getMetadata(ComponentConstants.NameKey, middleware);
       const override = getMetadata(ComponentConstants.OverrideKey, middleware);
-      const instances = this._ioc.container.get<AsenaMiddlewareService<any, any>>(name);
+      const instances = this._ioc.container.resolve<AsenaMiddlewareService<any, any>>(name);
 
       if (!instances) continue;
 
@@ -212,8 +209,10 @@ export class AsenaServer {
     return middlewares;
   }
 
-  private prepareWebSocket() {
-    const webSockets = this._ioc.container.getAll<AsenaWebSocketService<WebSocketData>>(ComponentType.WEBSOCKET);
+  private async prepareWebSocket() {
+    const webSockets = await this._ioc.container.resolveAll<AsenaWebSocketService<WebSocketData>>(
+      ComponentType.WEBSOCKET,
+    );
 
     if (!webSockets?.length) {
       this._logger.info('No websockets found');
@@ -237,43 +236,13 @@ export class AsenaServer {
 
       registeredPaths.add(path);
 
-      const middlewares = this.prepareTopMiddlewares({ controller: webSocket as unknown as Class }, true);
+      const middlewares = await this.prepareTopMiddlewares({ controller: webSocket as unknown as Class }, true);
 
       this._adapter.websocketAdapter.registerWebSocket(webSocket, this._adapter.prepareMiddlewares(middlewares));
     }
 
     if (flatWebSockets.length > 0) {
       this._adapter.websocketAdapter.prepareWebSocket(this._wsOptions);
-    }
-  }
-
-  private async prepareServerServices() {
-    const serverServices = this._ioc.container.getAll<AsenaService>(ComponentType.SERVER_SERVICE);
-
-    if (!serverServices?.length) {
-      this._logger.info('No server services found');
-      return;
-    }
-
-    // flat the array
-    const flatServerServices = serverServices.flat();
-
-    for (const service of flatServerServices) {
-      const serviceName = green(service.constructor.name);
-
-      try {
-        this._logger.info(`Service: ${serviceName} found`);
-
-        // Type guard to check if service has onStart method
-        if (service['onStart']) {
-          await service['onStart']();
-        }
-
-        this._logger.info(`Service: ${serviceName} initialized`);
-      } catch (error) {
-        this._logger.error(`Failed to initialize service ${serviceName}: ${error.message}`);
-        throw error;
-      }
     }
   }
 
