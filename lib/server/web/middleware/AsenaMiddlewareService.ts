@@ -1,5 +1,4 @@
 import type { AsenaContext } from '../../../adapter';
-import type { HonoRequest } from 'hono';
 
 /**
  * Abstract class representing a middleware service in the Asena framework.
@@ -19,8 +18,3 @@ export abstract class AsenaMiddlewareService<R, S> {
   public abstract handle(context: AsenaContext<R, S>, next: Function): Promise<void> | any;
 
 }
-
-export abstract class MiddlewareService<P extends string = any, I = any> extends AsenaMiddlewareService<
-  HonoRequest<P, I>,
-  Response
-> {}

@@ -5,15 +5,15 @@ import * as bun from 'bun';
 import type { RouteParams } from '../types';
 import { createFactory } from 'hono/factory';
 import type { H } from 'hono/types';
-import { DefaultContextWrapper } from './DefaultContextWrapper';
+import { HonoContextWrapper } from './HonoContextWrapper';
 import { HttpMethod } from '../../server/web/http';
 import type { BaseMiddleware } from '../../server/web/types';
 import type { ErrorHandler, Handler } from './types';
 import type { ValidatorClass } from '../../server/types';
-import { green, type ServerLogger, yellow } from '../../services';
 import type { AsenaWebsocketAdapter } from '../AsenaWebsocketAdapter';
+import { green, type ServerLogger, yellow } from '../../logger';
 
-export class DefaultAdapter extends AsenaAdapter<Hono, Handler, MiddlewareHandler, H> {
+export class HonoAdapter extends AsenaAdapter<Hono, Handler, MiddlewareHandler, H> {
 
   private static readonly VALIDATOR_METHODS = ['json', 'query', 'form', 'param', 'header'] as const;
 
@@ -77,7 +77,7 @@ export class DefaultAdapter extends AsenaAdapter<Hono, Handler, MiddlewareHandle
 
     methodHandler(path, ...routeHandler);
     this.logger.info(
-      `${green('Successfully')} registered ${yellow(method.toUpperCase())} route for PATH: ${green(`/${path}`)}`,
+      `${green('Successfully')} registered ${yellow(method.toUpperCase())} route for PATH: ${green(`${path}`)}`,
     );
   }
 
@@ -100,22 +100,23 @@ export class DefaultAdapter extends AsenaAdapter<Hono, Handler, MiddlewareHandle
 
     return _middlewares.map((middleware) => {
       if (middleware.override) {
-        return (c, next) => middleware.middlewareService.handle(c, next);
+        // @ts-ignore
+        return (c: Context, next: Function) => middleware.middlewareService.handle(c, next);
       }
 
       return factory.createMiddleware(async (context: Context, next: Next) => {
-        await middleware.middlewareService.handle(new DefaultContextWrapper(context), next);
+        await middleware.middlewareService.handle(new HonoContextWrapper(context), next);
       });
     });
   }
 
   public prepareHandler(handler: () => Handler) {
-    return (c: Context) => handler()(new DefaultContextWrapper(c));
+    return (c: Context) => handler()(new HonoContextWrapper(c));
   }
 
   public onError(errorHandler: ErrorHandler) {
     this.app.onError((error, context) => {
-      return errorHandler(error, new DefaultContextWrapper(context));
+      return errorHandler(error, new HonoContextWrapper(context));
     });
   }
 
@@ -130,7 +131,7 @@ export class DefaultAdapter extends AsenaAdapter<Hono, Handler, MiddlewareHandle
 
     const validatorInstance = new Validator();
 
-    return DefaultAdapter.VALIDATOR_METHODS.filter((key) => validatorInstance[key]).map((key) => {
+    return HonoAdapter.VALIDATOR_METHODS.filter((key) => validatorInstance[key]).map((key) => {
       return validatorInstance[key]();
     });
   }

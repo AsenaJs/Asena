@@ -11,6 +11,6 @@ export const getStrategyClass = (interfaceNames: StringMap, injectables: Compone
   const strategies = Object.values(interfaceNames);
 
   return injectables
-    .filter(injectable => strategies.includes(injectable.interface))
-    .map(injectable => injectable.Class);
+    .filter((injectable) => strategies.includes(injectable.interface))
+    .map((injectable) => injectable.Class);
 };

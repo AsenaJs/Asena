@@ -258,12 +258,16 @@ export class IocEngine {
         getMetadata(ComponentConstants.DependencyKey, component) || {},
       ) as Class[];
 
+      const softDependencies = Object.values(
+        getMetadata(ComponentConstants.SoftDependencyKey, component) || {},
+      ) as Class[];
+
       const parentClass = Object.getPrototypeOf(component);
 
       if (parentClass && parentClass !== Object.prototype) {
         const parentDependencies = this.getDependencies(parentClass);
 
-        return [...new Set([...directDependencies, ...parentDependencies])];
+        return [...new Set([...directDependencies, ...parentDependencies, ...softDependencies])];
       }
 
       return directDependencies;

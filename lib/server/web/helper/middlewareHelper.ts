@@ -3,8 +3,14 @@ import type { Injectable } from '../../../ioc/types';
 import { defineMetadata, getMetadata } from 'reflect-metadata/no-conflict';
 import { ComponentConstants } from '../../../ioc/constants';
 
+/**
+ * Defines middlewares for target class.
+ *
+ * @param {Function} target - The target class to which the middleware will be applied.
+ * @param {MiddlewareClass[]} middlewares - An array of middleware classes to be defined.
+ */
 export const defineMiddleware = (target: Function, middlewares: MiddlewareClass[]): void => {
-  const deps: Injectable = getMetadata(ComponentConstants.DependencyKey, target) || {};
+  const deps: Injectable = getMetadata(ComponentConstants.SoftDependencyKey, target) || {};
 
   for (const middleware of middlewares) {
     const keys = Object.keys(deps);
@@ -16,5 +22,5 @@ export const defineMiddleware = (target: Function, middlewares: MiddlewareClass[
     }
   }
 
-  defineMetadata(ComponentConstants.DependencyKey, deps, target);
+  defineMetadata(ComponentConstants.SoftDependencyKey, deps, target);
 };

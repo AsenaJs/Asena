@@ -1,11 +1,12 @@
 import { ServerService } from '../../../server/decorators';
-import { AsenaService } from '../../../services';
+import { PostConstruct } from '../../../ioc/component/decorators/PostConstruct';
 
 @ServerService()
-export class ExportedServerServiceTest extends AsenaService {
+export class ExportedServerServiceTest {
 
   public testValue: string;
 
+  @PostConstruct()
   protected async onStart() {
     this.testValue = 'Test Value';
   }

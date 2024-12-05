@@ -1,6 +1,6 @@
 import { Middleware } from '../../../server/decorators';
-import { MiddlewareService } from '../../../server/web/middleware';
-import type { Context } from '../../../adapter/defaultAdapter';
+import type { Context } from '../../../adapter/hono';
+import { MiddlewareService } from '../../../adapter/hono';
 
 @Middleware()
 export class ExportedTestMiddlewareTest extends MiddlewareService {

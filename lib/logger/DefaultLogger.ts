@@ -1,6 +1,6 @@
 import type { Logger } from 'winston';
 import winston from 'winston';
-import type { ServerLogger } from '../types';
+import type { ServerLogger } from './Logger';
 
 export const defaultFormat = winston.format.combine(
   winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),

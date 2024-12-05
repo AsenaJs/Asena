@@ -10,8 +10,8 @@ import { ComponentConstants } from '../../constants';
  * @param expression - The expression to evaluate on the injected class.
  * @returns {PropertyDecorator} - The property decorator function.
  */
-export const Inject = (Injection: Class, expression?: (injectedClass:any) => any): PropertyDecorator => {
-  return (target: object, propertyKey: string):void => {
+export const Inject = (Injection: Class, expression?: (injectedClass: any) => any): PropertyDecorator => {
+  return (target: object, propertyKey: string): void => {
     const dependencies: Injectable = getMetadata(ComponentConstants.DependencyKey, target.constructor) || {};
 
     defineMetadata('design:type', Injection, target, propertyKey);

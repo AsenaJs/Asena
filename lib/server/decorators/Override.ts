@@ -1,5 +1,5 @@
-import {defineMetadata} from "reflect-metadata/no-conflict";
-import {ComponentConstants} from "../../ioc/constants";
+import { defineMetadata } from 'reflect-metadata/no-conflict';
+import { ComponentConstants } from '../../ioc/constants';
 
 /**
  * Decorator for marking a class as an override.
@@ -11,7 +11,7 @@ import {ComponentConstants} from "../../ioc/constants";
  * @returns {ClassDecorator} - The class decorator for the override.
  */
 export const Override = (): ClassDecorator => {
-    return (target: Function) => {
-        defineMetadata(ComponentConstants.OverrideKey, true, target);
-    };
+  return (target: Function) => {
+    defineMetadata(ComponentConstants.OverrideKey, true, target);
+  };
 };

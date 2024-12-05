@@ -1,4 +1,4 @@
-import type { ServerLogger } from '../../services';
+import type { ServerLogger } from '../../logger';
 
 export interface WebsocketAdapterParams<A> {
   /**
