@@ -1,17 +1,23 @@
-import { defineMetadata } from 'reflect-metadata/no-conflict';
 import { ComponentConstants } from '../../ioc/constants';
+import { defineTypedMetadata, getTypedMetadata } from '../../utils/typedMetadata';
 
 /**
- * Decorator for marking a class as an override.
+ * Decorator for marking a property as an override.
  *
- * This decorator sets a metadata key to indicate that the class is an override.
+ * Override properties allow a middleware to work directly without any Asena wrapper.
  *
  * For now, it's only using in middleware.
  *
- * @returns {ClassDecorator} - The class decorator for the override.
+ * @returns {ClassDecorator} - The property decorator for the override.
  */
-export const Override = (): ClassDecorator => {
-  return (target: Function) => {
-    defineMetadata(ComponentConstants.OverrideKey, true, target);
+export const Override = (): PropertyDecorator => {
+  return (target: object, propertyKey: string) => {
+    const overrides: string[] = getTypedMetadata<string[]>(ComponentConstants.OverrideKey, target.constructor) || [];
+
+    if (!overrides.includes(propertyKey)) {
+      overrides.push(propertyKey);
+    }
+
+    defineTypedMetadata<string[]>(ComponentConstants.OverrideKey, overrides, target.constructor);
   };
 };

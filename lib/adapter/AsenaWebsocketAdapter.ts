@@ -18,7 +18,7 @@ export abstract class AsenaWebsocketAdapter<A, MH> {
    * @ MH[] - The middlewares to use.
    * @protected
    */
-  protected _websockets: WebSocketRegistry;
+  protected _websockets: WebSocketRegistry<MH>;
 
   /**
    * The application instance.
@@ -52,26 +52,26 @@ export abstract class AsenaWebsocketAdapter<A, MH> {
    * @param {websocket<any>} websocket - The WebSocket to register.
    * @param middlewares to used in upgrade function
    */
-  public abstract registerWebSocket(websocket: AsenaWebSocketService<any>, middlewares: MH[]): void;
+  public abstract registerWebSocket(websocket: AsenaWebSocketService<any>, middlewares: MH[]): Promise<void> | void;
 
   /**
    * Prepares the WebSocket with the given options.
    *
    * @param {WSOptions} [wsOptions] - Optional WebSocket options.
    */
-  public abstract prepareWebSocket(wsOptions?: WSOptions): void;
+  public abstract prepareWebSocket(wsOptions?: WSOptions): Promise<void> | void;
 
   /**
    * Build the WebSocket object for the server.
    */
-  public abstract buildWebsocket(): void;
+  public abstract buildWebsocket(): Promise<void> | void;
 
   /**
    * Start the WebSocket server.
    *
    * @param {Server} server - The server to start.
    */
-  public abstract startWebsocket(server: any): void;
+  public abstract startWebsocket(server: any): Promise<void> | void;
 
   public get app(): A {
     return this._app;
@@ -81,11 +81,11 @@ export abstract class AsenaWebsocketAdapter<A, MH> {
     this._app = value;
   }
 
-  protected get websockets(): WebSocketRegistry {
+  protected get websockets(): WebSocketRegistry<MH> {
     return this._websockets;
   }
 
-  protected set websockets(value: WebSocketRegistry) {
+  protected set websockets(value: WebSocketRegistry<MH>) {
     this._websockets = value;
   }
 

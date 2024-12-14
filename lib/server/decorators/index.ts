@@ -1,3 +1,3 @@
 export * from './components';
 export * from './Override';
-export * from './Config';
+export * from './components/Config';

@@ -1,18 +1,14 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
 import { AsenaServer } from '../../server';
-import { Controller, ServerService, WebSocket } from '../../server/decorators';
-import { ComponentType, Scope } from '../../ioc/types';
-import { Inject } from '../../ioc/component';
+import { Controller, Service, WebSocket } from '../../server/decorators';
+import { ComponentType } from '../../ioc/types';
+import { Inject, PostConstruct } from '../../ioc/component';
 import type { WSOptions } from '../../server/web/websocket';
 import { AsenaWebSocketService, type Socket } from '../../server/web/websocket';
 import { Get } from '../../server/web/decorators';
 import type { Context } from '../../adapter/hono';
-import { PostConstruct } from '../../ioc/component/decorators/PostConstruct';
 
-@ServerService({
-  name: 'TestService',
-  scope: Scope.SINGLETON,
-})
+@Service()
 class TestServerService {
 
   public testValue = 'Test Value';
@@ -51,7 +47,7 @@ class TestWebSocket extends AsenaWebSocketService<any> {
 }
 
 describe('AsenaServer', () => {
-  let server: AsenaServer;
+  let server: AsenaServer<any>;
   let mockLogger: any;
   let mockAdapter: any;
 
@@ -120,7 +116,11 @@ describe('AsenaServer', () => {
     // @ts-ignore - private property access for testing
     const ioc = server._ioc;
 
-    expect(await ioc.container.resolveAll(ComponentType.SERVER_SERVICE)).toHaveLength(1);
+    const services = await ioc.container.resolveAll<TestServerService>(ComponentType.SERVICE);
+
+    expect(services).toHaveLength(1);
+
+    expect((services[0] as TestServerService).testValue).toBe('Test Value');
 
     expect(await ioc.container.resolveAll(ComponentType.CONTROLLER)).toHaveLength(1);
 

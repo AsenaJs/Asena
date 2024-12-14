@@ -1,38 +1,49 @@
-import type { Class } from './types';
+import type { Class, MiddlewareClass, ValidatorClass } from './types';
 import { IocEngine } from '../ioc';
 import { readConfigFile } from '../ioc/helper/fileHelper';
-import { type Component, ComponentType } from '../ioc/types';
-import { getMetadata } from 'reflect-metadata/no-conflict';
-import type { ApiHandler, BaseMiddleware, PrepareMiddlewareParams, Route } from './web/types';
+import { type InjectibleComponent, ComponentType } from '../ioc/types';
+import {
+  type ApiParams,
+  type BaseMiddleware,
+  type BaseValidator,
+  type PrepareMiddlewareParams,
+  type Route,
+  VALIDATOR_METHODS,
+  type ValidatorHandler,
+} from './web/types';
 import * as path from 'node:path';
-import type { AsenaMiddlewareService } from './web/middleware';
+import type { AsenaMiddlewareService, AsenaValidationService } from './web/middleware';
+import type { AsenaWebsocketAdapter } from '../adapter';
 import type { AsenaAdapter, AsenaContext } from '../adapter';
 import type { AsenaWebSocketService, WebSocketData, WSOptions } from './web/websocket';
-import type { AsenaWebsocketAdapter } from '../adapter/AsenaWebsocketAdapter';
 import { ComponentConstants } from '../ioc/constants';
 import * as bun from 'bun';
-import { HonoAdapter } from '../adapter/hono';
-import { HonoWebsocketAdapter } from '../adapter/hono/HonoWebsocketAdapter';
-import { green, type ServerLogger } from '../logger';
+import { green, type ServerLogger, yellow } from '../logger';
+import type { AsenaConfig } from './config/AsenaConfig';
+import { getTypedMetadata } from '../utils/typedMetadata';
 
-export class AsenaServer {
+export class AsenaServer<A extends AsenaAdapter<any, any, any, any, any, any, any, AsenaWebsocketAdapter<any, any>>> {
 
   private _port: number;
 
   private controllers: Class[] = [];
 
-  private _components: Component[] = [];
+  private _components: InjectibleComponent[] = [];
 
   private _ioc: IocEngine;
 
   private _logger: ServerLogger;
 
-  private _adapter: AsenaAdapter<any, any, any, any, any, any, AsenaWebsocketAdapter<any, any>>;
+  private _adapter: A;
 
   private _wsOptions: WSOptions;
 
-  public constructor(adapter?: AsenaAdapter<any, any, any, any, any>) {
-    this.prepareLogger();
+  public constructor(adapter: A, logger?: ServerLogger) {
+    this._logger = logger;
+
+    if (!logger) {
+      this.prepareLogger();
+    }
 
     const config = readConfigFile();
 
@@ -48,15 +59,6 @@ export class AsenaServer {
   }
 
   public async start(gc = false): Promise<void> {
-    // Setting default adapter if not provided
-    if (!this._adapter) {
-      this._adapter = new HonoAdapter(new HonoWebsocketAdapter(), this._logger);
-    }
-
-    this._adapter.setPort(this._port);
-
-    await this._ioc.searchAndRegister(this._components);
-
     this._logger.info(`
     ___    _____  ______ _   __ ___ 
    /   |  / ___/ / ____// | / //   |
@@ -65,13 +67,19 @@ export class AsenaServer {
 /_/  |_|/____//_____//_/ |_//_/  |_|  
                             `);
 
-    this._logger.info('IoC initialized');
+    this._logger.info(`Adapter: ${green(this._adapter.constructor.name)} implemented`);
+
+    this._adapter.setPort(this._port);
+
+    await this._ioc.searchAndRegister(this._components);
+
+    this._logger.info('All components registered and ready to use');
+
+    await this.prepareConfigs();
 
     await this.initializeControllers();
 
     await this.prepareWebSocket();
-
-    this.configureErrorHandling();
 
     this._logger.info('Server started on port ' + this._port);
 
@@ -83,10 +91,10 @@ export class AsenaServer {
     }
   }
 
-  public components(components: Class[]): AsenaServer {
+  public components(components: Class[]) {
     this._components = components.map((_component: Class) => {
-      const face: string = getMetadata(ComponentConstants.InterfaceKey, _component);
-      const component: Component = {
+      const face: string = getTypedMetadata<string>(ComponentConstants.InterfaceKey, _component);
+      const component: InjectibleComponent = {
         Class: _component as Class,
         interface: face,
       };
@@ -97,19 +105,19 @@ export class AsenaServer {
     return this;
   }
 
-  public port(port: number): AsenaServer {
+  public port(port: number) {
     this._port = port;
 
     return this;
   }
 
-  public logger(value: ServerLogger): AsenaServer {
+  public logger(value: ServerLogger) {
     this._logger = value;
 
     return this;
   }
 
-  public wsOptions(options: WSOptions): AsenaServer {
+  public wsOptions(options: WSOptions) {
     this._wsOptions = options;
 
     return this;
@@ -132,24 +140,25 @@ export class AsenaServer {
     }
 
     for (const controller of this.controllers) {
-      const routes: Route = getMetadata(ComponentConstants.RouteKey, controller) || {};
+      const routes = getTypedMetadata<Route>(ComponentConstants.RouteKey, controller) || {};
 
-      const routePath: string = getMetadata(ComponentConstants.PathKey, controller.constructor) || '';
+      const routePath: string = getTypedMetadata<string>(ComponentConstants.PathKey, controller.constructor) || '';
 
       await this.prepareTopMiddlewares({ controller, routePath });
 
       for (const [name, params] of Object.entries(routes)) {
         const lastPath = path.join(`${routePath}/`, params.path);
 
-        const middlewares = this.prepareMiddleware(params);
+        const middlewares = await this.prepareMiddleware(params);
+        const validatorInstance = await this.prepareValidator(params.validator);
 
-        this._adapter.registerRoute({
+        await this._adapter.registerRoute({
           method: params.method,
           path: lastPath,
-          middleware: this._adapter.prepareMiddlewares(middlewares),
-          handler: this._adapter.prepareHandler(() => (ctx: AsenaContext<any, any>) => controller[name](ctx)),
+          middleware: await this._adapter.prepareMiddlewares(middlewares),
+          handler: await this._adapter.prepareHandler((ctx: AsenaContext<any, any>) => controller[name](ctx)),
           staticServe: params.staticServe,
-          validator: this._adapter.prepareValidator(params.validator),
+          validator: await this._adapter.prepareValidator(validatorInstance),
         });
       }
     }
@@ -159,11 +168,12 @@ export class AsenaServer {
     { controller, routePath }: PrepareMiddlewareParams,
     websocket = false,
   ): Promise<BaseMiddleware<any, any>[]> {
-    const topMiddlewares = getMetadata(ComponentConstants.MiddlewaresKey, controller.constructor) || [];
-    const middlewareInstances: BaseMiddleware<any, any>[] = [];
+    const topMiddlewares =
+      getTypedMetadata<MiddlewareClass[]>(ComponentConstants.MiddlewaresKey, controller.constructor) || [];
+    const middlewares: BaseMiddleware<any, any>[] = [];
 
     for (const middleware of topMiddlewares) {
-      const name = getMetadata(ComponentConstants.NameKey, middleware);
+      const name = getTypedMetadata<string>(ComponentConstants.NameKey, middleware);
       const instances = await this._ioc.container.resolve<AsenaMiddlewareService<any, any>>(name);
 
       if (!instances) continue;
@@ -171,28 +181,66 @@ export class AsenaServer {
       const normalizedInstances = Array.isArray(instances) ? instances : [instances];
 
       for (const instance of normalizedInstances) {
-        const override = getMetadata(ComponentConstants.OverrideKey, instance);
-        const middlewareConfig = { middlewareService: instance, override };
+        const override = getTypedMetadata<string[]>(ComponentConstants.OverrideKey, instance);
+        const isOverride = override ? override.includes('handle') : false;
+        const middleware: BaseMiddleware<any, any> = {
+          handle: (context, next) => instance.handle(context, next),
+          override: isOverride,
+        };
 
         if (websocket) {
-          middlewareInstances.push(middlewareConfig);
+          middlewares.push(middleware);
         } else {
-          this._adapter.use(middlewareConfig, routePath);
+          await this._adapter.use(middleware, routePath);
         }
       }
     }
 
-    return websocket ? middlewareInstances : [];
+    return websocket ? middlewares : [];
   }
 
-  private prepareMiddleware(middlewareParams: ApiHandler): BaseMiddleware<any, any>[] {
+  private async prepareValidator(Validator: ValidatorClass<any>): Promise<BaseValidator> {
+    if (!Validator) {
+      return;
+    }
+
+    const name = getTypedMetadata<string>(ComponentConstants.NameKey, Validator);
+
+    const validator = await this._ioc.container.resolve<AsenaValidationService<any>>(name);
+
+    if (!validator) {
+      throw new Error('Validator not found:' + name);
+    }
+
+    if (Array.isArray(validator)) {
+      throw new Error('Validator cannot be array');
+    }
+
+    const overrides: string[] = getTypedMetadata<string[]>(ComponentConstants.OverrideKey, validator.constructor);
+
+    const baseValidatorMiddleware: BaseValidator = {};
+
+    VALIDATOR_METHODS.filter((key) => typeof validator[key] === 'function').forEach((key) => {
+      baseValidatorMiddleware[key] = {
+        handle: () => validator[key](),
+        override: overrides?.includes(key) || false,
+      } satisfies ValidatorHandler;
+    });
+
+    return baseValidatorMiddleware;
+  }
+
+  private async prepareMiddleware(middlewareParams: ApiParams): Promise<BaseMiddleware<any, any>[]> {
     const middlewares: BaseMiddleware<any, any>[] = [];
     const routeMiddlewares = middlewareParams?.middlewares || [];
 
     for (const middleware of routeMiddlewares) {
-      const name = getMetadata(ComponentConstants.NameKey, middleware);
-      const override = getMetadata(ComponentConstants.OverrideKey, middleware);
-      const instances = this._ioc.container.resolve<AsenaMiddlewareService<any, any>>(name);
+      const name: string = getTypedMetadata<string>(ComponentConstants.NameKey, middleware);
+      const override: string[] | undefined = getTypedMetadata<string[]>(ComponentConstants.OverrideKey, middleware);
+      const isOverride = override ? override.includes('handle') : false;
+
+      const instances: AsenaMiddlewareService<any, any> | AsenaMiddlewareService<any, any>[] =
+        await this._ioc.container.resolve<AsenaMiddlewareService<any, any>>(name);
 
       if (!instances) continue;
 
@@ -200,8 +248,8 @@ export class AsenaServer {
 
       for (const instance of normalizedInstances) {
         middlewares.push({
-          middlewareService: instance,
-          override,
+          handle: (context, next) => instance.handle(context, next),
+          override: isOverride,
         });
       }
     }
@@ -224,7 +272,7 @@ export class AsenaServer {
     const registeredPaths = new Set<string>();
 
     for (const webSocket of flatWebSockets) {
-      const path = getMetadata(ComponentConstants.PathKey, webSocket.constructor);
+      const path = getTypedMetadata<string>(ComponentConstants.PathKey, webSocket.constructor);
 
       if (!path) {
         throw new Error('Path not found in WebSocket');
@@ -235,27 +283,44 @@ export class AsenaServer {
       }
 
       registeredPaths.add(path);
+      webSocket.namespace = path;
 
       const middlewares = await this.prepareTopMiddlewares({ controller: webSocket as unknown as Class }, true);
 
-      this._adapter.websocketAdapter.registerWebSocket(webSocket, this._adapter.prepareMiddlewares(middlewares));
+      await this._adapter.websocketAdapter.registerWebSocket(
+        webSocket,
+        await this._adapter.prepareMiddlewares(middlewares),
+      );
     }
 
     if (flatWebSockets.length > 0) {
-      this._adapter.websocketAdapter.prepareWebSocket(this._wsOptions);
+      await this._adapter.websocketAdapter.prepareWebSocket(this._wsOptions);
     }
   }
 
-  // todo: this implementation still under development
-  private configureErrorHandling() {
-    // this._adapter.app.onError((err: Error | HTTPResponseError, c: Context) => {
-    //   if (err instanceof HTTPException) {
-    //     // Get the custom response
-    //     return err.getResponse();
-    //   }
-    //
-    //   return c.json({ message: 'Internal server error' }, ServerErrorStatusCode.INTERNAL_SERVER_ERROR);
-    // });
+  private async prepareConfigs() {
+    const config = await this._ioc.container.resolveAll<AsenaConfig>(ComponentType.CONFIG);
+
+    if (!config?.length) {
+      this._logger.info('No configs found');
+      return;
+    }
+
+    if (config.length > 1) {
+      throw new Error('Only one config is allowed');
+    }
+
+    if (Array.isArray(config[0])) {
+      throw new Error('Config cannot be array');
+    }
+
+    this._logger.info(`Config found ${yellow(config[0].constructor.name)}`);
+
+    const configInstance = config[0];
+
+    await this._adapter.onError((error: Error, ctx: AsenaContext<any, any>) => configInstance.onError(error, ctx));
+
+    this._logger.info(`Config ${yellow(config[0].constructor.name)} applied`);
   }
 
   private prepareLogger() {

@@ -1,5 +1,5 @@
 import { AsenaAdapter } from '../AsenaAdapter';
-import { type Context, Hono, type HonoRequest, type MiddlewareHandler, type Next } from 'hono';
+import { type Context, Hono, type HonoRequest, type MiddlewareHandler, type Next, type ValidationTargets } from 'hono';
 import type { Server } from 'bun';
 import * as bun from 'bun';
 import type { RouteParams } from '../types';
@@ -7,15 +7,30 @@ import { createFactory } from 'hono/factory';
 import type { H } from 'hono/types';
 import { HonoContextWrapper } from './HonoContextWrapper';
 import { HttpMethod } from '../../server/web/http';
-import type { BaseMiddleware } from '../../server/web/types';
-import type { ErrorHandler, Handler } from './types';
-import type { ValidatorClass } from '../../server/types';
-import type { AsenaWebsocketAdapter } from '../AsenaWebsocketAdapter';
+import {
+  type BaseMiddleware,
+  type BaseValidator,
+  VALIDATOR_METHODS,
+  type ValidatorHandler,
+} from '../../server/web/types';
+import type { Handler, HonoErrorHandler } from './types';
 import { green, type ServerLogger, yellow } from '../../logger';
+import type { AsenaWebsocketAdapter } from '../AsenaWebsocketAdapter';
+import { type Hook, zValidator } from '@hono/zod-validator';
+import type { ValidationSchema } from './defaults';
+import type { ZodType } from 'zod';
+import type { ZodTypeDef } from 'zod';
 
-export class HonoAdapter extends AsenaAdapter<Hono, Handler, MiddlewareHandler, H> {
-
-  private static readonly VALIDATOR_METHODS = ['json', 'query', 'form', 'param', 'header'] as const;
+export class HonoAdapter extends AsenaAdapter<
+  Hono,
+  Handler,
+  MiddlewareHandler,
+  H,
+  HonoRequest,
+  Response,
+  ValidationSchema,
+  AsenaWebsocketAdapter<Hono, MiddlewareHandler>
+> {
 
   public app = new Hono();
 
@@ -36,7 +51,7 @@ export class HonoAdapter extends AsenaAdapter<Hono, Handler, MiddlewareHandler, 
       this.app.on(HttpMethod.TRACE.toUpperCase(), path, ...handlers),
   };
 
-  public constructor(websocketAdapter: AsenaWebsocketAdapter<any, any>, logger?: ServerLogger) {
+  public constructor(websocketAdapter: AsenaWebsocketAdapter<Hono, MiddlewareHandler>, logger?: ServerLogger) {
     super(websocketAdapter, logger);
     this.websocketAdapter.app = this.app;
 
@@ -67,6 +82,7 @@ export class HonoAdapter extends AsenaAdapter<Hono, Handler, MiddlewareHandler, 
     validator,
   }: RouteParams<MiddlewareHandler, H>) {
     const middlewares = validator ? [...validator, ...middleware] : middleware;
+
     const routeHandler = staticServe ? middleware : [...middlewares, handler];
 
     const methodHandler = this.methodMap[method];
@@ -101,20 +117,20 @@ export class HonoAdapter extends AsenaAdapter<Hono, Handler, MiddlewareHandler, 
     return _middlewares.map((middleware) => {
       if (middleware.override) {
         // @ts-ignore
-        return (c: Context, next: Function) => middleware.middlewareService.handle(c, next);
+        return (c: Context, next: Function) => middleware.handle(c, next);
       }
 
       return factory.createMiddleware(async (context: Context, next: Next) => {
-        await middleware.middlewareService.handle(new HonoContextWrapper(context), next);
+        await middleware.handle(new HonoContextWrapper(context), next);
       });
     });
   }
 
-  public prepareHandler(handler: () => Handler) {
-    return (c: Context) => handler()(new HonoContextWrapper(c));
+  public prepareHandler(handler: Handler) {
+    return (c: Context) => handler(new HonoContextWrapper(c));
   }
 
-  public onError(errorHandler: ErrorHandler) {
+  public onError(errorHandler: HonoErrorHandler) {
     this.app.onError((error, context) => {
       return errorHandler(error, new HonoContextWrapper(context));
     });
@@ -124,16 +140,36 @@ export class HonoAdapter extends AsenaAdapter<Hono, Handler, MiddlewareHandler, 
     this.port = port;
   }
 
-  public prepareValidator(Validator: ValidatorClass<MiddlewareHandler>) {
-    if (!Validator) {
+  public async prepareValidator(baseValidator: BaseValidator<ValidationSchema>): Promise<any> {
+    if (!baseValidator) {
       return [];
     }
 
-    const validatorInstance = new Validator();
+    const validators = [];
 
-    return HonoAdapter.VALIDATOR_METHODS.filter((key) => validatorInstance[key]).map((key) => {
-      return validatorInstance[key]();
-    });
+    for (const key of VALIDATOR_METHODS) {
+      // if the key is not a validator method, skip
+      if (typeof (baseValidator[key] as BaseMiddleware<HonoRequest, Response>)?.handle !== 'function') {
+        continue;
+      }
+
+      const validator: ValidatorHandler<ValidationSchema> = baseValidator[key];
+
+      const validationSchema = await validator.handle();
+      let schema: ZodType<any, ZodTypeDef, any>;
+      let hook: Hook<any, any, any>;
+
+      if ('schema' in validationSchema) {
+        schema = validationSchema['schema'];
+        hook = validationSchema['hook'];
+      } else {
+        schema = validationSchema as ZodType<any, ZodTypeDef, any>;
+      }
+
+      validators.push(zValidator(key as keyof ValidationTargets, schema, hook));
+    }
+
+    return validators;
   }
 
   private normalizePath(path: string): string {

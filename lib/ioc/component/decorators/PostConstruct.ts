@@ -1,5 +1,5 @@
 import { ComponentConstants } from '../../constants';
-import { defineMetadata, getMetadata } from 'reflect-metadata/no-conflict';
+import { defineTypedMetadata, getTypedMetadata } from '../../../utils/typedMetadata';
 
 /**
  * A decorator that marks a method to be called after the component's construction.
@@ -8,12 +8,13 @@ import { defineMetadata, getMetadata } from 'reflect-metadata/no-conflict';
  */
 export const PostConstruct = (): PropertyDecorator => {
   return (target: object, propertyKey: string): void => {
-    const postConstructs: string[] = getMetadata(ComponentConstants.PostConstructKey, target.constructor) || [];
+    const postConstructs: string[] =
+      getTypedMetadata<string[]>(ComponentConstants.PostConstructKey, target.constructor) || [];
 
     if (!postConstructs.includes(propertyKey)) {
       postConstructs.push(propertyKey);
     }
-    
-    defineMetadata(ComponentConstants.PostConstructKey, postConstructs, target.constructor);
+
+    defineTypedMetadata<string[]>(ComponentConstants.PostConstructKey, postConstructs, target.constructor);
   };
 };

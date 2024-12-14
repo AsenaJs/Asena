@@ -1,8 +1,9 @@
 import { ComponentType, type ControllerParams } from '../../../ioc/types';
-import { defineComponent } from '../../../ioc/component/componentUtils';
-import { defineMetadata } from 'reflect-metadata/no-conflict';
+import { defineComponent } from '../../../ioc/component';
 import { ComponentConstants } from '../../../ioc/constants';
 import { defineMiddleware } from '../../web/helper';
+import { defineTypedMetadata } from '../../../utils/typedMetadata';
+import type { MiddlewareClass } from '../../types';
 
 /**
  * Decorator for defining a WebSocket component.
@@ -16,10 +17,14 @@ export const WebSocket = (params: ControllerParams | string): ClassDecorator => 
 
     path = path.replace(/^\/+/, '');
 
-    defineMetadata(ComponentConstants.PathKey, path, target);
+    defineTypedMetadata<string>(ComponentConstants.PathKey, path, target);
 
     defineMiddleware(target, (params as ControllerParams).middlewares || []);
 
-    defineMetadata(ComponentConstants.MiddlewaresKey, (params as ControllerParams).middlewares || [], target);
+    defineTypedMetadata<MiddlewareClass[]>(
+      ComponentConstants.MiddlewaresKey,
+      (params as ControllerParams).middlewares || [],
+      target,
+    );
   });
 };

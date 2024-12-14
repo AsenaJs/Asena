@@ -30,8 +30,8 @@
       "types": "./dist/lib/adapter/hono/index.d.ts"
     },
     "./logger": {
-      "import": "./dist/lib/services/logger/DefaultLogger.js",
-      "types": "./dist/lib/services/logger/DefaultLogger.d.ts"
+      "import": "./dist/lib/logger/index.js",
+      "types": "./dist/lib/logger/index.d.ts"
     },
     "./web-socket": {
       "import": "./dist/lib/server/web/websocket/index.js",
@@ -48,6 +48,10 @@
     "./ioc": {
       "import": "./dist/lib/ioc/component/decorators/index.js",
       "types": "./dist/lib/ioc/component/decorators/index.d.ts"
+    },
+    "./http-status": {
+      "import": "./dist/lib/server/web/http/HttpStatus.js",
+      "types": "./dist/lib/server/web/http/HttpStatus.d.ts"
     }
   },
   "keywords": [
@@ -80,13 +84,15 @@
     "eslint-plugin-n": "^16.6.2",
     "eslint-plugin-prettier": "^5.2.1",
     "eslint-plugin-promise": "^6.6.0",
-    "hono": "^4.6.12",
-    "prettier": "^3.4.1",
+    "hono": "^4.6.13",
+    "prettier": "^3.4.2",
     "typescript": "^5.7.2",
     "winston": "^3.17.0"
   },
   "peerDependencies": {
+    "@hono/zod-validator": "^0.4.1",
     "hono": "^4.5.9",
-    "winston": "^3.13.0"
+    "winston": "^3.13.0",
+    "zod": "^3.23.8"
   }
 }

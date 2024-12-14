@@ -5,4 +5,5 @@ export enum ComponentType {
   SCHEDULE = 'SCHEDULE',
   MIDDLEWARE = 'MIDDLEWARE',
   WEBSOCKET = 'WEBSOCKET',
+  CONFIG = 'CONFIG',
 }

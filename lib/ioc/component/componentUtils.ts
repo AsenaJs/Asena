@@ -1,7 +1,7 @@
-import type { ComponentParams, ComponentType, ServiceParams } from '../types';
+import type { ComponentParams, ComponentType, Dependencies, ServiceParams, Strategies } from '../types';
 import { Scope } from '../types';
-import { defineMetadata, getMetadata } from 'reflect-metadata/no-conflict';
 import { ComponentConstants } from '../constants';
+import { defineTypedMetadata, getTypedMetadata } from '../../utils/typedMetadata';
 
 export const defineComponent = <T extends ComponentParams>(
   componentType: ComponentType,
@@ -11,28 +11,29 @@ export const defineComponent = <T extends ComponentParams>(
   return (target: Function) => {
     const { scope = Scope.SINGLETON, name = target.name } = paramsGenerator(params);
 
-    defineMetadata(componentType, true, target);
+    defineTypedMetadata<boolean>(componentType, true, target);
 
-    defineMetadata(ComponentConstants.IOCObjectKey, true, target);
+    defineTypedMetadata<boolean>(ComponentConstants.IOCObjectKey, true, target);
 
-    defineMetadata(ComponentConstants.ScopeKey, scope, target);
+    defineTypedMetadata<Scope>(ComponentConstants.ScopeKey, scope, target);
 
-    defineMetadata(ComponentConstants.NameKey, name, target);
+    defineTypedMetadata<string>(ComponentConstants.NameKey, name, target);
 
     if (extra) {
       extra(target);
     }
 
-    if (getMetadata(ComponentConstants.DependencyKey, target) === undefined) {
-      defineMetadata(ComponentConstants.DependencyKey, {}, target);
+    if (getTypedMetadata<Dependencies>(ComponentConstants.DependencyKey, target) === undefined) {
+      defineTypedMetadata<Dependencies>(ComponentConstants.DependencyKey, {}, target);
     }
 
-    if (getMetadata(ComponentConstants.StrategyKey, target) === undefined) {
-      defineMetadata(ComponentConstants.StrategyKey, {}, target);
+    if (getTypedMetadata<Strategies>(ComponentConstants.StrategyKey, target) === undefined) {
+      defineTypedMetadata<Strategies>(ComponentConstants.StrategyKey, {}, target);
     }
   };
 };
 
+// Todo if websocket or controller name in container will set as path this is not good. We need to change this.
 const paramsGenerator = (params: ComponentParams | string): ComponentParams | ServiceParams => {
   const defaultParam: ComponentParams | ServiceParams = { name: undefined, scope: undefined };
 

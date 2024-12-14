@@ -16,5 +16,5 @@ export enum ComponentConstants {
   IOCObjectKey = '_IIocObject',
   OverrideKey = '_IOverride',
   ExpressionKey = '_IExpression',
-  ConfigKey = '_IConfig',
+  ValidatorKey = '_IValidator',
 }

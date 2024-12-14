@@ -3,7 +3,7 @@ import { Container } from '../../ioc';
 import { Component } from '../../server/decorators';
 import { Inject, Strategy } from '../../ioc/component';
 import { ComponentType } from '../../ioc/types';
-import { ExportedServerServiceTest } from '../example-app-structure/database/ExportedServerService.test';
+import { ExportedServerService } from '../example-app-structure/database/ExportedServerService.test';
 
 @Component()
 class TestClass {
@@ -194,13 +194,13 @@ describe('Container', () => {
   });
 
   test('should execute PostConstruct method', async () => {
-    container.register('ExportedServerServiceTest', ExportedServerServiceTest, true);
+    container.register('ExportedServerServiceTest', ExportedServerService, true);
 
     const exportedServerServiceTest = (await container.resolve(
       'ExportedServerServiceTest',
-    )) as ExportedServerServiceTest;
+    )) as ExportedServerService;
 
-    expect(exportedServerServiceTest).toBeInstanceOf(ExportedServerServiceTest);
+    expect(exportedServerServiceTest).toBeInstanceOf(ExportedServerService);
 
     expect(exportedServerServiceTest.testValue).toBe('Test Value');
   });

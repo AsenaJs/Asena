@@ -1,15 +1,15 @@
 import type { Class } from '../../server/types';
 
-export interface Component {
+export interface InjectibleComponent {
   Class: Class;
   interface: string;
 }
 
-export interface Injectable {
-  [key: string]: Class | Class[];
+export interface Dependencies {
+  [key: string]: string;
 }
 
-export interface Expression {
+export interface Expressions {
   [key: string]: (injectedClass) => any;
 }
 

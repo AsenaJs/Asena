@@ -1,7 +1,7 @@
 import type { Class } from '../server/types';
-import type { ComponentType, ContainerService, Expression } from './types';
-import { getMetadata } from 'reflect-metadata/no-conflict';
+import type { ComponentType, ContainerService, Dependencies, Expressions, Strategies } from './types';
 import { ComponentConstants } from './constants';
+import { getTypedMetadata } from '../utils/typedMetadata';
 
 export class Container {
 
@@ -34,7 +34,7 @@ export class Container {
     const service = this._services[key];
 
     if (!service) {
-      throw new Error('Service not found');
+      throw new Error(key + ' is not registered');
     }
 
     if (Array.isArray(service)) {
@@ -78,11 +78,11 @@ export class Container {
         if (Array.isArray(value)) {
           // check every element in the array is the same type
           return value.every((service) => {
-            return getMetadata(typeOfComponent, service.Class);
+            return getTypedMetadata(typeOfComponent, service.Class);
           });
         }
 
-        return getMetadata(typeOfComponent, value.Class);
+        return getTypedMetadata(typeOfComponent, value.Class);
       })
       .map(([, value]) => value);
   }
@@ -116,7 +116,7 @@ export class Container {
   }
 
   private async executePostConstructs(newInstance: any, Class: Class) {
-    const postConstructs: string[] = getMetadata(ComponentConstants.PostConstructKey, Class);
+    const postConstructs: string[] = getTypedMetadata<string[]>(ComponentConstants.PostConstructKey, Class);
 
     if (!postConstructs) {
       return;
@@ -128,7 +128,9 @@ export class Container {
   }
 
   private async injectStrategies(newInstance: any, Class: Class) {
-    for (const [propertyKey, interfaceName] of Object.entries(getMetadata(ComponentConstants.StrategyKey, Class))) {
+    const strategyList = getTypedMetadata<Strategies>(ComponentConstants.StrategyKey, Class);
+
+    for (const [propertyKey, interfaceName] of Object.entries(strategyList)) {
       if (!interfaceName) {
         continue;
       }
@@ -139,7 +141,7 @@ export class Container {
 
       const strategy: Class[] = await this.resolveStrategy<Class>(interfaceName);
 
-      const expression: Expression = getMetadata(ComponentConstants.ExpressionKey, Class);
+      const expression: Expressions = getTypedMetadata<Expressions>(ComponentConstants.ExpressionKey, Class);
 
       Object.defineProperty(newInstance, propertyKey, {
         get() {
@@ -152,30 +154,28 @@ export class Container {
   }
 
   private async injectDependencies(newInstance: any, Class: Class) {
-    for (const [k, V] of Object.entries(getMetadata(ComponentConstants.DependencyKey, Class))) {
-      const name = getMetadata(ComponentConstants.NameKey, V) || (V as Class).name;
+    const deps = getTypedMetadata<Dependencies>(ComponentConstants.DependencyKey, Class);
 
+    for (const [k, name] of Object.entries(deps)) {
       const instance: Class | Class[] = await this.resolve<Class>(name);
 
       if (instance === null) {
-        throw new Error('Instance cant be null ' + V);
+        throw new Error('Instance cant be null ' + name);
       }
 
       if (Array.isArray(instance) && instance.length < 1) {
         throw new Error('instance error cannot be null');
       }
 
-      if (instance instanceof (V as Class)) {
-        const expression: Expression = getMetadata(ComponentConstants.ExpressionKey, Class);
+      const expression: Expressions = getTypedMetadata<Expressions>(ComponentConstants.ExpressionKey, Class);
 
-        Object.defineProperty(newInstance, k, {
-          get: () => {
-            return expression && expression[k] ? expression[k](instance) : instance;
-          },
-          enumerable: true,
-          configurable: true,
-        });
-      }
+      Object.defineProperty(newInstance, k, {
+        get: () => {
+          return expression && expression[k] ? expression[k](instance) : instance;
+        },
+        enumerable: true,
+        configurable: true,
+      });
     }
   }
 

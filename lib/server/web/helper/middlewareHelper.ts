@@ -1,7 +1,7 @@
 import type { MiddlewareClass } from '../../types';
-import type { Injectable } from '../../../ioc/types';
-import { defineMetadata, getMetadata } from 'reflect-metadata/no-conflict';
+import type { Dependencies } from '../../../ioc/types';
 import { ComponentConstants } from '../../../ioc/constants';
+import { defineTypedMetadata, getTypedMetadata } from '../../../utils/typedMetadata';
 
 /**
  * Defines middlewares for target class.
@@ -10,17 +10,17 @@ import { ComponentConstants } from '../../../ioc/constants';
  * @param {MiddlewareClass[]} middlewares - An array of middleware classes to be defined.
  */
 export const defineMiddleware = (target: Function, middlewares: MiddlewareClass[]): void => {
-  const deps: Injectable = getMetadata(ComponentConstants.SoftDependencyKey, target) || {};
+  const deps: Dependencies = getTypedMetadata<Dependencies>(ComponentConstants.SoftDependencyKey, target) || {};
 
   for (const middleware of middlewares) {
     const keys = Object.keys(deps);
 
-    const name = getMetadata(ComponentConstants.NameKey, middleware);
+    const name = getTypedMetadata<string>(ComponentConstants.NameKey, middleware);
 
     if (!keys.includes(name)) {
-      deps[name] = middleware;
+      deps[name] = name;
     }
   }
 
-  defineMetadata(ComponentConstants.SoftDependencyKey, deps, target);
-};
+  defineTypedMetadata<Dependencies>(ComponentConstants.SoftDependencyKey, deps, target);
+}

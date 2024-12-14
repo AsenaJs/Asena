@@ -1,6 +1,6 @@
 import type { AsenaValidationService } from '../../../../server/web/middleware';
 
-export class ExportedTestValidatorTest implements AsenaValidationService<boolean> {
+export class ExportedTestValidator implements AsenaValidationService<boolean> {
 
   public form(): boolean {
     return true;

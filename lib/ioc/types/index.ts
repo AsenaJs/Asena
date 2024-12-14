@@ -5,5 +5,5 @@ export * from './decorators/ServiceParams';
 export * from './decorators/ScheduleParams';
 export * from './Scope';
 export * from './IocConfig';
-export * from './Component';
+export * from './InjectibleComponent';
 export * from './ContainerService';

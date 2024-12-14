@@ -1,8 +1,8 @@
-import { ServerService } from '../../../server/decorators';
-import { PostConstruct } from '../../../ioc/component/decorators/PostConstruct';
+import { PostConstruct } from '../../../ioc/component';
+import { Service } from '../../../server/decorators';
 
-@ServerService()
-export class ExportedServerServiceTest {
+@Service()
+export class ExportedServerService {
 
   public testValue: string;
 

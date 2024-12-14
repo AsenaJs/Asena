@@ -9,11 +9,9 @@ import { AsenaWebsocketAdapter } from '../AsenaWebsocketAdapter';
 import type { Context, Hono, MiddlewareHandler } from 'hono';
 import type { Server, ServerWebSocket } from 'bun';
 import * as bun from 'bun';
-import { getMetadata } from 'reflect-metadata/no-conflict';
-import { ComponentConstants } from '../../ioc/constants';
 import { AsenaWebSocketServer } from '../../server/web/websocket/AsenaWebSocketServer';
 import type { WebsocketAdapterParams, WebsocketServiceRegistry } from '../types';
-import {green, yellow} from "../../logger";
+import { green, yellow } from '../../logger';
 
 export class HonoWebsocketAdapter extends AsenaWebsocketAdapter<Hono, MiddlewareHandler> {
 
@@ -32,13 +30,11 @@ export class HonoWebsocketAdapter extends AsenaWebsocketAdapter<Hono, Middleware
       this.websockets = new Map<string, WebsocketServiceRegistry<MiddlewareHandler>>();
     }
 
-    const namespace = getMetadata(ComponentConstants.PathKey, webSocketService.constructor);
+    const namespace = webSocketService.namespace;
 
     if (!namespace) {
       throw new Error('Namespace is not provided');
     }
-
-    webSocketService.namespace = namespace;
 
     this.logger.info(
       `${green('Successfully')} registered ${yellow('WEBSOCKET')} route for PATH: ${green(`/${webSocketService.namespace}`)} (${webSocketService.constructor.name})`,

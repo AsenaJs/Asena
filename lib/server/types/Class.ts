@@ -2,6 +2,6 @@ import type { AsenaMiddlewareService, AsenaValidationService } from '../web/midd
 
 export type Class<T = any> = new (...args: any[]) => T;
 
-export type MiddlewareClass = Class<AsenaMiddlewareService<any, any>>;
+export type MiddlewareClass<R = unknown, S = unknown> = Class<AsenaMiddlewareService<R, S>>;
 
-export type ValidatorClass<T> = Class<AsenaValidationService<T>>;
+export type ValidatorClass<S = unknown> = Class<AsenaValidationService<S>>;

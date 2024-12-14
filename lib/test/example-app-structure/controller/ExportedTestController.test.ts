@@ -1,15 +1,15 @@
 import { Controller } from '../../../server/decorators';
 import { Inject } from '../../../ioc/component';
-import { ExportedTestServiceTest } from '../service/ExportedTestService.test';
-import { ExportedTopMiddlewareTest } from '../middleware/ExportedTopMiddleware.test';
+import { ExportedTopMiddleware } from '../middleware/ExportedTopMiddleware.test';
 import type { AsenaContext } from '../../../adapter';
 import { Get } from '../../../server/web/decorators';
+import { ExportedTestService } from '../service/ExportedTestService.test';
 
-@Controller({ path: '/test', name: 'ExportedTestController', middlewares: [ExportedTopMiddlewareTest] })
-export class ExportedTestControllerTest {
+@Controller({ path: '/test', name: 'ExportedTestController', middlewares: [ExportedTopMiddleware] })
+export class ExportedTestController {
 
-  @Inject(ExportedTestServiceTest)
-  private testService: ExportedTestServiceTest;
+  @Inject(ExportedTestService)
+  private testService: ExportedTestService;
 
   @Get('/data')
   public getData(context: AsenaContext<any, any>) {
