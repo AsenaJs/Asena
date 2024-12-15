@@ -1,7 +1,7 @@
 import type { Class, MiddlewareClass, ValidatorClass } from './types';
 import { IocEngine } from '../ioc';
 import { readConfigFile } from '../ioc/helper/fileHelper';
-import { type InjectibleComponent, ComponentType } from '../ioc/types';
+import { type InjectableComponent, ComponentType } from '../ioc/types';
 import {
   type ApiParams,
   type BaseMiddleware,
@@ -28,7 +28,7 @@ export class AsenaServer<A extends AsenaAdapter<any, any, any, any, any, any, an
 
   private controllers: Class[] = [];
 
-  private _components: InjectibleComponent[] = [];
+  private _components: InjectableComponent[] = [];
 
   private _ioc: IocEngine;
 
@@ -94,7 +94,7 @@ export class AsenaServer<A extends AsenaAdapter<any, any, any, any, any, any, an
   public components(components: Class[]) {
     this._components = components.map((_component: Class) => {
       const face: string = getTypedMetadata<string>(ComponentConstants.InterfaceKey, _component);
-      const component: InjectibleComponent = {
+      const component: InjectableComponent = {
         Class: _component as Class,
         interface: face,
       };

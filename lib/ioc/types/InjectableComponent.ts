@@ -1,6 +1,6 @@
 import type { Class } from '../../server/types';
 
-export interface InjectibleComponent {
+export interface InjectableComponent {
   Class: Class;
   interface: string;
 }
@@ -10,7 +10,7 @@ export interface Dependencies {
 }
 
 export interface Expressions {
-  [key: string]: (injectedClass) => any;
+  [key: string]: (injectedClass: any) => any;
 }
 
 export interface Strategies {

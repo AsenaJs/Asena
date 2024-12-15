@@ -1,4 +1,4 @@
-import type { InjectibleComponent, Dependencies, IocConfig, Strategies } from './types';
+import type { InjectableComponent, Dependencies, IocConfig, Strategies } from './types';
 import { Scope } from './types';
 import { Container } from './Container';
 import { getAllFiles } from './helper/fileHelper';
@@ -14,7 +14,7 @@ export class IocEngine {
 
   private readonly _container: Container;
 
-  private injectables: InjectibleComponent[] = [];
+  private injectables: InjectableComponent[] = [];
 
   private readonly config: IocConfig;
 
@@ -24,7 +24,7 @@ export class IocEngine {
     this.config = config;
   }
 
-  public async searchAndRegister(components?: InjectibleComponent[]): Promise<void> {
+  public async searchAndRegister(components?: InjectableComponent[]): Promise<void> {
     // load components
     await this.loadComponents(components);
 
@@ -33,7 +33,7 @@ export class IocEngine {
     await this.validateAndRegisterComponents(injectableClasses);
   }
 
-  private async loadComponents(components?: InjectibleComponent[]): Promise<void> {
+  private async loadComponents(components?: InjectableComponent[]): Promise<void> {
     if (components?.length) {
       this.injectables = components;
       return;
@@ -75,7 +75,7 @@ export class IocEngine {
     }
   }
 
-  private async getInjectables(files: string[]): Promise<InjectibleComponent[]> {
+  private async getInjectables(files: string[]): Promise<InjectableComponent[]> {
     const validFiles = files.filter(
       (file) => file.endsWith('.ts') || file.endsWith('.js') || file.endsWith('.tsx') || file.endsWith('.jsx'),
     );
@@ -104,11 +104,11 @@ export class IocEngine {
     return results.flat();
   }
 
-  private processComponents(components: any[]): InjectibleComponent[] {
+  private processComponents(components: any[]): InjectableComponent[] {
     return components
       .filter((component) => this.isValidComponent(component))
       .map((component) => this.createComponentObject(component))
-      .filter((component): component is InjectibleComponent => component !== null);
+      .filter((component): component is InjectableComponent => component !== null);
   }
 
   private isValidComponent(component: any): boolean {
@@ -119,7 +119,7 @@ export class IocEngine {
     }
   }
 
-  private createComponentObject(component: Class): InjectibleComponent | null {
+  private createComponentObject(component: Class): InjectableComponent | null {
     try {
       const _interface = getTypedMetadata<string>(ComponentConstants.InterfaceKey, component);
 
@@ -133,7 +133,7 @@ export class IocEngine {
     }
   }
 
-  private topologicalSort(classes: Class[], injectables: InjectibleComponent[]): Class[] {
+  private topologicalSort(classes: Class[], injectables: InjectableComponent[]): Class[] {
     const inDegree = new Map<string, number>();
     const adjacencyList = new Map<string, string[]>();
     const nameToClass = new Map<string, Class>();
@@ -185,7 +185,7 @@ export class IocEngine {
   // eslint-disable-next-line max-params
   private initializeGraph(
     classes: Class[],
-    injectables: InjectibleComponent[],
+    injectables: InjectableComponent[],
     inDegree: Map<string, number>,
     adjacencyList: Map<string, string[]>,
     nameToClass: Map<string, Class>,
@@ -274,7 +274,7 @@ export class IocEngine {
     }
   }
 
-  private getStrategyDependencies(component: Class, injectables: InjectibleComponent[]): string[] {
+  private getStrategyDependencies(component: Class, injectables: InjectableComponent[]): string[] {
     try {
       const strategyMeta = getTypedMetadata<Strategies>(ComponentConstants.StrategyKey, component);
 

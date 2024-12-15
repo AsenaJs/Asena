@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
 import { Component } from '../../ioc/component/decorators/Component';
-import type { InjectibleComponent } from '../../ioc/types';
+import type { InjectableComponent } from '../../ioc/types';
 import { Scope } from '../../ioc/types';
 import { Inject } from '../../ioc/component';
 import { IocEngine } from '../../ioc';
@@ -63,7 +63,7 @@ describe('IocEngine', () => {
   });
 
   test('should register components manually', async () => {
-    const components: InjectibleComponent[] = [
+    const components: InjectableComponent[] = [
       { Class: TestService, interface: null },
       { Class: TestController, interface: null },
     ];
@@ -102,7 +102,7 @@ describe('IocEngine', () => {
   });
 
   test('should register dependencies correct when extending class', async () => {
-    const components: InjectibleComponent[] = [
+    const components: InjectableComponent[] = [
       { Class: TestService2, interface: null },
       { Class: TestController, interface: null },
       { Class: TestService, interface: null },
