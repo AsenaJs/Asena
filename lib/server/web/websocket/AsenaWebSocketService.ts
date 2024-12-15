@@ -1,8 +1,6 @@
 import type { AsenaWebSocketServer } from './AsenaWebSocketServer';
 import type { Socket } from './AsenaSocket';
 
-// TODO: server needs to be a generic , also write default implementation for server object it needs to have sockets
-
 /**
  * A service class for handling WebSocket connections.
  *
