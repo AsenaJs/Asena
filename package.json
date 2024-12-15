@@ -84,7 +84,7 @@
     "eslint-plugin-n": "^16.6.2",
     "eslint-plugin-prettier": "^5.2.1",
     "eslint-plugin-promise": "^6.6.0",
-    "hono": "^4.6.13",
+    "hono": "^4.6.14",
     "prettier": "^3.4.2",
     "typescript": "^5.7.2",
     "winston": "^3.17.0"
