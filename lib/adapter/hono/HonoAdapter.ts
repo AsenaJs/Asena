@@ -17,7 +17,7 @@ import type { Handler, HonoErrorHandler } from './types';
 import { green, type ServerLogger, yellow } from '../../logger';
 import type { AsenaWebsocketAdapter } from '../AsenaWebsocketAdapter';
 import { type Hook, zValidator } from '@hono/zod-validator';
-import type { ValidationSchema } from './defaults';
+import type { ValidationSchema, ValidationSchemaWithHook } from './defaults';
 import type { ZodType } from 'zod';
 import type { ZodTypeDef } from 'zod';
 
@@ -140,7 +140,9 @@ export class HonoAdapter extends AsenaAdapter<
     this.port = port;
   }
 
-  public async prepareValidator(baseValidator: BaseValidator<ValidationSchema>): Promise<any> {
+  public async prepareValidator(
+    baseValidator: BaseValidator<ValidationSchema | ValidationSchemaWithHook>,
+  ): Promise<any> {
     if (!baseValidator) {
       return [];
     }
@@ -153,7 +155,7 @@ export class HonoAdapter extends AsenaAdapter<
         continue;
       }
 
-      const validator: ValidatorHandler<ValidationSchema> = baseValidator[key];
+      const validator: ValidatorHandler<ValidationSchema | ValidationSchemaWithHook> = baseValidator[key];
 
       const validationSchema = await validator.handle();
       let schema: ZodType<any, ZodTypeDef, any>;
