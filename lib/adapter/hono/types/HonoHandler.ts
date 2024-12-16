@@ -1,6 +1,6 @@
 import type { HonoRequest } from 'hono';
-import type { AsenaContext } from '../../AsenaContext';
 import type { ErrorHandler } from '../../types';
+import type { AsenaHandler } from '../../types/AsenaHandler';
 
-export type Handler = (context: AsenaContext<HonoRequest, Response>) => any | Promise<any>;
+export type HonoHandler = AsenaHandler<HonoRequest, Response>;
 export type HonoErrorHandler = ErrorHandler<HonoRequest, Response>;

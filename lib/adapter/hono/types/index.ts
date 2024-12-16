@@ -1,2 +1,2 @@
-export * from './Handler';
+export * from './HonoHandler';
 export * from '../defaults/Context';

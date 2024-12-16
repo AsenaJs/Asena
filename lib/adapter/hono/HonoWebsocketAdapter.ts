@@ -6,14 +6,17 @@ import {
   type WSOptions,
 } from '../../server/web/websocket';
 import { AsenaWebsocketAdapter } from '../AsenaWebsocketAdapter';
-import type { Context, Hono, MiddlewareHandler } from 'hono';
+import type { Context, Hono, HonoRequest, MiddlewareHandler } from 'hono';
 import type { Server, ServerWebSocket } from 'bun';
 import * as bun from 'bun';
 import { AsenaWebSocketServer } from '../../server/web/websocket/AsenaWebSocketServer';
 import type { WebsocketAdapterParams, WebsocketServiceRegistry } from '../types';
 import { green, yellow } from '../../logger';
+import type { BaseMiddleware } from '../../server/web/types';
+import { middlewareParser } from './utils/middlewareParser';
 
-export class HonoWebsocketAdapter extends AsenaWebsocketAdapter<Hono, MiddlewareHandler> {
+// TODO: middleware system on weboscket needs to be updated
+export class HonoWebsocketAdapter extends AsenaWebsocketAdapter<Hono, HonoRequest, Response> {
 
   private _server: Server;
 
@@ -21,13 +24,16 @@ export class HonoWebsocketAdapter extends AsenaWebsocketAdapter<Hono, Middleware
     super(params);
   }
 
-  public registerWebSocket(webSocketService: AsenaWebSocketService<any>, middlewares: MiddlewareHandler[]): void {
+  public registerWebSocket(
+    webSocketService: AsenaWebSocketService<any>,
+    middlewares: BaseMiddleware<HonoRequest, Response>[],
+  ): void {
     if (!webSocketService) {
       throw new Error('Websocket service is not provided');
     }
 
     if (this.websockets === undefined) {
-      this.websockets = new Map<string, WebsocketServiceRegistry<MiddlewareHandler>>();
+      this.websockets = new Map<string, WebsocketServiceRegistry<HonoRequest, Response>>();
     }
 
     const namespace = webSocketService.namespace;
@@ -43,24 +49,14 @@ export class HonoWebsocketAdapter extends AsenaWebsocketAdapter<Hono, Middleware
     this.websockets.set(namespace, { socket: webSocketService, middlewares });
   }
 
-  public prepareWebSocket(options?: WSOptions): void {
-    this.websocket = {
-      open: this.createHandler('onOpenInternal'),
-      message: this.createHandler('onMessage'),
-      drain: this.createHandler('onDrain'),
-      close: this.createHandler('onCloseInternal'),
-      ping: this.createHandler('onPing'),
-      pong: this.createHandler('onPong'),
-      ...options,
-    };
-  }
-
-  public buildWebsocket(): void {
+  public buildWebsocket(options?: WSOptions): void {
     if (!this.websocket || !this.websockets?.size) return;
 
     for (const [, websocket] of this.websockets) {
       this.upgradeWebSocket(websocket.socket, websocket.middlewares);
     }
+
+    this.prepareWebSocket(options);
   }
 
   public startWebsocket(server: Server) {
@@ -75,10 +71,31 @@ export class HonoWebsocketAdapter extends AsenaWebsocketAdapter<Hono, Middleware
     }
   }
 
-  private upgradeWebSocket(websocket: AsenaWebSocketService<any>, middlewares: MiddlewareHandler[]): void {
+  private prepareWebSocket(options?: WSOptions): void {
+    if (this.websockets?.size <= 1) {
+      return;
+    }
+
+    this.websocket = {
+      open: this.createHandler('onOpenInternal'),
+      message: this.createHandler('onMessage'),
+      drain: this.createHandler('onDrain'),
+      close: this.createHandler('onCloseInternal'),
+      ping: this.createHandler('onPing'),
+      pong: this.createHandler('onPong'),
+      ...options,
+    };
+  }
+
+  private upgradeWebSocket(
+    websocket: AsenaWebSocketService<any>,
+    middlewares: BaseMiddleware<HonoRequest, Response>[],
+  ): void {
     const path = websocket.namespace;
 
-    this.app.get(`/${path}`, ...middlewares, async (c: Context, next) => {
+    const preparedMiddlewares = this.prepareMiddlewares(middlewares);
+
+    this.app.get(`/${path}`, ...preparedMiddlewares, async (c: Context, next) => {
       const websocketData = c.get('_websocketData') || {};
 
       const id = bun.randomUUIDv7();
@@ -102,6 +119,10 @@ export class HonoWebsocketAdapter extends AsenaWebsocketAdapter<Hono, Middleware
         (websocket?.socket[type] as (...args: any[]) => void)(new AsenaSocket(ws, websocket.socket), ...args);
       }
     };
+  }
+
+  private prepareMiddlewares(middlewares: BaseMiddleware<HonoRequest, Response>[]): MiddlewareHandler[] {
+    return middlewareParser(middlewares);
   }
 
 }

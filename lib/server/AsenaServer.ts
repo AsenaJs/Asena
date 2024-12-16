@@ -1,7 +1,7 @@
 import type { Class, MiddlewareClass, ValidatorClass } from './types';
 import { IocEngine } from '../ioc';
 import { readConfigFile } from '../ioc/helper/fileHelper';
-import { type InjectableComponent, ComponentType } from '../ioc/types';
+import { ComponentType, type InjectableComponent } from '../ioc/types';
 import {
   type ApiParams,
   type BaseMiddleware,
@@ -13,8 +13,7 @@ import {
 } from './web/types';
 import * as path from 'node:path';
 import type { AsenaMiddlewareService, AsenaValidationService } from './web/middleware';
-import type { AsenaWebsocketAdapter } from '../adapter';
-import type { AsenaAdapter, AsenaContext } from '../adapter';
+import type { AsenaAdapter, AsenaWebsocketAdapter } from '../adapter';
 import type { AsenaWebSocketService, WebSocketData, WSOptions } from './web/websocket';
 import { ComponentConstants } from '../ioc/constants';
 import * as bun from 'bun';
@@ -22,7 +21,7 @@ import { green, type ServerLogger, yellow } from '../logger';
 import type { AsenaConfig } from './config/AsenaConfig';
 import { getTypedMetadata } from '../utils/typedMetadata';
 
-export class AsenaServer<A extends AsenaAdapter<any, any, any, any, any, any, any, AsenaWebsocketAdapter<any, any>>> {
+export class AsenaServer<A extends AsenaAdapter<any, any, any, any, AsenaWebsocketAdapter<any, any, any>>> {
 
   private _port: number;
 
@@ -83,7 +82,7 @@ export class AsenaServer<A extends AsenaAdapter<any, any, any, any, any, any, an
 
     this._logger.info('Server started on port ' + this._port);
 
-    await this._adapter.start();
+    await this._adapter.start(this._wsOptions);
 
     // TODO: this is wierd but when we call gc asena uses less memory rest of the time
     if (gc) {
@@ -155,10 +154,10 @@ export class AsenaServer<A extends AsenaAdapter<any, any, any, any, any, any, an
         await this._adapter.registerRoute({
           method: params.method,
           path: lastPath,
-          middleware: await this._adapter.prepareMiddlewares(middlewares),
-          handler: await this._adapter.prepareHandler((ctx: AsenaContext<any, any>) => controller[name](ctx)),
+          middleware: middlewares,
+          handler: controller[name].bind(controller),
           staticServe: params.staticServe,
-          validator: await this._adapter.prepareValidator(validatorInstance),
+          validator: validatorInstance,
         });
       }
     }
@@ -184,7 +183,7 @@ export class AsenaServer<A extends AsenaAdapter<any, any, any, any, any, any, an
         const override = getTypedMetadata<string[]>(ComponentConstants.OverrideKey, instance);
         const isOverride = override ? override.includes('handle') : false;
         const middleware: BaseMiddleware<any, any> = {
-          handle: (context, next) => instance.handle(context, next),
+          handle: instance.handle.bind(instance),
           override: isOverride,
         };
 
@@ -222,7 +221,7 @@ export class AsenaServer<A extends AsenaAdapter<any, any, any, any, any, any, an
 
     VALIDATOR_METHODS.filter((key) => typeof validator[key] === 'function').forEach((key) => {
       baseValidatorMiddleware[key] = {
-        handle: () => validator[key](),
+        handle: validator[key].bind(validator),
         override: overrides?.includes(key) || false,
       } satisfies ValidatorHandler;
     });
@@ -248,7 +247,7 @@ export class AsenaServer<A extends AsenaAdapter<any, any, any, any, any, any, an
 
       for (const instance of normalizedInstances) {
         middlewares.push({
-          handle: (context, next) => instance.handle(context, next),
+          handle: instance.handle.bind(instance),
           override: isOverride,
         });
       }
@@ -287,14 +286,7 @@ export class AsenaServer<A extends AsenaAdapter<any, any, any, any, any, any, an
 
       const middlewares = await this.prepareTopMiddlewares({ controller: webSocket as unknown as Class }, true);
 
-      await this._adapter.websocketAdapter.registerWebSocket(
-        webSocket,
-        await this._adapter.prepareMiddlewares(middlewares),
-      );
-    }
-
-    if (flatWebSockets.length > 0) {
-      await this._adapter.websocketAdapter.prepareWebSocket(this._wsOptions);
+      await this._adapter.websocketAdapter.registerWebSocket(webSocket, middlewares);
     }
   }
 
@@ -318,7 +310,7 @@ export class AsenaServer<A extends AsenaAdapter<any, any, any, any, any, any, an
 
     const configInstance = config[0];
 
-    await this._adapter.onError((error: Error, ctx: AsenaContext<any, any>) => configInstance.onError(error, ctx));
+    await this._adapter.onError(configInstance.onError.bind(configInstance));
 
     this._logger.info(`Config ${yellow(config[0].constructor.name)} applied`);
   }
