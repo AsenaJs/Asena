@@ -68,6 +68,7 @@ describe('AsenaServer', () => {
       prepareValidator: mock(() => {}),
       use: mock(() => {}),
       websocketAdapter: {
+        buildWebsocket: mock(() => {}),
         registerWebSocket: mock(() => {}),
         prepareWebSocket: mock(() => {}),
       },
@@ -104,7 +105,7 @@ describe('AsenaServer', () => {
     server.wsOptions(options);
     await server.start();
 
-    expect(mockAdapter.websocketAdapter.prepareWebSocket).toHaveBeenCalledWith(options);
+    expect(mockAdapter.start).toHaveBeenCalledWith(options);
   });
 
   test('should register components', async () => {

@@ -11,4 +11,12 @@ export class ExportedTestService {
     return 'test';
   }
 
+  public setValue(value: string): string {
+    return value;
+  }
+
+  public deleteValue(): string {
+    return 'deleted';
+  }
+
 }

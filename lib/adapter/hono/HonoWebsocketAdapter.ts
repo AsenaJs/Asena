@@ -15,7 +15,6 @@ import { green, yellow } from '../../logger';
 import type { BaseMiddleware } from '../../server/web/types';
 import { middlewareParser } from './utils/middlewareParser';
 
-// TODO: middleware system on weboscket needs to be updated
 export class HonoWebsocketAdapter extends AsenaWebsocketAdapter<Hono, HonoRequest, Response> {
 
   public name = 'HonoWebsocketAdapter';
@@ -117,9 +116,16 @@ export class HonoWebsocketAdapter extends AsenaWebsocketAdapter<Hono, HonoReques
     return (ws: ServerWebSocket<WebSocketData>, ...args: any[]) => {
       const websocket = this.websockets.get(ws.data.path);
 
-      if (websocket?.socket[type]) {
-        (websocket?.socket[type] as (...args: any[]) => void)(new AsenaSocket(ws, websocket.socket), ...args);
+      const handler = websocket?.socket[type];
+
+      if (!handler) {
+        return;
       }
+
+      (handler as (socket: AsenaSocket<WebSocketData>, ...args: any[]) => void)(
+        new AsenaSocket(ws, websocket.socket),
+        ...args,
+      );
     };
   }
 
