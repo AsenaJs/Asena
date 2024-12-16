@@ -35,6 +35,8 @@ export class HonoAdapter extends AsenaAdapter<
   AsenaWebsocketAdapter<Hono, HonoRequest, Response>
 > {
 
+  public name = 'HonoAdapter';
+
   public app = new Hono();
 
   private server: Server;

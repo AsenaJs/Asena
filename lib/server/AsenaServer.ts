@@ -47,7 +47,7 @@ export class AsenaServer<A extends AsenaAdapter<any, any, any, any, AsenaWebsock
     const config = readConfigFile();
 
     if (!config) {
-      this._logger.error('Config file not found');
+      this._logger.warn('Config file not found');
     }
 
     this._ioc = new IocEngine(config);
@@ -66,7 +66,7 @@ export class AsenaServer<A extends AsenaAdapter<any, any, any, any, AsenaWebsock
 /_/  |_|/____//_____//_/ |_//_/  |_|  
                             `);
 
-    this._logger.info(`Adapter: ${green(this._adapter.constructor.name)} implemented`);
+    this._logger.info(`Adapter: ${green(this._adapter.name)} implemented`);
 
     this._adapter.setPort(this._port);
 
@@ -123,22 +123,13 @@ export class AsenaServer<A extends AsenaAdapter<any, any, any, any, AsenaWebsock
   }
 
   private async initializeControllers() {
-    const controllers = await this._ioc.container.resolveAll<Class>(ComponentType.CONTROLLER);
-
-    if (controllers !== null) {
-      // check if any controller is array or not
-      if (controllers.find((controller) => Array.isArray(controller))) {
-        throw new Error('Controller cannot be array');
-      }
-
-      this.controllers = controllers as Class[];
-
-      for (const controller of this.controllers) {
-        this._logger.info(`Controller: ${green(controller.constructor.name)} found`);
-      }
-    }
+    await this.validateAndSetControllers();
 
     for (const controller of this.controllers) {
+      const name = getTypedMetadata<string>(ComponentConstants.NameKey, controller.constructor);
+
+      this._logger.info(`Controller: ${green(name)} found:`);
+
       const routes = getTypedMetadata<Route>(ComponentConstants.RouteKey, controller) || {};
 
       const routePath: string = getTypedMetadata<string>(ComponentConstants.PathKey, controller.constructor) || '';
@@ -160,6 +151,21 @@ export class AsenaServer<A extends AsenaAdapter<any, any, any, any, AsenaWebsock
           validator: validatorInstance,
         });
       }
+
+      this._logger.info(`Controller: ${green(name)} successfully registered.`);
+    }
+  }
+
+  private async validateAndSetControllers() {
+    const controllers = await this._ioc.container.resolveAll<Class>(ComponentType.CONTROLLER);
+
+    if (controllers !== null) {
+      // check if any controller is array or not
+      if (controllers.find((controller) => Array.isArray(controller))) {
+        throw new Error('Controller cannot be array');
+      }
+
+      this.controllers = controllers as Class[];
     }
   }
 
@@ -306,13 +312,15 @@ export class AsenaServer<A extends AsenaAdapter<any, any, any, any, AsenaWebsock
       throw new Error('Config cannot be array');
     }
 
-    this._logger.info(`Config found ${yellow(config[0].constructor.name)}`);
+    const name = getTypedMetadata<string>(ComponentConstants.NameKey, config[0].constructor);
+
+    this._logger.info(`Config found ${yellow(name)}`);
 
     const configInstance = config[0];
 
     await this._adapter.onError(configInstance.onError.bind(configInstance));
 
-    this._logger.info(`Config ${yellow(config[0].constructor.name)} applied`);
+    this._logger.info(`Config ${yellow(name)} applied`);
   }
 
   private prepareLogger() {

@@ -18,6 +18,8 @@ import { middlewareParser } from './utils/middlewareParser';
 // TODO: middleware system on weboscket needs to be updated
 export class HonoWebsocketAdapter extends AsenaWebsocketAdapter<Hono, HonoRequest, Response> {
 
+  public name = 'HonoWebsocketAdapter';
+
   private _server: Server;
 
   public constructor(params?: WebsocketAdapterParams<Hono>) {

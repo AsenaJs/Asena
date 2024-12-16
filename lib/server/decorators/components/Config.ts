@@ -1,6 +1,6 @@
-import { ComponentType } from '../../../ioc/types';
+import { type ComponentParams, ComponentType } from '../../../ioc/types';
 import { defineComponent } from '../../../ioc/component';
 
-export const Config = (): ClassDecorator => {
-  return defineComponent(ComponentType.CONFIG, undefined);
+export const Config = (params: ComponentParams | string): ClassDecorator => {
+  return defineComponent(ComponentType.CONFIG, params);
 };

@@ -13,6 +13,8 @@ import type { BaseMiddleware } from '../server/web/types';
  */
 export abstract class AsenaWebsocketAdapter<A, R, S> {
 
+  public readonly name: string;
+
   /**
    * The WebSocket services.
    * @ string - The namespace of the WebSocket.

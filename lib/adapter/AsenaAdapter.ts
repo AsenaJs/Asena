@@ -16,6 +16,8 @@ import type { WSOptions } from '../server/web/websocket';
  */
 export abstract class AsenaAdapter<A, R, S, VS, WSA extends AsenaWebsocketAdapter<A, R, S>> {
 
+  public readonly name: string;
+
   /**
    * The application instance.
    */
