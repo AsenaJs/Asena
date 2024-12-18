@@ -1,22 +1,19 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
 import { AsenaServer } from '../../server';
-import { Controller, ServerService, WebSocket } from '../../server/decorators';
-import { ComponentType, Scope } from '../../ioc/types';
-import { Inject } from '../../ioc/component/decorators';
-import { AsenaService } from '../../services';
-import { Get } from '../../server/web/api';
-import type { Context } from '../../adapter/defaultAdapter';
+import { Controller, Service, WebSocket } from '../../server/decorators';
+import { ComponentType } from '../../ioc/types';
+import { Inject, PostConstruct } from '../../ioc/component';
 import type { WSOptions } from '../../server/web/websocket';
 import { AsenaWebSocketService, type Socket } from '../../server/web/websocket';
+import { Get } from '../../server/web/decorators';
+import type { Context } from '../../adapter/hono';
 
-@ServerService({
-  name: 'TestService',
-  scope: Scope.SINGLETON,
-})
-class TestServerService extends AsenaService {
+@Service()
+class TestServerService {
 
   public testValue = 'Test Value';
 
+  @PostConstruct()
   protected async onStart() {
     return Promise.resolve();
   }
@@ -50,7 +47,7 @@ class TestWebSocket extends AsenaWebSocketService<any> {
 }
 
 describe('AsenaServer', () => {
-  let server: AsenaServer;
+  let server: AsenaServer<any>;
   let mockLogger: any;
   let mockAdapter: any;
 
@@ -63,9 +60,7 @@ describe('AsenaServer', () => {
 
     // Mock adapter
     mockAdapter = {
-      setPort: mock((data) => {
-        console.log(data);
-      }),
+      setPort: mock(() => {}),
       start: mock(async () => {}),
       registerRoute: mock(() => {}),
       prepareMiddlewares: mock(() => []),
@@ -73,6 +68,7 @@ describe('AsenaServer', () => {
       prepareValidator: mock(() => {}),
       use: mock(() => {}),
       websocketAdapter: {
+        buildWebsocket: mock(() => {}),
         registerWebSocket: mock(() => {}),
         prepareWebSocket: mock(() => {}),
       },
@@ -109,7 +105,7 @@ describe('AsenaServer', () => {
     server.wsOptions(options);
     await server.start();
 
-    expect(mockAdapter.websocketAdapter.prepareWebSocket).toHaveBeenCalledWith(options);
+    expect(mockAdapter.start).toHaveBeenCalledWith(options);
   });
 
   test('should register components', async () => {
@@ -121,11 +117,15 @@ describe('AsenaServer', () => {
     // @ts-ignore - private property access for testing
     const ioc = server._ioc;
 
-    expect(ioc.container.getAll(ComponentType.SERVER_SERVICE)).toHaveLength(1);
+    const services = await ioc.container.resolveAll<TestServerService>(ComponentType.SERVICE);
 
-    expect(ioc.container.getAll(ComponentType.CONTROLLER)).toHaveLength(1);
+    expect(services).toHaveLength(1);
 
-    expect(ioc.container.getAll(ComponentType.WEBSOCKET)).toHaveLength(1);
+    expect((services[0] as TestServerService).testValue).toBe('Test Value');
+
+    expect(await ioc.container.resolveAll(ComponentType.CONTROLLER)).toHaveLength(1);
+
+    expect(await ioc.container.resolveAll(ComponentType.WEBSOCKET)).toHaveLength(1);
 
     expect(mockLogger.info).toHaveBeenCalled();
     expect(mockAdapter.start).toHaveBeenCalled();
@@ -139,7 +139,7 @@ describe('AsenaServer', () => {
 
     expect(mockAdapter.registerRoute).toHaveBeenCalledWith(
       expect.objectContaining({
-        path: 'test/',
+        path: '/test/',
         method: 'get',
         staticServe: false,
       }),
@@ -158,33 +158,12 @@ describe('AsenaServer', () => {
     expect(mockAdapter.websocketAdapter.registerWebSocket).toHaveBeenCalledWith(expect.any(TestWebSocket), []);
   });
 
-  test('should handle server services', async () => {
-    // @ts-ignore - private property access for testing
-    server._ioc = {
-      container: {
-        // @ts-ignore
-        getAll: mock((type: ComponentType) => {
-          if (type === ComponentType.SERVER_SERVICE) {
-            return [new TestServerService()];
-          }
-
-          return [];
-        }),
-      },
-      searchAndRegister: mock(async () => {}),
-    };
-
-    await server.start();
-
-    expect(mockLogger.info).toHaveBeenCalledWith(expect.stringContaining('Service:'));
-  });
-
   test('should handle websocket registration', async () => {
     // @ts-ignore - private property access for testing
     server._ioc = {
       container: {
         // @ts-ignore
-        getAll: mock((type: ComponentType) => {
+        resolveAll: mock((type: ComponentType) => {
           if (type === ComponentType.WEBSOCKET) {
             return [new TestWebSocket()];
           }
@@ -205,7 +184,7 @@ describe('AsenaServer', () => {
     server._ioc = {
       // @ts-ignore
       container: {
-        getAll: mock(() => {
+        resolveAll: mock(() => {
           throw new Error('Test error');
         }),
       },

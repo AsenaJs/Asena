@@ -1,9 +1,8 @@
 import { Middleware } from '../../../server/decorators';
-import { MiddlewareService } from '../../../server/web/middleware';
-import type { Context } from '../../../adapter/defaultAdapter';
+import { type Context, MiddlewareService } from '../../../adapter/hono';
 
 @Middleware()
-export class ExportedTopMiddlewareTest extends MiddlewareService {
+export class ExportedTopMiddleware extends MiddlewareService {
 
   public handle(context: Context, next: Function): any {
     context.setValue('top', 'Test Value');

@@ -1,19 +1,19 @@
-import {ComponentType, type ScheduleParams} from "../../../ioc/types";
-import {defineComponent} from "../../../ioc/component/componentUtils";
-import {parseCron} from "../../../ioc/helper/cronParser";
-import {defineMetadata} from "reflect-metadata/no-conflict";
-import {ComponentConstants} from "../../../ioc/constants";
+import { ComponentType, type ScheduleParams } from '../../../ioc/types';
+import { defineComponent } from '../../../ioc/component';
+import { type CronParsed, parseCron } from '../../../ioc/helper/cronParser';
+import { ComponentConstants } from '../../../ioc/constants';
+import { defineTypedMetadata } from '../../../utils/typedMetadata';
 
 /**
- * Not working right now.
+ * @deprecated Not working right now.
  *
  * @param params
  * @constructor
  */
 export const Schedule = (params: ScheduleParams): ClassDecorator => {
-    return defineComponent(ComponentType.SCHEDULE, params, (target) => {
-        const cronParsed = parseCron((params as ScheduleParams).cron);
+  return defineComponent(ComponentType.SCHEDULE, params, (target) => {
+    const cronParsed = parseCron((params as ScheduleParams).cron);
 
-        defineMetadata(ComponentConstants.CronKey, cronParsed, target);
-    });
+    defineTypedMetadata<CronParsed>(ComponentConstants.CronKey, cronParsed, target);
+  });
 };

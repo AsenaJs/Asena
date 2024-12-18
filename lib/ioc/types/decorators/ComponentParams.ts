@@ -1,6 +1,6 @@
 import type { Scope } from '../Scope';
 
 export interface ComponentParams {
-  name: string;
+  name?: string;
   scope?: Scope;
 }

@@ -16,6 +16,44 @@
     "build": "bun run clean && tsc",
     "clean": "rm -rf dist"
   },
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./adapter": {
+      "import": "./dist/lib/adapter/index.js",
+      "types": "./dist/lib/adapter/index.d.ts"
+    },
+    "./adapter/hono": {
+      "import": "./dist/lib/adapter/hono/index.js",
+      "types": "./dist/lib/adapter/hono/index.d.ts"
+    },
+    "./logger": {
+      "import": "./dist/lib/logger/index.js",
+      "types": "./dist/lib/logger/index.d.ts"
+    },
+    "./web-socket": {
+      "import": "./dist/lib/server/web/websocket/index.js",
+      "types": "./dist/lib/server/web/websocket/index.d.ts"
+    },
+    "./web": {
+      "import": "./dist/lib/server/web/decorators/index.js",
+      "types": "./dist/lib/server/web/decorators/index.d.ts"
+    },
+    "./server": {
+      "import": "./dist/lib/server/decorators/index.js",
+      "types": "./dist/lib/server/decorators/index.d.ts"
+    },
+    "./ioc": {
+      "import": "./dist/lib/ioc/component/decorators/index.js",
+      "types": "./dist/lib/ioc/component/decorators/index.d.ts"
+    },
+    "./http-status": {
+      "import": "./dist/lib/server/web/http/HttpStatus.js",
+      "types": "./dist/lib/server/web/http/HttpStatus.d.ts"
+    }
+  },
   "keywords": [
     "asena",
     "framework",
@@ -46,13 +84,15 @@
     "eslint-plugin-n": "^16.6.2",
     "eslint-plugin-prettier": "^5.2.1",
     "eslint-plugin-promise": "^6.6.0",
-    "hono": "^4.6.10",
-    "prettier": "^3.3.3",
-    "typescript": "^5.6.3",
+    "hono": "^4.6.14",
+    "prettier": "^3.4.2",
+    "typescript": "^5.7.2",
     "winston": "^3.17.0"
   },
   "peerDependencies": {
+    "@hono/zod-validator": "^0.4.1",
     "hono": "^4.5.9",
-    "winston": "^3.13.0"
+    "winston": "^3.13.0",
+    "zod": "^3.23.8"
   }
 }

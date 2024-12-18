@@ -1,8 +1,6 @@
 import type { AsenaWebSocketServer } from './AsenaWebSocketServer';
 import type { Socket } from './AsenaSocket';
 
-// TODO: server needs to be a generic , also write default implementation for server object it needs to have sockets
-
 /**
  * A service class for handling WebSocket connections.
  *
@@ -36,7 +34,8 @@ export class AsenaWebSocketService<T> {
    */
 
   public in(data?: any) {
-    this.to(this.namespace, data);
+    // __ is a reserved namespace for broadcasting to all connected clients
+    this.to('__', data);
   }
 
   /**
@@ -121,7 +120,7 @@ export class AsenaWebSocketService<T> {
   protected async onOpenInternal(ws: Socket<T>): Promise<void> {
     this.sockets.set(ws.id, ws);
 
-    ws.subscribe('');
+    ws.subscribe('__');
 
     ws.subscribe(`${ws.data.id}`);
 
@@ -133,7 +132,7 @@ export class AsenaWebSocketService<T> {
   protected async onCloseInternal(ws: Socket<T>, _code: number, _reason: string): Promise<void> {
     ws.cleanup();
 
-    ws.unsubscribe(``);
+    ws.unsubscribe(`__`);
 
     ws.unsubscribe(`.${ws.data.id}`);
 

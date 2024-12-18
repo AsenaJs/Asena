@@ -1,7 +1,7 @@
 import { mock } from 'bun:test';
 import type { AsenaContext, CookieExtra, SendOptions } from '../../adapter';
 
-export const createMockContextTest = () =>
+export const createMockContext = () =>
   ({
     // @ts-ignore
     req: {} satisfies Request,

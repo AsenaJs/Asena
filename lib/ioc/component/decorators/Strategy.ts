@@ -1,7 +1,7 @@
 import type { Class } from '../../../server/types';
-import type { Expression, Strategies } from '../../types';
-import { defineMetadata, getMetadata } from 'reflect-metadata/no-conflict';
+import type { Expressions, Strategies } from '../../types';
 import { ComponentConstants } from '../../constants';
+import { defineTypedMetadata, getTypedMetadata } from '../../../utils/typedMetadata';
 
 /**
  * Property decorator to define a strategy.
@@ -12,9 +12,10 @@ import { ComponentConstants } from '../../constants';
  */
 export const Strategy = (Injection: Class | string, expression?: (injectedClass) => any): PropertyDecorator => {
   return (target: Object, propertyKey: string) => {
-    const strategies: Strategies = getMetadata(ComponentConstants.StrategyKey, target.constructor) || {};
+    const strategies: Strategies =
+      getTypedMetadata<Strategies>(ComponentConstants.StrategyKey, target.constructor) || {};
 
-    defineMetadata('design:type', Injection, target, propertyKey);
+    defineTypedMetadata<Class | string>('design:type', Injection, target, propertyKey);
 
     const injectionName = typeof Injection === 'string' ? Injection : Injection.name;
 
@@ -23,15 +24,16 @@ export const Strategy = (Injection: Class | string, expression?: (injectedClass)
     }
 
     if (expression) {
-      const expressions: Expression = getMetadata(ComponentConstants.ExpressionKey, target.constructor) || {};
+      const expressions: Expressions =
+        getTypedMetadata<Expressions>(ComponentConstants.ExpressionKey, target.constructor) || {};
 
       if (!expressions[propertyKey]) {
         expressions[propertyKey] = expression;
       }
 
-      defineMetadata(ComponentConstants.ExpressionKey, expressions, target.constructor);
+      defineTypedMetadata<Expressions>(ComponentConstants.ExpressionKey, expressions, target.constructor);
     }
 
-    defineMetadata(ComponentConstants.StrategyKey, strategies, target.constructor);
+    defineTypedMetadata<Strategies>(ComponentConstants.StrategyKey, strategies, target.constructor);
   };
 };

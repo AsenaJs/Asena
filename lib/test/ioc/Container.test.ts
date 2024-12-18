@@ -1,8 +1,9 @@
 import { beforeEach, describe, expect, spyOn, test } from 'bun:test';
 import { Container } from '../../ioc';
 import { Component } from '../../server/decorators';
-import { Inject, Strategy } from '../../ioc/component/decorators';
+import { Inject, Strategy } from '../../ioc/component';
 import { ComponentType } from '../../ioc/types';
+import { ExportedServerService } from '../example-app-structure/database/ExportedServerService.test';
 
 @Component()
 class TestClass {
@@ -115,49 +116,49 @@ describe('Container', () => {
     expect(Object.keys(container.services).length).toBe(1);
   });
 
-  test('should register component', () => {
+  test('should register component', async () => {
     container.register('TestClass7', TestClass7, true);
 
-    expect(container.get('TestClass7')).toBeInstanceOf(TestClass7);
+    expect(await container.resolve('TestClass7')).toBeInstanceOf(TestClass7);
   });
 
-  test('should prepare instance', () => {
+  test('should prepare instance', async () => {
     container.services = { TestClass: { Class: TestClass, instance: null, singleton: false } };
 
     // @ts-ignore
     const spy = spyOn(container, 'prepareInstance');
 
-    expect(container.get('TestClass')).toBeInstanceOf(TestClass);
+    expect(await container.resolve('TestClass')).toBeInstanceOf(TestClass);
 
     expect(spy).toBeCalled();
 
     expect(spy).toHaveBeenCalledWith(TestClass);
   });
 
-  test('should inject dependency', () => {
-    expect(container.get('TestClass3')).toBeInstanceOf(TestClass3);
+  test('should inject dependency', async () => {
+    const testClass3 = (await container.resolve<TestClass3>('TestClass3')) as TestClass3;
 
-    const testClass3 = container.get('TestClass3') as TestClass3;
+    expect(testClass3).toBeInstanceOf(TestClass3);
 
     expect(testClass3.testMethod()).toBe('test-test');
   });
 
-  test('should inject strategy', () => {
-    const testClass6 = container.get('TestClass6') as TestClass6;
+  test('should inject strategy', async () => {
+    const testClass6 = (await container.resolve('TestClass6')) as TestClass6;
 
     expect(testClass6.services.length).toBe(2);
 
     expect(testClass6.testMethod()).toBe('test-test');
   });
 
-  test('should getAll component', () => {
-    const services = container.getAll(ComponentType.COMPONENT);
+  test('should getAll component', async () => {
+    const services = await container.resolveAll(ComponentType.COMPONENT);
 
     expect(services).toBeInstanceOf(Array);
   });
 
-  test('should getStrategy components', () => {
-    const services = container.getStrategy('TestInterface');
+  test('should getStrategy components', async () => {
+    const services = await container.resolveStrategy('TestInterface');
 
     expect(services).toBeInstanceOf(Array);
     expect(services.length).toBe(2);
@@ -171,9 +172,11 @@ describe('Container', () => {
     const initialMemory = process.memoryUsage().heapUsed;
 
     for (let i = 0; i < 1000; i++) {
-      let instance = container.get('TestClass3') as TestClass3;
+      let instance = (await container.resolve('TestClass3')) as TestClass3;
 
       expect(instance).toBeInstanceOf(TestClass3);
+
+      instance.testMethod();
 
       (instance as any) = null;
     }
@@ -188,5 +191,17 @@ describe('Container', () => {
 
     // less than 1MB is okay
     expect(finalMemory - initialMemory).toBeLessThan(1024 * 1024);
+  });
+
+  test('should execute PostConstruct method', async () => {
+    container.register('ExportedServerServiceTest', ExportedServerService, true);
+
+    const exportedServerServiceTest = (await container.resolve(
+      'ExportedServerServiceTest',
+    )) as ExportedServerService;
+
+    expect(exportedServerServiceTest).toBeInstanceOf(ExportedServerService);
+
+    expect(exportedServerServiceTest.testValue).toBe('Test Value');
   });
 });

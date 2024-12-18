@@ -1,7 +1,7 @@
 import type { ComponentParams } from './ComponentParams';
 import type { MiddlewareClass } from '../../../server/types';
 
-export interface ControllerParams extends ComponentParams {
+export interface ControllerParams<R = unknown, S = unknown> extends ComponentParams {
   path: string;
-  middlewares?: MiddlewareClass[];
+  middlewares?: MiddlewareClass<R, S>[];
 }

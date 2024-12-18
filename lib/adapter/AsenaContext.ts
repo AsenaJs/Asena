@@ -1,160 +1,171 @@
 import type { CookieExtra, SendOptions } from './types';
 
 /**
- * Interface representing the context for Asena.
+ * AsenaContext represents the core context interface for handling HTTP requests and responses in Asena framework.
+ * It provides essential methods and properties for request/response handling, data manipulation, and state management.
  *
- * @template R - The type of the request object.
- * @template S - The type of the response object.
+ * @template R - Type parameter for the underlying request object
+ * @template S - Type parameter for the underlying response object
  */
 export interface AsenaContext<R, S> {
+  /** The original request object */
   req: R;
+  /** The original response object */
   res: S;
 
   /**
-   * Headers associated with the request.
+   * Request headers stored as key-value pairs
    */
   headers: Record<string, string>;
+
   /**
-   * Retrieves the request body as an ArrayBuffer.
-   *
-   * @returns {Promise<ArrayBuffer>} A promise that resolves to an ArrayBuffer.
+   * Retrieves the raw request body as an ArrayBuffer.
+   * Useful for handling binary data.
+   * 
+   * @returns {Promise<ArrayBuffer>} The request body as an ArrayBuffer
    */
   getArrayBuffer: () => Promise<ArrayBuffer>;
 
   /**
-   * Parses and retrieves the request body.
-   *
-   * @returns {Promise<any>} A promise that resolves to the parsed body.
+   * Automatically parses the request body based on content type.
+   * Supports JSON, form data, and other common formats.
+   * 
+   * @returns {Promise<any>} The parsed request body
    */
   getParseBody: () => Promise<any>;
 
   /**
-   * Retrieves the request body as a Blob.
-   *
-   * @returns {Promise<Blob>} A promise that resolves to a Blob.
+   * Retrieves the request body as a Blob object.
+   * Useful for handling file uploads and binary data.
+   * 
+   * @returns {Promise<Blob>} The request body as a Blob
    */
   getBlob: () => Promise<Blob>;
 
   /**
    * Retrieves the request body as FormData.
-   *
-   * @returns {Promise<FormData>} A promise that resolves to FormData.
+   * Useful for processing multipart/form-data submissions.
+   * 
+   * @returns {Promise<FormData>} The request body as FormData
    */
   getFormData: () => Promise<FormData>;
 
   /**
-   * Retrieves a parameter from the request.
-   *
-   * @param {string} s - The name of the parameter.
-   * @returns {string} The value of the parameter.
+   * Retrieves a route parameter by name.
+   * Example: For route "/users/:id", getParam("id") returns the actual ID value.
+   * 
+   * @param {string} s - The parameter name to retrieve
+   * @returns {string} The parameter value
    */
   getParam: (s: string) => string;
 
   /**
-   * Retrieves the request body as a specified type.
-   *
-   * @template U - The type to which the body should be parsed.
-   * @returns {Promise<U>} A promise that resolves to the parsed body.
+   * Retrieves and automatically type-casts the request body.
+   * 
+   * @template U - The expected type of the body
+   * @returns {Promise<U>} The typed request body
    */
   getBody: <U>() => Promise<U>;
 
   /**
-   * Retrieves a query parameter from the request.
-   *
-   * @param {string} query - The name of the query parameter.
-   * @returns {Promise<string>} A promise that resolves to the value of the query parameter.
+   * Retrieves a single query parameter value.
+   * For URL "?name=john", getQuery("name") returns "john".
+   * 
+   * @param {string} query - The query parameter name
+   * @returns {Promise<string>} The query parameter value
    */
   getQuery: (query: string) => Promise<string>;
 
   /**
-   * Retrieves all values of a query parameter from the request.
-   *
-   * @param {string} query - The name of the query parameter.
-   * @returns {Promise<string[]>} A promise that resolves to an array of values.
+   * Retrieves all values for a query parameter that appears multiple times.
+   * For URL "?color=red&color=blue", getQueryAll("color") returns ["red", "blue"].
+   * 
+   * @param {string} query - The query parameter name
+   * @returns {Promise<string[]>} Array of all values for the query parameter
    */
   getQueryAll: (query: string) => Promise<string[]>;
 
   /**
-   * Retrieves a cookie from the request.
-   *
-   * @param {string} name - The name of the cookie.
-   * @param {string | BufferSource} [secret] - Optional secret for signed cookies.
-   * @returns {Promise<string | false>} A promise that resolves to the cookie value or false if not found.
+   * Retrieves a cookie value by name, with optional signature verification.
+   * 
+   * @param {string} name - The cookie name
+   * @param {string | BufferSource} [secret] - Optional secret for verifying signed cookies
+   * @returns {Promise<string | false>} The cookie value if found, false otherwise
    */
   getCookie: (name: string, secret?: string | BufferSource) => Promise<string | false>;
 
   /**
-   * Sets a cookie in the response.
-   *
-   * @param {string} name - The name of the cookie.
-   * @param {string} value - The value of the cookie.
-   * @param {CookieExtra<any>} [options] - Optional settings for the cookie.
-   * @returns {Promise<void>} A promise that resolves when the cookie is set.
+   * Sets a cookie with the specified name, value, and options.
+   * 
+   * @param {string} name - The cookie name
+   * @param {string} value - The cookie value
+   * @param {CookieExtra<any>} [options] - Cookie options (expires, domain, path, etc.)
+   * @returns {Promise<void>}
    */
   setCookie: (name: string, value: string, options?: CookieExtra<any>) => Promise<void>;
 
   /**
-   * Deletes a cookie from the response.
-   *
-   * @param {string} name - The name of the cookie to delete.
-   * @param {CookieExtra<any>} [options] - Optional settings for the cookie.
-   * @returns {Promise<void>} A promise that resolves when the cookie is deleted.
+   * Deletes a cookie by setting its expiration to the past.
+   * 
+   * @param {string} name - The cookie name to delete
+   * @param {CookieExtra<any>} [options] - Cookie options (domain, path, etc.)
+   * @returns {Promise<void>}
    */
   deleteCookie: (name: string, options?: CookieExtra<any>) => Promise<void>;
 
   /**
-   * Retrieves a value from the context.
-   *
-   * @template T - The type of the value.
-   * @param {string} key - The key of the value.
-   * @returns {T} The value associated with the key.
+   * Retrieves a value from the context's state storage.
+   * 
+   * @template T - The expected type of the value
+   * @param {string} key - The key to retrieve
+   * @returns {T} The stored value
    */
   getValue: <T>(key: string) => T;
 
   /**
-   * Sets a value in the context.
-   *
-   * @param {string} key - The key of the value.
-   * @param {any} value - The value to set.
+   * Stores a value in the context's state storage.
+   * 
+   * @param {string} key - The key to store under
+   * @param {any} value - The value to store
    */
   setValue: (key: string, value: any) => void;
 
   /**
-   * Sets a value for WebSocket communication.
-   *
-   * @param {any} value - The value to set.
+   * Stores a value specifically for WebSocket communication.
+   * 
+   * @param {any} value - The value to store for WebSocket context
    */
   setWebSocketValue: (value: any) => void;
 
   /**
-   * Retrieves a value for WebSocket communication.
-   *
-   * @template T - The type of the value.
-   * @returns {T} The value associated with the WebSocket.
+   * Retrieves the stored WebSocket-specific value.
+   * 
+   * @template T - The expected type of the WebSocket value
+   * @returns {T} The stored WebSocket value
    */
   getWebSocketValue: <T>() => T;
 
   /**
-   * Sends an HTML response.
-   *
-   * @param {string} data - The HTML data to send.
-   * @returns {Response | Promise<Response> } The response object.
+   * Sends an HTML response with appropriate content-type headers.
+   * 
+   * @param {string} data - The HTML content to send
+   * @returns {Response | Promise<Response>} The response object
    */
   html: (data: string) => Response | Promise<Response>;
 
   /**
-   * Sends a response.
-   *
-   * @param {string | any} data - The data to send.
-   * @param {SendOptions | number} [status] - Optional status code or send options.
-   * @returns {Response | Promise<Response>} The response object.
+   * Sends a response with automatic content-type detection.
+   * 
+   * @param {string | any} data - The content to send
+   * @param {SendOptions | number} [status] - HTTP status code or send options
+   * @returns {Response | Promise<Response>} The response object
    */
   send: (data: string | any, status?: SendOptions | number) => Response | Promise<Response>;
 
   /**
-   * Redirects the request to a new URL.
-   *
-   * @param {string} url - The URL to redirect to.
+   * Performs an HTTP redirect to the specified URL.
+   * 
+   * @param {string} url - The destination URL
    */
   redirect: (url: string) => void;
 }

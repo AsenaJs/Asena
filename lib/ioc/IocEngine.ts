@@ -1,20 +1,20 @@
-import type { Component, IocConfig } from './types';
+import type { InjectableComponent, Dependencies, IocConfig, Strategies } from './types';
 import { Scope } from './types';
 import { Container } from './Container';
 import { getAllFiles } from './helper/fileHelper';
 import * as path from 'node:path';
 import type { Class } from '../server/types';
-import { getMetadata } from 'reflect-metadata/no-conflict';
 import { ComponentConstants } from './constants';
 import * as process from 'node:process';
 import * as console from 'node:console';
 import { getStrategyClass } from './helper/iocHelper';
+import { getTypedMetadata } from '../utils/typedMetadata';
 
 export class IocEngine {
 
   private readonly _container: Container;
 
-  private injectables: Component[] = [];
+  private injectables: InjectableComponent[] = [];
 
   private readonly config: IocConfig;
 
@@ -24,7 +24,7 @@ export class IocEngine {
     this.config = config;
   }
 
-  public async searchAndRegister(components?: Component[]): Promise<void> {
+  public async searchAndRegister(components?: InjectableComponent[]): Promise<void> {
     // load components
     await this.loadComponents(components);
 
@@ -33,7 +33,7 @@ export class IocEngine {
     await this.validateAndRegisterComponents(injectableClasses);
   }
 
-  private async loadComponents(components?: Component[]): Promise<void> {
+  private async loadComponents(components?: InjectableComponent[]): Promise<void> {
     if (components?.length) {
       this.injectables = components;
       return;
@@ -61,13 +61,13 @@ export class IocEngine {
 
   private register(injectables: Class[]) {
     for (const injectable of injectables) {
-      const name = getMetadata(ComponentConstants.NameKey, injectable) || injectable.name;
+      const name = getTypedMetadata<string>(ComponentConstants.NameKey, injectable) || injectable.name;
 
-      const isSingleton = getMetadata(ComponentConstants.ScopeKey, injectable) === Scope.SINGLETON;
+      const isSingleton = getTypedMetadata<Scope>(ComponentConstants.ScopeKey, injectable) === Scope.SINGLETON;
 
       this._container.register(name, injectable, isSingleton);
 
-      const _interface = getMetadata(ComponentConstants.InterfaceKey, injectable);
+      const _interface = getTypedMetadata<string>(ComponentConstants.InterfaceKey, injectable);
 
       if (_interface) {
         this._container.register(_interface, injectable, isSingleton);
@@ -75,7 +75,7 @@ export class IocEngine {
     }
   }
 
-  private async getInjectables(files: string[]): Promise<Component[]> {
+  private async getInjectables(files: string[]): Promise<InjectableComponent[]> {
     const validFiles = files.filter(
       (file) => file.endsWith('.ts') || file.endsWith('.js') || file.endsWith('.tsx') || file.endsWith('.jsx'),
     );
@@ -104,24 +104,24 @@ export class IocEngine {
     return results.flat();
   }
 
-  private processComponents(components: any[]): Component[] {
+  private processComponents(components: any[]): InjectableComponent[] {
     return components
       .filter((component) => this.isValidComponent(component))
       .map((component) => this.createComponentObject(component))
-      .filter((component): component is Component => component !== null);
+      .filter((component): component is InjectableComponent => component !== null);
   }
 
   private isValidComponent(component: any): boolean {
     try {
-      return !!getMetadata(ComponentConstants.IOCObjectKey, component);
+      return !!getTypedMetadata<boolean>(ComponentConstants.IOCObjectKey, component);
     } catch {
       return false;
     }
   }
 
-  private createComponentObject(component: Class): Component | null {
+  private createComponentObject(component: Class): InjectableComponent | null {
     try {
-      const _interface = getMetadata(ComponentConstants.InterfaceKey, component);
+      const _interface = getTypedMetadata<string>(ComponentConstants.InterfaceKey, component);
 
       return {
         Class: component,
@@ -133,7 +133,7 @@ export class IocEngine {
     }
   }
 
-  private topologicalSort(classes: Class[], injectables: Component[]): Class[] {
+  private topologicalSort(classes: Class[], injectables: InjectableComponent[]): Class[] {
     const inDegree = new Map<string, number>();
     const adjacencyList = new Map<string, string[]>();
     const nameToClass = new Map<string, Class>();
@@ -185,13 +185,13 @@ export class IocEngine {
   // eslint-disable-next-line max-params
   private initializeGraph(
     classes: Class[],
-    injectables: Component[],
+    injectables: InjectableComponent[],
     inDegree: Map<string, number>,
     adjacencyList: Map<string, string[]>,
     nameToClass: Map<string, Class>,
   ): void {
     classes.forEach((cls) => {
-      const name = cls.name;
+      const name = getTypedMetadata<string>(ComponentConstants.NameKey, cls) || cls.name;
 
       nameToClass.set(name, cls);
       inDegree.set(name, 0);
@@ -199,15 +199,13 @@ export class IocEngine {
     });
 
     classes.forEach((cls) => {
-      const name = cls.name;
+      const name = getTypedMetadata<string>(ComponentConstants.NameKey, cls) || cls.name;
       const dependencies = [...this.getDependencies(cls), ...this.getStrategyDependencies(cls, injectables)];
 
       dependencies.forEach((dep) => {
         if (dep) {
-          const depName = dep.name;
-
-          adjacencyList.get(name)?.push(depName);
-          inDegree.set(depName, (inDegree.get(depName) || 0) + 1);
+          adjacencyList.get(name)?.push(dep);
+          inDegree.set(dep, (inDegree.get(dep) || 0) + 1);
         }
       });
     });
@@ -252,29 +250,33 @@ export class IocEngine {
     return cycle.reverse();
   }
 
-  private getDependencies(component: Class): Class[] {
+  private getDependencies(component: Class): string[] {
     try {
       const directDependencies = Object.values(
-        getMetadata(ComponentConstants.DependencyKey, component) || {},
-      ) as Class[];
+        getTypedMetadata<Dependencies>(ComponentConstants.DependencyKey, component) || {},
+      ) as string[];
+
+      const softDependencies = Object.values(
+        getTypedMetadata<Dependencies>(ComponentConstants.SoftDependencyKey, component) || {},
+      ) as string[];
 
       const parentClass = Object.getPrototypeOf(component);
 
       if (parentClass && parentClass !== Object.prototype) {
         const parentDependencies = this.getDependencies(parentClass);
 
-        return [...new Set([...directDependencies, ...parentDependencies])];
+        return [...new Set([...directDependencies, ...parentDependencies, ...softDependencies])];
       }
 
-      return directDependencies;
+      return [...new Set(...directDependencies, ...softDependencies)];
     } catch {
       return [];
     }
   }
 
-  private getStrategyDependencies(component: Class, injectables: Component[]): Class[] {
+  private getStrategyDependencies(component: Class, injectables: InjectableComponent[]): string[] {
     try {
-      const strategyMeta = getMetadata(ComponentConstants.StrategyKey, component);
+      const strategyMeta = getTypedMetadata<Strategies>(ComponentConstants.StrategyKey, component);
 
       const directStrategies = getStrategyClass(strategyMeta, injectables);
 

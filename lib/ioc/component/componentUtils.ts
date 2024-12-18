@@ -1,7 +1,13 @@
-import type { ComponentParams, ComponentType, ServiceParams } from '../types';
-import { Scope } from '../types';
-import { defineMetadata, getMetadata } from 'reflect-metadata/no-conflict';
+import {
+  type ComponentParams,
+  ComponentType,
+  type Dependencies,
+  Scope,
+  type ServiceParams,
+  type Strategies,
+} from '../types';
 import { ComponentConstants } from '../constants';
+import { defineTypedMetadata, getTypedMetadata } from '../../utils/typedMetadata';
 
 export const defineComponent = <T extends ComponentParams>(
   componentType: ComponentType,
@@ -9,32 +15,42 @@ export const defineComponent = <T extends ComponentParams>(
   extra?: (target: Function) => void,
 ): ClassDecorator => {
   return (target: Function) => {
-    const { scope = Scope.SINGLETON, name = target.name } = paramsGenerator(params);
+    const { scope = Scope.SINGLETON, name = target.name } = paramsGenerator(params, componentType);
 
-    defineMetadata(componentType, true, target);
+    defineTypedMetadata<boolean>(componentType, true, target);
 
-    defineMetadata(ComponentConstants.IOCObjectKey, true, target);
+    defineTypedMetadata<boolean>(ComponentConstants.IOCObjectKey, true, target);
 
-    defineMetadata(ComponentConstants.ScopeKey, scope, target);
+    defineTypedMetadata<Scope>(ComponentConstants.ScopeKey, scope, target);
 
-    defineMetadata(ComponentConstants.NameKey, name, target);
+    defineTypedMetadata<string>(ComponentConstants.NameKey, name, target);
 
     if (extra) {
       extra(target);
     }
 
-    if (getMetadata(ComponentConstants.DependencyKey, target) === undefined) {
-      defineMetadata(ComponentConstants.DependencyKey, {}, target);
+    if (getTypedMetadata<Dependencies>(ComponentConstants.DependencyKey, target) === undefined) {
+      defineTypedMetadata<Dependencies>(ComponentConstants.DependencyKey, {}, target);
     }
 
-    if (getMetadata(ComponentConstants.StrategyKey, target) === undefined) {
-      defineMetadata(ComponentConstants.StrategyKey, {}, target);
+    if (getTypedMetadata<Strategies>(ComponentConstants.StrategyKey, target) === undefined) {
+      defineTypedMetadata<Strategies>(ComponentConstants.StrategyKey, {}, target);
     }
   };
 };
 
-const paramsGenerator = (params: ComponentParams | string): ComponentParams | ServiceParams => {
+const paramsGenerator = (
+  params: ComponentParams | string,
+  componentType: ComponentType,
+): ComponentParams | ServiceParams => {
   const defaultParam: ComponentParams | ServiceParams = { name: undefined, scope: undefined };
+
+  if (
+    typeof params === 'string' &&
+    (componentType === ComponentType.CONTROLLER || componentType === ComponentType.WEBSOCKET)
+  ) {
+    return defaultParam;
+  }
 
   return typeof params === 'string' ? { name: params } : params || defaultParam;
 };

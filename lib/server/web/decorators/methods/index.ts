@@ -1,0 +1,9 @@
+export { Get } from './Get';
+export { Post } from './Post';
+export { Put } from './Put';
+export { Delete } from './Delete';
+export { Patch } from './Patch';
+export { Options } from './Options';
+export { Head } from './Head';
+export { Connect } from './Connect';
+export { Trace } from './Trace';

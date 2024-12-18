@@ -1,2 +1,2 @@
-export * from './ApiHandler';
+export * from './ApiParams';
 export * from './BaseMiddleware';
