@@ -37,6 +37,8 @@ describe('WebSocket Tests', () => {
       // @ts-ignore
       await wsService.onOpenInternal(mockWs);
 
+      expect(wsService.sockets.size).toBe(1);
+
       expect(wsService.sockets.has('test-socket-id')).toBe(true);
       expect(mockWs.subscribe).toHaveBeenCalledTimes(2);
     });
@@ -94,6 +96,10 @@ describe('WebSocket Tests', () => {
 
       const roomSockets = wsService.getSocketsByRoom('test-room');
 
+      const rooms = wsService.rooms;
+
+      expect(rooms.has('test-room')).toBe(true);
+
       expect(roomSockets).toContain(mockWs);
     });
 
@@ -113,6 +119,33 @@ describe('WebSocket Tests', () => {
       const roomSockets = wsService.getSocketsByRoom('test-room');
 
       expect(roomSockets).toBeUndefined();
+    });
+
+    it('should remove socket from all rooms, if socket disconnects', async () => {
+      const mockWs = new AsenaSocket(
+        {
+          subscribe: jest.fn(),
+          unsubscribe: jest.fn(),
+          data: { id: 'test-socket-id' },
+        } as any,
+        wsService,
+      );
+
+      wsService.rooms.set('test-room-hidden', [mockWs]);
+
+      mockWs.subscribe('test-room');
+
+      // @ts-ignore
+      await wsService.onCloseInternal(mockWs, 1000, 'test close');
+
+      const roomSockets = wsService.getSocketsByRoom('test-room');
+      const hiddenRoomSockets = wsService.getSocketsByRoom('test-room-hidden');
+
+      expect(wsService.rooms.size).toBe(0);
+      expect(wsService.sockets.size).toBe(0);
+
+      expect(roomSockets).toBeUndefined();
+      expect(hiddenRoomSockets).toBeUndefined();
     });
   });
 });
