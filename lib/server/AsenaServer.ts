@@ -18,7 +18,7 @@ import type { AsenaWebSocketService, WebSocketData, WSOptions } from './web/webs
 import { ComponentConstants } from '../ioc/constants';
 import * as bun from 'bun';
 import { green, type ServerLogger, yellow } from '../logger';
-import type { AsenaConfig } from './config/AsenaConfig';
+import { type AsenaConfig, AsenaConfigFuncions } from './config/AsenaConfig';
 import { getTypedMetadata } from '../utils/typedMetadata';
 
 export class AsenaServer<A extends AsenaAdapter<any, any, any, any, AsenaWebsocketAdapter<any, any, any>>> {
@@ -318,7 +318,12 @@ export class AsenaServer<A extends AsenaAdapter<any, any, any, any, AsenaWebsock
 
     const configInstance = config[0];
 
-    await this._adapter.onError(configInstance.onError.bind(configInstance));
+    for (const [key] of Object.keys(configInstance)) {
+      if (typeof configInstance[key] === 'function' && AsenaConfigFuncions.includes(key)) {
+        // bind every function to the instance
+        await this._adapter[key](configInstance[key].bind(configInstance));
+      }
+    }
 
     this._logger.info(`Config ${yellow(name)} applied`);
   }

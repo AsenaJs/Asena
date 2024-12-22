@@ -4,6 +4,7 @@ import type { Server } from 'bun';
 import type { AsenaWebsocketAdapter } from './AsenaWebsocketAdapter';
 import type { ServerLogger } from '../logger';
 import type { WSOptions } from '../server/web/websocket';
+import type { AsenaServeOptions } from './types/ServeOptions';
 
 /**
  * Abstract class representing an adapter for the Asena framework.
@@ -89,5 +90,17 @@ export abstract class AsenaAdapter<A, R, S, VS, WSA extends AsenaWebsocketAdapte
    * @param errorHandler - Error handler implementation
    */
   public abstract onError(errorHandler: ErrorHandler<R, S>): Promise<void> | void;
+
+  /**
+   * Configures server options.
+   *
+   * @param options - Configuration options for the server, which can include:
+   *   - `ServeOptions`: Basic server options.
+   *   - `TLSServeOptions`: Options for TLS/SSL configuration.
+   *   - `UnixServeOptions`: Options for Unix domain sockets.
+   *   - `UnixTLSServeOptions`: Options for Unix domain sockets with TLS/SSL.
+   * @returns A promise that resolves when the options are set, or void.
+   */
+  public abstract serveOptions(options: () => Promise<AsenaServeOptions> | AsenaServeOptions): Promise<void> | void;
 
 }

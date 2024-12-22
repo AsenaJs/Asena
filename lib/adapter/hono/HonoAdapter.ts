@@ -26,6 +26,7 @@ import type { ValidationSchema, ValidationSchemaWithHook } from './defaults';
 import type { ZodType, ZodTypeDef } from 'zod';
 import type { WSOptions } from '../../server/web/websocket';
 import { middlewareParser } from './utils/middlewareParser';
+import type { AsenaServeOptions } from '../types/ServeOptions';
 
 export class HonoAdapter extends AsenaAdapter<
   Hono,
@@ -40,6 +41,9 @@ export class HonoAdapter extends AsenaAdapter<
   public app = new Hono();
 
   private server: Server;
+
+  // @ts-ignore
+  private options: AsenaServeOptions = {} satisfies AsenaServeOptions;
 
   private readonly methodMap = {
     [HttpMethod.GET]: (path: string, ...handlers: (MiddlewareHandler | Handler)[]) => this.app.get(path, ...handlers),
@@ -109,7 +113,12 @@ export class HonoAdapter extends AsenaAdapter<
   public async start(wsOptions?: WSOptions) {
     this.websocketAdapter.buildWebsocket(wsOptions);
 
-    this.server = bun.serve({ port: this.port, fetch: this.app.fetch, websocket: this.websocketAdapter.websocket });
+    this.server = bun.serve({
+      ...this.options,
+      port: this.port,
+      fetch: this.app.fetch,
+      websocket: this.websocketAdapter.websocket,
+    });
 
     this.websocketAdapter.startWebsocket(this.server);
 
@@ -120,6 +129,10 @@ export class HonoAdapter extends AsenaAdapter<
     this.app.onError((error, context) => {
       return errorHandler(error, new HonoContextWrapper(context));
     });
+  }
+
+  public async serveOptions(options: () => Promise<AsenaServeOptions> | AsenaServeOptions) {
+    this.options = await options();
   }
 
   public setPort(port: number) {
