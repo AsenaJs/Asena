@@ -46,6 +46,7 @@ export class AsenaSocket<T> implements ServerWebSocket<WebSocketData<T>> {
   }
 
   public terminate(): void {
+    this.cleanup();
     this.ws.terminate();
   }
 
