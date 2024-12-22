@@ -1,2 +1,2 @@
 export * from './AsenaServer';
-export { createDefaultAdapter } from '../utils/createDefault';
+export { createHonoAdapter } from '../adapter/hono/utils/createHonoAdapter';

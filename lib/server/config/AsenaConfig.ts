@@ -1,10 +1,9 @@
 import type { AsenaContext } from '../../adapter';
-import type { ServeOptions, TLSServeOptions, UnixServeOptions, UnixTLSServeOptions } from 'bun';
+import type { AsenaServeOptions } from '../../adapter/types/ServeOptions';
 
 export interface AsenaConfig<C extends AsenaContext<any, any> = AsenaContext<any, any>> {
   onError?(error: Error, context: C): Response | Promise<Response>;
-  serveOptions?(): ServeOptions | TLSServeOptions | UnixServeOptions | UnixTLSServeOptions;
+  serveOptions?(): AsenaServeOptions;
 }
 
-
-export const AsenaConfigFuncions = "onError, serveOptions";
+export const AsenaConfigFunctions = 'onError, serveOptions';

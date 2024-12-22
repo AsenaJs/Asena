@@ -44,14 +44,14 @@ export class HonoWebsocketAdapter extends AsenaWebsocketAdapter<Hono, HonoReques
     }
 
     this.logger.info(
-      `${green('Successfully')} registered ${yellow('WEBSOCKET')} route for PATH: ${green(`/${webSocketService.namespace}`)} (${webSocketService.constructor.name})`,
+      `${green('Successfully')} registered ${yellow('WEBSOCKET')} route for PATH: ${green(`/${webSocketService.namespace}`)}`,
     );
 
     this.websockets.set(namespace, { socket: webSocketService, middlewares });
   }
 
   public buildWebsocket(options?: WSOptions): void {
-    if (!this.websocket || !this.websockets?.size) return;
+    if (!this.websockets || !this.websockets?.size) return;
 
     for (const [, websocket] of this.websockets) {
       this.upgradeWebSocket(websocket.socket, websocket.middlewares);
@@ -73,7 +73,7 @@ export class HonoWebsocketAdapter extends AsenaWebsocketAdapter<Hono, HonoReques
   }
 
   private prepareWebSocket(options?: WSOptions): void {
-    if (this.websockets?.size <= 1) {
+    if (this.websockets?.size < 1) {
       return;
     }
 
@@ -116,7 +116,7 @@ export class HonoWebsocketAdapter extends AsenaWebsocketAdapter<Hono, HonoReques
     return (ws: ServerWebSocket<WebSocketData>, ...args: any[]) => {
       const websocket = this.websockets.get(ws.data.path);
 
-      const handler = websocket?.socket[type];
+      const handler = websocket?.socket[type].bind(websocket.socket);
 
       if (!handler) {
         return;

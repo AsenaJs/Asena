@@ -1,1 +1,1 @@
-export { AsenaServer, createDefaultAdapter } from './lib/server';
+export { AsenaServer, createHonoAdapter } from './lib/server';

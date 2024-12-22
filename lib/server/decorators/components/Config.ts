@@ -9,6 +9,6 @@ import { defineComponent } from '../../../ioc/component';
  * @returns {ClassDecorator} A class decorator that registers the class as a config component
  *
  */
-export const Config = (params: ComponentParams | string): ClassDecorator => {
+export const Config = (params?: ComponentParams | string): ClassDecorator => {
   return defineComponent(ComponentType.CONFIG, params);
 };
