@@ -1,4 +1,4 @@
-import type { Class, MiddlewareClass, ValidatorClass } from './types';
+import type { Class } from './types';
 import { IocEngine } from '../ioc';
 import { readConfigFile } from '../ioc/helper/fileHelper';
 import { ComponentType, type InjectableComponent } from '../ioc/types';
@@ -12,16 +12,16 @@ import {
   type ValidatorHandler,
 } from './web/types';
 import * as path from 'node:path';
-import type { AsenaMiddlewareService, AsenaValidationService } from './web/middleware';
+import type {AsenaMiddlewareService, AsenaValidationService, MiddlewareClass, ValidatorClass} from './web/middleware';
 import type { AsenaAdapter, AsenaWebsocketAdapter } from '../adapter';
-import type { AsenaWebSocketService, WebSocketData, WSOptions } from './web/websocket';
+import type { AsenaWebSocketService, WebSocketData } from './web/websocket';
 import { ComponentConstants } from '../ioc/constants';
 import * as bun from 'bun';
 import { green, type ServerLogger, yellow } from '../logger';
-import { type AsenaConfig, AsenaConfigFunctions } from './config/AsenaConfig';
+import type { AsenaConfig } from './config/AsenaConfig';
 import { getTypedMetadata } from '../utils/typedMetadata';
 
-export class AsenaServer<A extends AsenaAdapter<any, any, any, any, AsenaWebsocketAdapter<any, any, any>>> {
+export class AsenaServer<A extends AsenaAdapter<any, any, any, AsenaWebsocketAdapter<any, any>>> {
 
   private _port: number;
 
@@ -33,9 +33,7 @@ export class AsenaServer<A extends AsenaAdapter<any, any, any, any, AsenaWebsock
 
   private _logger: ServerLogger;
 
-  private _adapter: A;
-
-  private _wsOptions: WSOptions;
+  private readonly _adapter: A;
 
   public constructor(adapter: A, logger?: ServerLogger) {
     this._logger = logger;
@@ -82,7 +80,7 @@ export class AsenaServer<A extends AsenaAdapter<any, any, any, any, AsenaWebsock
 
     this._logger.info('Server started on port ' + this._port);
 
-    await this._adapter.start(this._wsOptions);
+    await this._adapter.start();
 
     // TODO: this is wierd but when we call gc asena uses less memory rest of the time
     if (gc) {
@@ -116,12 +114,6 @@ export class AsenaServer<A extends AsenaAdapter<any, any, any, any, AsenaWebsock
     return this;
   }
 
-  public wsOptions(options: WSOptions) {
-    this._wsOptions = options;
-
-    return this;
-  }
-
   private async initializeControllers() {
     await this.validateAndSetControllers();
 
@@ -139,7 +131,7 @@ export class AsenaServer<A extends AsenaAdapter<any, any, any, any, AsenaWebsock
       for (const [name, params] of Object.entries(routes)) {
         const lastPath = path.join(`${routePath}/`, params.path);
 
-        const middlewares = await this.prepareMiddleware(params);
+        const middlewares = await this.prepareRouteMiddleware(params);
         const validatorInstance = await this.prepareValidator(params.validator);
 
         await this._adapter.registerRoute({
@@ -172,36 +164,19 @@ export class AsenaServer<A extends AsenaAdapter<any, any, any, any, AsenaWebsock
   private async prepareTopMiddlewares(
     { controller, routePath }: PrepareMiddlewareParams,
     websocket = false,
-  ): Promise<BaseMiddleware<any, any>[]> {
+  ): Promise<BaseMiddleware[]> {
     const topMiddlewares =
       getTypedMetadata<MiddlewareClass[]>(ComponentConstants.MiddlewaresKey, controller.constructor) || [];
-    const middlewares: BaseMiddleware<any, any>[] = [];
 
-    for (const middleware of topMiddlewares) {
-      const name = getTypedMetadata<string>(ComponentConstants.NameKey, middleware);
-      const instances = await this._ioc.container.resolve<AsenaMiddlewareService>(name);
+    const middlewares = await this.prepareMiddlewares(topMiddlewares);
 
-      if (!instances) continue;
-
-      const normalizedInstances = Array.isArray(instances) ? instances : [instances];
-
-      for (const instance of normalizedInstances) {
-        const override = getTypedMetadata<string[]>(ComponentConstants.OverrideKey, instance);
-        const isOverride = override ? override.includes('handle') : false;
-        const middleware: BaseMiddleware<any, any> = {
-          handle: instance.handle.bind(instance),
-          override: isOverride,
-        };
-
-        if (websocket) {
-          middlewares.push(middleware);
-        } else {
-          await this._adapter.use(middleware, routePath);
-        }
-      }
+    if (websocket) {
+      return middlewares;
     }
 
-    return websocket ? middlewares : [];
+    for (const middleware of middlewares) {
+      await this._adapter.use(middleware, routePath);
+    }
   }
 
   private async prepareValidator(Validator: ValidatorClass<any>): Promise<BaseValidator> {
@@ -235,31 +210,35 @@ export class AsenaServer<A extends AsenaAdapter<any, any, any, any, AsenaWebsock
     return baseValidatorMiddleware;
   }
 
-  private async prepareMiddleware(middlewareParams: ApiParams): Promise<BaseMiddleware<any, any>[]> {
-    const middlewares: BaseMiddleware<any, any>[] = [];
+  private async prepareRouteMiddleware(middlewareParams: ApiParams): Promise<BaseMiddleware[]> {
     const routeMiddlewares = middlewareParams?.middlewares || [];
 
-    for (const middleware of routeMiddlewares) {
-      const name: string = getTypedMetadata<string>(ComponentConstants.NameKey, middleware);
-      const override: string[] | undefined = getTypedMetadata<string[]>(ComponentConstants.OverrideKey, middleware);
+    return this.prepareMiddlewares(routeMiddlewares);
+  }
+
+  private async prepareMiddlewares(middlewares: MiddlewareClass[]): Promise<BaseMiddleware[]> {
+    const preparedMiddlewares: BaseMiddleware[] = [];
+
+    for (const middleware of middlewares) {
+      const name = getTypedMetadata<string>(ComponentConstants.NameKey, middleware);
+      const override = getTypedMetadata<string[]>(ComponentConstants.OverrideKey, middleware);
       const isOverride = override ? override.includes('handle') : false;
 
-      const instances: AsenaMiddlewareService | AsenaMiddlewareService[] =
-        await this._ioc.container.resolve<AsenaMiddlewareService>(name);
+      const instances = await this._ioc.container.resolve<AsenaMiddlewareService>(name);
 
       if (!instances) continue;
 
       const normalizedInstances = Array.isArray(instances) ? instances : [instances];
 
       for (const instance of normalizedInstances) {
-        middlewares.push({
+        preparedMiddlewares.push({
           handle: instance.handle.bind(instance),
           override: isOverride,
         });
       }
     }
 
-    return middlewares;
+    return preparedMiddlewares;
   }
 
   private async prepareWebSocket() {
@@ -318,10 +297,26 @@ export class AsenaServer<A extends AsenaAdapter<any, any, any, any, AsenaWebsock
 
     const configInstance = config[0];
 
-    for (const [key] of Object.keys(configInstance)) {
-      if (typeof configInstance[key] === 'function' && AsenaConfigFunctions.includes(key)) {
-        // bind every function to the instance
-        await this._adapter[key](configInstance[key].bind(configInstance));
+    if (!configInstance) {
+      this._logger.info('Config instance not found');
+      return;
+    }
+
+    if (typeof configInstance.serveOptions === 'function') {
+      await this._adapter.serveOptions(configInstance.serveOptions.bind(configInstance));
+    }
+
+    if (typeof configInstance.onError === 'function') {
+      await this._adapter.onError(configInstance.onError.bind(configInstance));
+    }
+
+    if (typeof configInstance.globalMiddlewares === 'function') {
+      const middlewares = await configInstance.globalMiddlewares();
+
+      const preparedMiddlewares = await this.prepareMiddlewares(middlewares);
+
+      for (const middleware of preparedMiddlewares) {
+        await this._adapter.use(middleware);
       }
     }
 

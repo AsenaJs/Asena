@@ -1,9 +1,10 @@
-import type { Context, HonoRequest, MiddlewareHandler, Next } from 'hono';
+import type { Context, MiddlewareHandler, Next } from 'hono';
 import { HonoContextWrapper } from '../HonoContextWrapper';
 import type { BaseMiddleware } from '../../../server/web/types';
 import { createFactory } from 'hono/factory';
+import type { Context as HonoAdapterContext } from '../defaults';
 
-export const middlewareParser = (middlewares: BaseMiddleware<HonoRequest, Response>[]): MiddlewareHandler[] => {
+export const middlewareParser = (middlewares: BaseMiddleware<HonoAdapterContext>[]): MiddlewareHandler[] => {
   const factory = createFactory();
 
   return middlewares.map((middleware) => {

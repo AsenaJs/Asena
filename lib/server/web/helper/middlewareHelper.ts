@@ -1,7 +1,7 @@
-import type { MiddlewareClass } from '../../types';
 import type { Dependencies } from '../../../ioc/types';
 import { ComponentConstants } from '../../../ioc/constants';
 import { defineTypedMetadata, getTypedMetadata } from '../../../utils/typedMetadata';
+import type {MiddlewareClass} from "../middleware";
 
 /**
  * Defines middlewares for target class.

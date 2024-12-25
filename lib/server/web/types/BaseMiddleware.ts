@@ -1,15 +1,14 @@
 import type { Class } from '../../types';
 import type { ApiParams } from './ApiParams';
-import type { AsenaMiddlewareHandler } from '../../../adapter';
+import type { AsenaContext, AsenaMiddlewareHandler } from '../../../adapter';
 
 /**
  * Interface representing a base middleware.
  *
- * @template R - The request type.
- * @template S - The response type.
+ * @Templete context - The current Asena context
  */
-export interface BaseMiddleware<R = unknown, S = unknown> {
-  handle: AsenaMiddlewareHandler<R, S>;
+export interface BaseMiddleware<C extends AsenaContext<any, any> = any> {
+  handle: AsenaMiddlewareHandler<C>;
   override: boolean;
 }
 

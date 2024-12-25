@@ -1,26 +1,28 @@
 import type { HttpMethod } from '../http';
-import type { MiddlewareClass, ValidatorClass } from '../../types';
 import type { AsenaContext } from '../../../adapter';
+import type {MiddlewareClass, ValidatorClass} from "../middleware";
 
 /**
  * Interface representing a route configuration.
  *
- * @template R - The request type.
- * @template S - The response type.
+ * @template C - The context type extending AsenaContext.
  * @template SH - The schema type for validation.
  */
-export interface Route<R = unknown, S = unknown, SH = unknown> {
-  [key: string]: ApiParams<R, S, SH>;
+export interface Route<C extends AsenaContext<any, any> = any, SH = unknown> {
+  /**
+   * A dictionary where the key is a string representing the route name
+   * and the value is an object containing the parameters for the API route.
+   */
+  [key: string]: ApiParams<C, SH>;
 }
 
 /**
  * Interface representing the parameters for an API route.
  *
- * @template R - The request type.
- * @template S - The response type.
+ * @template C - The context type extending AsenaContext.
  * @template SH - The schema type for validation.
  */
-export interface ApiParams<R = unknown, S = unknown, SH = unknown> {
+export interface ApiParams<C extends AsenaContext<any, any> = any, SH = unknown> {
   /** The path for the route. */
   path: string;
   /** The HTTP method for the route. */
@@ -28,7 +30,7 @@ export interface ApiParams<R = unknown, S = unknown, SH = unknown> {
   /** A brief description of the route. */
   description: string;
   /** An array of middleware classes to be applied to the route. */
-  middlewares: MiddlewareClass<AsenaContext<R, S>>[];
+  middlewares: MiddlewareClass<C>[];
   /** A flag indicating whether to serve static files. */
   staticServe: boolean;
   /** The validator class for request validation. */
@@ -38,14 +40,13 @@ export interface ApiParams<R = unknown, S = unknown, SH = unknown> {
 /**
  * Type definition for a controller handler function.
  *
- * @template R - The request type.
- * @template RE - The response type.
- * @param {AsenaContext<R, RE>} c - The context object for the request and response.
+ * @template C - The context type extending AsenaContext.
+ * @param {C} c - The context object for the request and response.
  * @param {...any[]} args - Additional arguments passed to the handler.
  * @returns {void | Promise<void> | Promise<Response> | Response} - The result of the handler, which can be void, a promise resolving to void, a promise resolving to a Response, or a Response.
  */
-export type ControllerHandler<R = unknown, RE = unknown> = (
-  c: AsenaContext<R, RE>,
+export type ControllerHandler<C extends AsenaContext<any, any> = any> = (
+  c: C,
   ...args: any[]
   // eslint-disable-next-line @typescript-eslint/no-invalid-void-type
 ) => void | Promise<void> | Promise<Response> | Response;
@@ -53,19 +54,32 @@ export type ControllerHandler<R = unknown, RE = unknown> = (
 /**
  * Interface for defining parameters for a controller decorator.
  *
- * @template R - The request type.
- * @template S - The response type.
+ * @template C - The context type extending AsenaContext.
  * @template SH - The schema type for validation.
  */
-export interface ControllerDecoratorParams<R = any, S = any, SH = any> {
-  /** The path for the route. */
+export interface ControllerDecoratorParams<C extends AsenaContext<any, any> = any, SH = any> {
+  /**
+   * The path for the route.
+   */
   path: string;
-  /** Optional array of middleware classes to be applied. */
-  middlewares?: MiddlewareClass<AsenaContext<R, S>>[];
-  /** Optional description of the route. */
+
+  /**
+   * Optional array of middleware classes to be applied.
+   */
+  middlewares?: MiddlewareClass<C>[];
+
+  /**
+   * Optional description of the route.
+   */
   description?: string;
-  /** Optional flag to serve static files. */
+
+  /**
+   * Optional flag to serve static files.
+   */
   staticServe?: boolean;
-  /** Optional validator class for request validation. */
+
+  /**
+   * Optional validator class for request validation.
+   */
   validator?: ValidatorClass<SH>;
 }

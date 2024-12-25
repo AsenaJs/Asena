@@ -1,3 +1,5 @@
+import type { Class } from '../../types';
+
 /**
  * Interface representing a validation service.
  * @template S - Schema type.
@@ -33,3 +35,5 @@ export interface AsenaValidationService<S> {
    */
   header?(): Promise<S> | S;
 }
+
+export type ValidatorClass<S = unknown> = Class<AsenaValidationService<S>>;

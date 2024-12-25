@@ -1,6 +1,6 @@
-import type { HonoRequest } from 'hono';
 import type { ErrorHandler } from '../../types';
 import type { AsenaHandler } from '../../types/AsenaHandler';
+import type { Context } from '../defaults';
 
-export type HonoHandler = AsenaHandler<HonoRequest, Response>;
-export type HonoErrorHandler = ErrorHandler<HonoRequest, Response>;
+export type HonoHandler = AsenaHandler<Context>;
+export type HonoErrorHandler = ErrorHandler<Context>;

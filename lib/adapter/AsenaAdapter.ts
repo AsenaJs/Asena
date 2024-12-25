@@ -1,10 +1,9 @@
-import type { ErrorHandler, RouteParams } from './types';
+import type { AsenaServeOptions, ErrorHandler, RouteParams } from './types';
 import type { BaseMiddleware } from '../server/web/types';
 import type { Server } from 'bun';
 import type { AsenaWebsocketAdapter } from './AsenaWebsocketAdapter';
 import type { ServerLogger } from '../logger';
-import type { WSOptions } from '../server/web/websocket';
-import type { AsenaServeOptions } from './types/ServeOptions';
+import type { AsenaContext } from './AsenaContext';
 
 /**
  * Abstract class representing an adapter for the Asena framework.
@@ -16,7 +15,7 @@ import type { AsenaServeOptions } from './types/ServeOptions';
  * @template VS - Type for the validator schema
  * @template WSA - Type for the WebSocket adapter implementation
  */
-export abstract class AsenaAdapter<A, R, S, VS, WSA extends AsenaWebsocketAdapter<A, R, S>> {
+export abstract class AsenaAdapter<A, C extends AsenaContext<any, any>, VS, WSA extends AsenaWebsocketAdapter<A, C>> {
 
   /**
    * The name identifier of the adapter
@@ -70,26 +69,25 @@ export abstract class AsenaAdapter<A, R, S, VS, WSA extends AsenaWebsocketAdapte
    * @param middleware - Middleware implementation
    * @param path - Optional path to apply the middleware to
    */
-  public abstract use(middleware: BaseMiddleware<R, S>, path?: string): Promise<void> | void;
+  public abstract use(middleware: BaseMiddleware<C>, path?: string): Promise<void> | void;
 
   /**
    * Registers a new route with the application
    * @param params - Route configuration parameters
    */
-  public abstract registerRoute(params: RouteParams<R, S, VS>): Promise<void> | void;
+  public abstract registerRoute(params: RouteParams<C, VS>): Promise<void> | void;
 
   /**
    * Initializes and starts the server
-   * @param wsOptions - Optional WebSocket configuration
    * @returns Server instance
    */
-  public abstract start(wsOptions?: WSOptions): Promise<Server> | Server;
+  public abstract start(): Promise<Server> | Server;
 
   /**
    * Sets up global error handling
    * @param errorHandler - Error handler implementation
    */
-  public abstract onError(errorHandler: ErrorHandler<R, S>): Promise<void> | void;
+  public abstract onError(errorHandler: ErrorHandler<C>): Promise<void> | void;
 
   /**
    * Configures server options.

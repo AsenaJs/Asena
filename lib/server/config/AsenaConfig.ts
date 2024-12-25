@@ -1,5 +1,6 @@
 import type { AsenaContext, AsenaServeOptions } from '../../adapter';
-import type { AsenaMiddlewareService } from '../web/middleware';
+
+import type {MiddlewareClass} from "../web/middleware";
 
 /**
  * Configuration interface for Asena framework
@@ -41,7 +42,7 @@ export interface AsenaConfig<C extends AsenaContext<any, any> = AsenaContext<any
    *
    * @returns Array of middleware services to be applied globally
    */
-  globalMiddlewares?(): AsenaMiddlewareService<C>[];
+  globalMiddlewares?(): Promise<MiddlewareClass[]> | MiddlewareClass[];
 }
 
-export const AsenaConfigFunctions = 'onError, serveOptions';
+export type AsenaConfigFunctions = 'onError' | 'serveOptions' | 'globalMiddlewares';

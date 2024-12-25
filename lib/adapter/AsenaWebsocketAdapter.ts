@@ -3,6 +3,7 @@ import type { WebSocketHandler } from 'bun';
 import type { WebsocketAdapterParams, WebSocketRegistry } from './types';
 import type { ServerLogger } from '../logger';
 import type { BaseMiddleware } from '../server/web/types';
+import type { AsenaContext } from './AsenaContext';
 
 /**
  * Abstract class that provides a base implementation for WebSocket adapters.
@@ -12,7 +13,7 @@ import type { BaseMiddleware } from '../server/web/types';
  * @template R - Type of the request object
  * @template S - Type of the response object
  */
-export abstract class AsenaWebsocketAdapter<A, R, S> {
+export abstract class AsenaWebsocketAdapter<A, C extends AsenaContext<any, any>> {
 
   public readonly name: string;
 
@@ -25,7 +26,7 @@ export abstract class AsenaWebsocketAdapter<A, R, S> {
    *   - middlewares: Array of middleware functions
    * @protected
    */
-  protected _websockets: WebSocketRegistry<R, S>;
+  protected _websockets: WebSocketRegistry<C>;
 
   /**
    * Reference to the main application instance
@@ -61,7 +62,7 @@ export abstract class AsenaWebsocketAdapter<A, R, S> {
    */
   public abstract registerWebSocket(
     websocket: AsenaWebSocketService<any>,
-    middlewares: BaseMiddleware<R, S>[],
+    middlewares: BaseMiddleware<C>[],
   ): Promise<void> | void;
 
   /**
@@ -95,14 +96,14 @@ export abstract class AsenaWebsocketAdapter<A, R, S> {
   /**
    * Gets the WebSocket registry
    */
-  protected get websockets(): WebSocketRegistry<R, S> {
+  protected get websockets(): WebSocketRegistry<C> {
     return this._websockets;
   }
 
   /**
    * Sets the WebSocket registry
    */
-  protected set websockets(value: WebSocketRegistry<R, S>) {
+  protected set websockets(value: WebSocketRegistry<C>) {
     this._websockets = value;
   }
 

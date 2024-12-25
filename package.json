@@ -52,6 +52,10 @@
     "./http-status": {
       "import": "./dist/lib/server/web/http/HttpStatus.js",
       "types": "./dist/lib/server/web/http/HttpStatus.d.ts"
+    },
+    "./middleware": {
+      "import": "./dist/lib/server/web/middleware/index.js",
+      "types": "./dist/lib/server/web/middleware/index.d.ts"
     }
   },
   "keywords": [

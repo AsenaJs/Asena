@@ -1,15 +1,8 @@
 import { AsenaAdapter } from '../AsenaAdapter';
-import {
-  type Context,
-  type Handler,
-  Hono,
-  type HonoRequest,
-  type MiddlewareHandler,
-  type ValidationTargets,
-} from 'hono';
+import { type Context, type Handler, Hono, type MiddlewareHandler, type ValidationTargets } from 'hono';
 import type { Server } from 'bun';
 import * as bun from 'bun';
-import type { RouteParams } from '../types';
+import type { AsenaServeOptions, RouteParams } from '../types';
 import { HonoContextWrapper } from './HonoContextWrapper';
 import { HttpMethod } from '../../server/web/http';
 import {
@@ -24,16 +17,14 @@ import type { AsenaWebsocketAdapter } from '../AsenaWebsocketAdapter';
 import { type Hook, zValidator } from '@hono/zod-validator';
 import type { ValidationSchema, ValidationSchemaWithHook } from './defaults';
 import type { ZodType, ZodTypeDef } from 'zod';
-import type { WSOptions } from '../../server/web/websocket';
 import { middlewareParser } from './utils/middlewareParser';
-import type { AsenaServeOptions } from '../types/ServeOptions';
+import type { Context as HonoAdapterContext } from './defaults/Context';
 
 export class HonoAdapter extends AsenaAdapter<
   Hono,
-  HonoRequest,
-  Response,
+  HonoAdapterContext,
   ValidationSchema,
-  AsenaWebsocketAdapter<Hono, HonoRequest, Response>
+  AsenaWebsocketAdapter<Hono, HonoAdapterContext>
 > {
 
   public name = 'HonoAdapter';
@@ -60,7 +51,7 @@ export class HonoAdapter extends AsenaAdapter<
       this.app.on(HttpMethod.TRACE.toUpperCase(), path, ...handlers),
   };
 
-  public constructor(websocketAdapter: AsenaWebsocketAdapter<Hono, HonoRequest, Response>, logger?: ServerLogger) {
+  public constructor(websocketAdapter: AsenaWebsocketAdapter<Hono, HonoAdapterContext>, logger?: ServerLogger) {
     super(websocketAdapter, logger);
     this.websocketAdapter.app = this.app;
 
@@ -70,7 +61,7 @@ export class HonoAdapter extends AsenaAdapter<
     }
   }
 
-  public use(middleware: BaseMiddleware<HonoRequest, Response>, path?: string) {
+  public use(middleware: BaseMiddleware<HonoAdapterContext>, path?: string) {
     const normalizedPath = path ? this.normalizePath(path) : undefined;
     const preparedMiddlewares = this.prepareMiddlewares([middleware]);
 
@@ -89,7 +80,7 @@ export class HonoAdapter extends AsenaAdapter<
     handler,
     staticServe,
     validator,
-  }: RouteParams<HonoRequest, Response, ValidationSchema>) {
+  }: RouteParams<HonoAdapterContext, ValidationSchema>) {
     const middlewares = this.prepareMiddlewares(middleware);
 
     const allMiddlewares: MiddlewareHandler[] = validator
@@ -110,8 +101,8 @@ export class HonoAdapter extends AsenaAdapter<
     );
   }
 
-  public async start(wsOptions?: WSOptions) {
-    this.websocketAdapter.buildWebsocket(wsOptions);
+  public async start() {
+    this.websocketAdapter.buildWebsocket(this.options?.wsOptions);
 
     this.server = bun.serve({
       ...this.options,
@@ -139,7 +130,7 @@ export class HonoAdapter extends AsenaAdapter<
     this.port = port;
   }
 
-  private prepareMiddlewares(middlewares: BaseMiddleware<HonoRequest, Response>[]): MiddlewareHandler[] {
+  private prepareMiddlewares(middlewares: BaseMiddleware<HonoAdapterContext>[]): MiddlewareHandler[] {
     return middlewareParser(middlewares);
   }
 
@@ -158,7 +149,7 @@ export class HonoAdapter extends AsenaAdapter<
 
     for (const key of VALIDATOR_METHODS) {
       // if the key is not a validator method, skip
-      if (typeof (baseValidator[key] as BaseMiddleware<HonoRequest, Response>)?.handle !== 'function') {
+      if (typeof (baseValidator[key] as BaseMiddleware<HonoAdapterContext>)?.handle !== 'function') {
         continue;
       }
 

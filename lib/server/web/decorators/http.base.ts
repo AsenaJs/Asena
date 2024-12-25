@@ -17,7 +17,7 @@ export function genericHandler({ method, path, description, middlewares, staticS
   };
 }
 
-export const DEFAULT_PARAMS: ControllerDecoratorParams<any, any, any> = {
+export const DEFAULT_PARAMS: ControllerDecoratorParams = {
   path: '',
   middlewares: [],
   description: '',

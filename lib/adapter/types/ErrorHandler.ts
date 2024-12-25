@@ -1,3 +1,3 @@
 import type { AsenaContext } from '../AsenaContext';
 
-export type ErrorHandler<R, S> = (error: Error, context: AsenaContext<R, S>) => Response | Promise<Response>;
+export type ErrorHandler<C extends AsenaContext<any, any>> = (error: Error, context: C) => Response | Promise<Response>;

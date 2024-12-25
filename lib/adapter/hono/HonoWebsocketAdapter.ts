@@ -6,7 +6,7 @@ import {
   type WSOptions,
 } from '../../server/web/websocket';
 import { AsenaWebsocketAdapter } from '../AsenaWebsocketAdapter';
-import type { Context, Hono, HonoRequest, MiddlewareHandler } from 'hono';
+import type { Context, Hono, MiddlewareHandler } from 'hono';
 import type { Server, ServerWebSocket } from 'bun';
 import * as bun from 'bun';
 import { AsenaWebSocketServer } from '../../server/web/websocket/AsenaWebSocketServer';
@@ -14,8 +14,9 @@ import type { WebsocketAdapterParams, WebsocketServiceRegistry } from '../types'
 import { green, yellow } from '../../logger';
 import type { BaseMiddleware } from '../../server/web/types';
 import { middlewareParser } from './utils/middlewareParser';
+import type { Context as HonoAdapterContext } from './defaults/Context';
 
-export class HonoWebsocketAdapter extends AsenaWebsocketAdapter<Hono, HonoRequest, Response> {
+export class HonoWebsocketAdapter extends AsenaWebsocketAdapter<Hono, HonoAdapterContext> {
 
   public name = 'HonoWebsocketAdapter';
 
@@ -27,14 +28,14 @@ export class HonoWebsocketAdapter extends AsenaWebsocketAdapter<Hono, HonoReques
 
   public registerWebSocket(
     webSocketService: AsenaWebSocketService<any>,
-    middlewares: BaseMiddleware<HonoRequest, Response>[],
+    middlewares: BaseMiddleware<HonoAdapterContext>[],
   ): void {
     if (!webSocketService) {
       throw new Error('Websocket service is not provided');
     }
 
     if (this.websockets === undefined) {
-      this.websockets = new Map<string, WebsocketServiceRegistry<HonoRequest, Response>>();
+      this.websockets = new Map<string, WebsocketServiceRegistry<HonoAdapterContext>>();
     }
 
     const namespace = webSocketService.namespace;
@@ -90,7 +91,7 @@ export class HonoWebsocketAdapter extends AsenaWebsocketAdapter<Hono, HonoReques
 
   private upgradeWebSocket(
     websocket: AsenaWebSocketService<any>,
-    middlewares: BaseMiddleware<HonoRequest, Response>[],
+    middlewares: BaseMiddleware<HonoAdapterContext>[],
   ): void {
     const path = websocket.namespace;
 
@@ -129,7 +130,7 @@ export class HonoWebsocketAdapter extends AsenaWebsocketAdapter<Hono, HonoReques
     };
   }
 
-  private prepareMiddlewares(middlewares: BaseMiddleware<HonoRequest, Response>[]): MiddlewareHandler[] {
+  private prepareMiddlewares(middlewares: BaseMiddleware<HonoAdapterContext>[]): MiddlewareHandler[] {
     return middlewareParser(middlewares);
   }
 

@@ -1,5 +1,5 @@
-import type { AsenaContext } from '../../../adapter';
-import type { AsenaNextHandler } from '../../../adapter';
+import type { AsenaContext, AsenaNextHandler } from '../../../adapter';
+import type { Class } from '../../types';
 
 /**
  * Abstract class representing a middleware service in the Asena framework.
@@ -18,3 +18,7 @@ export abstract class AsenaMiddlewareService<C extends AsenaContext<any, any> = 
   public abstract handle(context: C, next: AsenaNextHandler): Promise<void> | any;
 
 }
+
+export type MiddlewareClass<C extends AsenaContext<any, any> = AsenaContext<any, any>> = Class<
+  AsenaMiddlewareService<C>
+>;
