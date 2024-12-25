@@ -179,7 +179,7 @@ export class AsenaServer<A extends AsenaAdapter<any, any, any, any, AsenaWebsock
 
     for (const middleware of topMiddlewares) {
       const name = getTypedMetadata<string>(ComponentConstants.NameKey, middleware);
-      const instances = await this._ioc.container.resolve<AsenaMiddlewareService<any, any>>(name);
+      const instances = await this._ioc.container.resolve<AsenaMiddlewareService>(name);
 
       if (!instances) continue;
 
@@ -244,8 +244,8 @@ export class AsenaServer<A extends AsenaAdapter<any, any, any, any, AsenaWebsock
       const override: string[] | undefined = getTypedMetadata<string[]>(ComponentConstants.OverrideKey, middleware);
       const isOverride = override ? override.includes('handle') : false;
 
-      const instances: AsenaMiddlewareService<any, any> | AsenaMiddlewareService<any, any>[] =
-        await this._ioc.container.resolve<AsenaMiddlewareService<any, any>>(name);
+      const instances: AsenaMiddlewareService | AsenaMiddlewareService[] =
+        await this._ioc.container.resolve<AsenaMiddlewareService>(name);
 
       if (!instances) continue;
 

@@ -28,7 +28,7 @@ export interface ApiParams<R = unknown, S = unknown, SH = unknown> {
   /** A brief description of the route. */
   description: string;
   /** An array of middleware classes to be applied to the route. */
-  middlewares: MiddlewareClass<R, S>[];
+  middlewares: MiddlewareClass<AsenaContext<R, S>>[];
   /** A flag indicating whether to serve static files. */
   staticServe: boolean;
   /** The validator class for request validation. */
@@ -61,7 +61,7 @@ export interface ControllerDecoratorParams<R = any, S = any, SH = any> {
   /** The path for the route. */
   path: string;
   /** Optional array of middleware classes to be applied. */
-  middlewares?: MiddlewareClass<R, S>[];
+  middlewares?: MiddlewareClass<AsenaContext<R, S>>[];
   /** Optional description of the route. */
   description?: string;
   /** Optional flag to serve static files. */

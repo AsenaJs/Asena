@@ -5,3 +5,4 @@ export * from './RouteParams';
 export * from './SendOptions';
 export * from './WebsocketAdapterParams';
 export * from './WebSocketRegistry';
+export * from './ServeOptions';
