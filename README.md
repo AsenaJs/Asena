@@ -22,9 +22,10 @@ First, create a new project using Bun:
 
 ```bash
 bun init
-````
+```
 
 For decorators working properly, you need to add some settings to your tsconfig. Here is an recommended file:
+
 ```json
 {
   "compilerOptions": {
@@ -55,26 +56,26 @@ For decorators working properly, you need to add some settings to your tsconfig.
     "noPropertyAccessFromIndexSignature": true
   }
 }
-
 ```
 
 Then, install the required packages:
+
 ```bash
 
 bun add @asenajs/asena hono winston
 ```
+
 Add @asenajs/asena-cli to your package. This package provides a CLI for creating and managing Asena projects.
 
 ```bash
 bun add -D @asenajs/asena-cli
-````
+```
 
-
-Then, create a new .asenarc.json file using the CLI:
+Then, create a new asena-config.ts file using the CLI:
 
 ```bash
 
-## Creates a .asenarc.json file with default values (requires manual updates). Source folder is 'src'.
+## Creates a asena-config.ts file with default values (requires manual updates). Source folder is 'src'.
 asena init
 ```
 
@@ -85,24 +86,26 @@ Create index.ts file under your src folder:
 
 ```typescript
 // src/index.ts
-import {AsenaServer, DefaultLogger} from "@asenajs/asena";
-
-await new AsenaServer().logger(new DefaultLogger()).port(3000).start();
+const [adapter, serverLogger] = createHonoAdapter(new DefaultLogger());
+await new AsenaServer(adapter, serverLogger).port(3000).start(true);
 ```
 
 To run asena you need at least one controller. Create a new controller:
 
 ```typescript
 // src/controllers/TestController.ts
-import {type Context, Controller, Get} from "@asenajs/asena";
+import type { Context } from '@asenajs/asena/adapter/hono';
+import { Controller } from '@asenajs/asena/server';
+import { Get } from '@asenajs/asena/web';
 
-@Controller("/hello")
+@Controller('/hello')
 export class TestController {
 
-    @Get("/world")
+    @Get('/world')
     public async getHello(context: Context) {
-        return context.send("Hello World");
+        return context.send('Hello World');
     }
+
 }
 ```
 
@@ -111,12 +114,13 @@ Finally, run the project:
 ```bash
 
 ## only for fast developing purposes
-asena dev start 
-````
+asena dev start
+```
+
 ```bash
 ## or you can simply build then run your bundled project
 asena build
-## then go to dist folder and run the project this way it will consume less memory 
+## then go to dist folder and run the project this way it will consume less memory
 bun index.asena.js
 ```
 
@@ -125,106 +129,113 @@ bun index.asena.js
 Here is a simple example of a controller with service and middleware:
 
 ### Middleware
+
 This middleware sets a value to the context object.
+
 ```typescript
 // src/middleware/TestMiddleware.ts
-import {type Context, Middleware, MiddlewareService} from "@asenajs/asena";
+import type { AsenaNextHandler } from '@asenajs/asena/adapter';
+import type { Context, MiddlewareService } from '@asenajs/asena/adapter/hono';
+import { Middleware } from '@asenajs/asena/server';
 
 @Middleware()
-export class TestMiddleware extends MiddlewareService {
+export class TestMiddleware implements MiddlewareService {
+  public handle(context: Context, next: AsenaNextHandler) {
+    context.setValue('testValue', 'test');
 
-    public handle(context: Context, next: Function) {
-        context.setValue("testValue", "test");
-
-        next();
-    }
+    next();
+  }
 }
 ```
 
 ### Service
+
 Basic service with a getter and setter.
 
 ```typescript
-import {Service} from "@asenajs/asena";
+import { Service } from '@asenajs/asena/server';
 
 @Service()
 export class HelloService {
+  private _foo = 'bar';
 
-    private _foo: string = "bar";
+  public get foo(): string {
+    return this._foo;
+  }
 
-    public get foo(): string {
-        return this._foo;
-    }
-
-    public set foo(value: string) {
-        this._foo = value;
-    }
+  public set foo(value: string) {
+    this._foo = value;
+  }
 }
-
 ```
 
 ### Controller
+
 Controller with a GET route that uses the middleware and service.
 
 ```typescript
 // src/controller/TestController.ts
-import {type Context, Controller, Get, Inject} from "@asenajs/asena";
-import {HelloService} from "../service/HelloService.ts";
-import {TestMiddleware} from "../middleware/TestMiddleware.ts";
+import { type Context, Controller, Get, Inject } from '@asenajs/asena';
+import { HelloService } from '../service/HelloService.ts';
+import { TestMiddleware } from '../middleware/TestMiddleware.ts';
 
-@Controller("/v1")
+@Controller('/v1')
 export class TestController {
+  @Inject(HelloService)
+  private helloService: HelloService;
 
-    @Inject(HelloService)
-    private helloService: HelloService
+  @Get('foo')
+  public async getFoo(context: Context) {
+    return context.send(this.helloService.foo);
+  }
 
-    @Get("foo")
-    public async getFoo(context: Context) {
-        return context.send(this.helloService.foo);
-    }
+  @Get({ path: 'world', middlewares: [TestMiddleware] })
+  public async getHello(context: Context) {
+    const testValue: string = context.getValue('testValue');
 
-    @Get({path: "world", middlewares: [TestMiddleware]})
-    public async getHello(context: Context) {
-        const testValue: string = context.getValue("testValue");
-
-        return context.send(testValue);
-    }
+    return context.send(testValue);
+  }
 }
 ```
 
 ### Index
+
 The main file that starts the server.
 
 ```typescript
 // src/index.ts
-import {AsenaServer, DefaultLogger} from "@asenajs/asena";
+import { AsenaServer, createHonoAdapter } from '@asenajs/asena';
+import { DefaultLogger } from '@asenajs/asena/logger';
 
-await new AsenaServer().logger(new DefaultLogger()).port(3000).start();
+const [adapter, serverLogger] = createHonoAdapter(new DefaultLogger());
+await new AsenaServer(adapter, serverLogger).port(3000).start(true);
 ```
 
 then run
+
 ```bash
 asena dev start
 ```
 
 You should see the following output:
+
 ```text
 
-Build completed successfully.  
-2024-11-19 17:58:35 [info]:     
-    ___    _____  ______ _   __ ___ 
+Build completed successfully.
+2024-11-19 17:58:35 [info]:
+    ___    _____  ______ _   __ ___
    /   |  / ___/ / ____// | / //   |
   / /| |  \__ \ / __/  /  |/ // /| |
  / ___ | ___/ // /___ / /|  // ___ |
-/_/  |_|/____//_____//_/ |_//_/  |_|  
-                             
-2024-11-19 17:58:35 [info]:     IoC initialized 
-2024-11-19 17:58:35 [info]:     No server services found 
-2024-11-19 17:58:35 [info]:     Controller: V1 found 
-2024-11-19 17:58:35 [info]:     Successfully registered GET route for PATH: /v1/foo 
-2024-11-19 17:58:35 [info]:     Successfully registered GET route for PATH: /v1/world 
-2024-11-19 17:58:35 [info]:     No websockets found 
-2024-11-19 17:58:35 [info]:     Server started on port 3000 
+/_/  |_|/____//_____//_/ |_//_/  |_|
+
+2024-11-19 17:58:35 [info]:     IoC initialized
+2024-11-19 17:58:35 [info]:     No server services found
+2024-11-19 17:58:35 [info]:     Controller: V1 found
+2024-11-19 17:58:35 [info]:     Successfully registered GET route for PATH: /v1/foo
+2024-11-19 17:58:35 [info]:     Successfully registered GET route for PATH: /v1/world
+2024-11-19 17:58:35 [info]:     No websockets found
+2024-11-19 17:58:35 [info]:     Server started on port 3000
 ```
 
 and you see the result on your browser [http://localhost:3000/v1/foo](http://localhost:3000/v1/foo) with "bar" message.
@@ -267,7 +278,7 @@ the project:
 ### Performance Comparison (Fastest to Slowest)
 
 | Framework                            | Requests/sec | Latency (avg) | Transfer/sec |
-|--------------------------------------|--------------|---------------|--------------|
+| ------------------------------------ | ------------ | ------------- | ------------ |
 | Hono                                 | 147,031.08   | 2.69ms        | 18.09MB      |
 | Asena                                | 137,148.80   | 2.89ms        | 16.74MB      |
 | NestJS (Bun + Fastify)               | 81,652.05    | 6.01ms        | 13.78MB      |
