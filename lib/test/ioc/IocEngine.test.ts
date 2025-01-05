@@ -79,7 +79,7 @@ describe('IocEngine', () => {
   });
 
   test('should register components automatically', async () => {
-    iocEngine = new IocEngine({ sourceFolder: 'lib/test/example-app-structure' });
+    iocEngine = new IocEngine({ sourceFolder: 'lib/test/example-app-structure', rootFile: '' });
     await iocEngine.searchAndRegister();
     console.log('here');
 

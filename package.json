@@ -1,6 +1,6 @@
 {
   "name": "@asenajs/asena",
-  "version": "0.1.18",
+  "version": "0.1.19",
   "description": "Asena is a spring like framework for building web applications built with hono and bun",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -56,6 +56,10 @@
     "./middleware": {
       "import": "./dist/lib/server/web/middleware/index.js",
       "types": "./dist/lib/server/web/middleware/index.d.ts"
+    },
+    "./container": {
+      "import": "./dist/lib/ioc/Container.js",
+      "types": "./dist/lib/ioc/Container.d.ts"
     }
   },
   "keywords": [
@@ -88,7 +92,7 @@
     "eslint-plugin-n": "^16.6.2",
     "eslint-plugin-prettier": "^5.2.1",
     "eslint-plugin-promise": "^6.6.0",
-    "hono": "^4.6.14",
+    "hono": "^4.6.16",
     "prettier": "^3.4.2",
     "typescript": "^5.7.2",
     "winston": "^3.17.0"

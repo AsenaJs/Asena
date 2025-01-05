@@ -105,7 +105,7 @@ export class HonoAdapter extends AsenaAdapter<
     this.websocketAdapter.buildWebsocket(this.options?.wsOptions);
 
     this.server = bun.serve({
-      ...this.options,
+      ...this.options.serveOptions,
       port: this.port,
       fetch: this.app.fetch,
       websocket: this.websocketAdapter.websocket,

@@ -1,4 +1,5 @@
 import type { Class } from './types';
+import type { Container} from '../ioc';
 import { IocEngine } from '../ioc';
 import { readConfigFile } from '../ioc/helper/fileHelper';
 import { ComponentType, type InjectableComponent } from '../ioc/types';
@@ -12,7 +13,7 @@ import {
   type ValidatorHandler,
 } from './web/types';
 import * as path from 'node:path';
-import type {AsenaMiddlewareService, AsenaValidationService, MiddlewareClass, ValidatorClass} from './web/middleware';
+import type { AsenaMiddlewareService, AsenaValidationService, MiddlewareClass, ValidatorClass } from './web/middleware';
 import type { AsenaAdapter, AsenaWebsocketAdapter } from '../adapter';
 import type { AsenaWebSocketService, WebSocketData } from './web/websocket';
 import { ComponentConstants } from '../ioc/constants';
@@ -42,7 +43,13 @@ export class AsenaServer<A extends AsenaAdapter<any, any, any, AsenaWebsocketAda
       this.prepareLogger();
     }
 
-    const config = readConfigFile();
+    if (adapter) {
+      this._adapter = adapter;
+    }
+  }
+
+  public async initialize(): Promise<Container> {
+    const config = await readConfigFile();
 
     if (!config) {
       this._logger.warn('Config file not found');
@@ -50,9 +57,9 @@ export class AsenaServer<A extends AsenaAdapter<any, any, any, AsenaWebsocketAda
 
     this._ioc = new IocEngine(config);
 
-    if (adapter) {
-      this._adapter = adapter;
-    }
+    await this._ioc.searchAndRegister(this._components);
+
+    return this._ioc.container;
   }
 
   public async start(gc = false): Promise<void> {
@@ -64,11 +71,11 @@ export class AsenaServer<A extends AsenaAdapter<any, any, any, AsenaWebsocketAda
 /_/  |_|/____//_____//_/ |_//_/  |_|  
                             `);
 
+    await this.initialize();
+
     this._logger.info(`Adapter: ${green(this._adapter.name)} implemented`);
 
     this._adapter.setPort(this._port);
-
-    await this._ioc.searchAndRegister(this._components);
 
     this._logger.info('All components registered and ready to use');
 

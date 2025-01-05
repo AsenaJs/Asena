@@ -117,11 +117,13 @@ export class HonoWebsocketAdapter extends AsenaWebsocketAdapter<Hono, HonoAdapte
     return (ws: ServerWebSocket<WebSocketData>, ...args: any[]) => {
       const websocket = this.websockets.get(ws.data.path);
 
-      const handler = websocket?.socket[type].bind(websocket.socket);
+      let handler = websocket?.socket[type];
 
       if (!handler) {
         return;
       }
+
+      handler = handler.bind(websocket.socket);
 
       (handler as (socket: AsenaSocket<WebSocketData>, ...args: any[]) => void)(
         new AsenaSocket(ws, websocket.socket),

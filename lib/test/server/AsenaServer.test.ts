@@ -1,12 +1,12 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
 import { AsenaServer } from '../../server';
-import { Controller, Service, WebSocket } from '../../server/decorators';
+import { Config, Controller, Service, WebSocket } from '../../server/decorators';
 import { ComponentType } from '../../ioc/types';
 import { Inject, PostConstruct } from '../../ioc/component';
-import type { WSOptions } from '../../server/web/websocket';
 import { AsenaWebSocketService, type Socket } from '../../server/web/websocket';
 import { Get } from '../../server/web/decorators';
-import type { Context } from '../../adapter/hono';
+import type { AsenaContext, AsenaServeOptions } from '../../adapter';
+import type { AsenaConfig } from '../../server/config/AsenaConfig';
 
 @Service()
 class TestServerService {
@@ -27,7 +27,7 @@ class TestController {
   private testServerService: TestServerService;
 
   @Get('/')
-  public async get(context: Context) {
+  public async get(context: AsenaContext<any, any>) {
     console.log('TestController -> get -> context', context);
 
     console.log('TestController -> get -> this.testServerService.testValue', this.testServerService.testValue);
@@ -46,6 +46,22 @@ class TestWebSocket extends AsenaWebSocketService<any> {
 
 }
 
+const options: AsenaServeOptions = {
+  wsOptions: {
+    perMessageDeflate: true,
+    maxPayloadLimit: 1000,
+  },
+};
+
+@Config('TestConfig')
+class TestConfig implements AsenaConfig {
+
+  public serveOptions(): AsenaServeOptions {
+    return options;
+  }
+
+}
+
 describe('AsenaServer', () => {
   let server: AsenaServer<any>;
   let mockLogger: any;
@@ -60,6 +76,7 @@ describe('AsenaServer', () => {
 
     // Mock adapter
     mockAdapter = {
+      options: {},
       setPort: mock(() => {}),
       start: mock(async () => {}),
       registerRoute: mock(() => {}),
@@ -67,6 +84,9 @@ describe('AsenaServer', () => {
       prepareHandler: mock(() => () => {}),
       prepareValidator: mock(() => {}),
       use: mock(() => {}),
+      serveOptions: mock(async (options: () => Promise<any>) => {
+        mockAdapter.options = await options();
+      }),
       websocketAdapter: {
         buildWebsocket: mock(() => {}),
         registerWebSocket: mock(() => {}),
@@ -94,18 +114,17 @@ describe('AsenaServer', () => {
   });
 
   test('should register wsOptions correctly', async () => {
-    const options: WSOptions = {
-      perMessageDeflate: undefined,
-      maxPayloadLimit: 1000,
-    };
-
-    const components = [TestServerService, TestController, TestWebSocket];
+    const components = [TestServerService, TestController, TestWebSocket, TestConfig];
 
     server.components(components);
-    server.wsOptions(options);
     await server.start();
 
-    expect(mockAdapter.start).toHaveBeenCalledWith(options);
+    // @ts-ignore
+    const instace: TestConfig = await server._ioc.container.resolve<TestConfig>('TestConfig');
+
+    expect(instace).toBeDefined();
+
+    expect(mockAdapter.options).toBe(options);
   });
 
   test('should register components', async () => {

@@ -3,6 +3,7 @@ import type { AsenaContext } from '../AsenaContext';
 import type { CookieExtra, SendOptions } from '../types';
 import { deleteCookie, getCookie, getSignedCookie, setCookie, setSignedCookie } from 'hono/cookie'; // add delete cookie
 import type { CookieOptions } from 'hono/utils/cookie';
+import type { ContentfulStatusCode } from 'hono/utils/http-status';
 
 export class HonoContextWrapper implements AsenaContext<HonoRequest<any, any>, Response> {
 
@@ -70,7 +71,7 @@ export class HonoContextWrapper implements AsenaContext<HonoRequest<any, any>, R
       return this._context.text(data);
     }
 
-    return this._context.json(data, { status });
+    return this._context.json(data, status as ContentfulStatusCode, headers);
   }
 
   public async getCookie(name: string, secret?: string | BufferSource): Promise<string | false> {
@@ -116,14 +117,14 @@ export class HonoContextWrapper implements AsenaContext<HonoRequest<any, any>, R
       typeof statusOrOptions === 'number' ? { status: statusOrOptions } : statusOrOptions || {};
 
     if (typeof data === 'string') {
-      return this._context.html(data, { headers, status });
+      return this._context.html(data, status as ContentfulStatusCode, headers);
     }
 
     Object.entries(headers).forEach(([key, value]) => {
       this._context.res.headers.append(key, value);
     });
 
-    return this._context.html(data, { status });
+    return this._context.html(data, status as ContentfulStatusCode, headers);
   }
 
   public get context(): Context {
