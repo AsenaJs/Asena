@@ -72,6 +72,7 @@ describe('AsenaServer', () => {
     mockLogger = {
       info: mock(() => {}),
       error: mock(() => {}),
+      warn: mock(() => {}),
     };
 
     // Mock adapter
@@ -102,14 +103,14 @@ describe('AsenaServer', () => {
     expect(server).toBeDefined();
   });
 
-  test('should set port correctly', () => {
+  test('should set port correctly', async () => {
     const port = 3000;
 
     server.port(port);
 
     server.components([TestServerService, TestController, TestWebSocket]);
 
-    server.start();
+    await server.start();
     expect(mockAdapter.setPort).toHaveBeenCalledWith(port);
   });
 
@@ -178,20 +179,24 @@ describe('AsenaServer', () => {
   });
 
   test('should handle websocket registration', async () => {
+    // Mock initialize method
     // @ts-ignore - private property access for testing
-    server._ioc = {
-      container: {
-        // @ts-ignore
-        resolveAll: mock((type: ComponentType) => {
-          if (type === ComponentType.WEBSOCKET) {
-            return [new TestWebSocket()];
-          }
+    server.initialize = mock(async () => {
+      // @ts-ignore
+      server._ioc = {
+        container: {
+          // @ts-ignore
+          resolveAll: mock((type: ComponentType) => {
+            if (type === ComponentType.WEBSOCKET) {
+              return [new TestWebSocket()];
+            }
 
-          return [];
-        }),
-      },
-      searchAndRegister: mock(async () => {}),
-    };
+            return [];
+          }),
+        },
+        searchAndRegister: mock(async () => {}),
+      };
+    });
 
     await server.start();
 
@@ -199,17 +204,22 @@ describe('AsenaServer', () => {
   });
 
   test('should handle errors during initialization', async () => {
-    // @ts-ignore - private property access for testing
-    server._ioc = {
+    // @ts-ignore
+    server.initialize = mock(async () => {
       // @ts-ignore
-      container: {
-        resolveAll: mock(() => {
-          throw new Error('Test error');
-        }),
-      },
-      searchAndRegister: mock(async () => {}),
-    };
+      server._ioc = {
+        // @ts-ignore
 
-    expect(server.start()).rejects.toThrow('Test error');
+        container: {
+          // @ts-ignore
+          resolveAll: mock(() => {
+            throw new Error('Test Error');
+          }),
+        },
+        searchAndRegister: mock(async () => {}),
+      };
+    });
+
+    expect(server.start()).rejects.toThrow('Test Error');
   });
 });

@@ -1,5 +1,5 @@
 import type { Class } from './types';
-import type { Container} from '../ioc';
+import type { Container } from '../ioc';
 import { IocEngine } from '../ioc';
 import { readConfigFile } from '../ioc/helper/fileHelper';
 import { ComponentType, type InjectableComponent } from '../ioc/types';
