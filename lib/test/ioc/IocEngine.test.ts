@@ -1,13 +1,13 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
-import { IocEngine } from '../../ioc';
-import type { Component as ComponentType } from '../../ioc/types';
+import { Component } from '../../ioc/component/decorators/Component';
+import type { InjectableComponent } from '../../ioc/types';
 import { Scope } from '../../ioc/types';
-import { Component } from '../../server/decorators';
-import { Inject } from '../../ioc/component/decorators';
-import { ExportedTestServiceTest } from '../example-app-structure/service/ExportedTestService.test';
-import { ExportedTestControllerTest } from '../example-app-structure/controller/ExportedTestController.test';
+import { Inject } from '../../ioc/component';
+import { IocEngine } from '../../ioc';
 import type { AsenaContext } from '../../adapter';
-import { createMockContextTest } from '../utils/createMockContext.test';
+import { createMockContext } from '../utils/createMockContext.test';
+import { ExportedTestService } from '../example-app-structure/service/ExportedTestService.test';
+import { ExportedTestController } from '../example-app-structure/controller/ExportedTestController.test';
 
 @Component({
   name: 'TestService',
@@ -54,7 +54,7 @@ describe('IocEngine', () => {
 
   beforeEach(() => {
     iocEngine = new IocEngine();
-    mockContext = createMockContextTest();
+    mockContext = createMockContext();
   });
 
   test('should create instance', () => {
@@ -63,15 +63,15 @@ describe('IocEngine', () => {
   });
 
   test('should register components manually', async () => {
-    const components: ComponentType[] = [
+    const components: InjectableComponent[] = [
       { Class: TestService, interface: null },
       { Class: TestController, interface: null },
     ];
 
     await iocEngine.searchAndRegister(components);
 
-    const testService = iocEngine.container.get<TestService>(TestService.name);
-    const testController = iocEngine.container.get<TestController>(TestController.name);
+    const testService = await iocEngine.container.resolve<TestService>(TestService.name);
+    const testController = await iocEngine.container.resolve<TestController>(TestController.name);
 
     expect(testService).toBeInstanceOf(TestService);
     expect(testController).toBeInstanceOf(TestController);
@@ -79,14 +79,17 @@ describe('IocEngine', () => {
   });
 
   test('should register components automatically', async () => {
-    iocEngine = new IocEngine({ sourceFolder: 'lib/test/example-app-structure' });
+    iocEngine = new IocEngine({ sourceFolder: 'lib/test/example-app-structure', rootFile: '' });
     await iocEngine.searchAndRegister();
-    const testService = iocEngine.container.get<ExportedTestServiceTest>('ExportedTestService');
-    const testController = iocEngine.container.get<ExportedTestControllerTest>('ExportedTestController');
+    console.log('here');
 
-    expect(testService).toBeInstanceOf(ExportedTestServiceTest);
-    expect(testController).toBeInstanceOf(ExportedTestControllerTest);
-    expect((testController as ExportedTestControllerTest).getData(mockContext)).toBeInstanceOf(Response);
+    const testService = await iocEngine.container.resolve<ExportedTestService>('ExportedTestService');
+
+    const testController = await iocEngine.container.resolve<ExportedTestController>('ExportedTestController');
+
+    expect(testService).toBeInstanceOf(ExportedTestService);
+    expect(testController).toBeInstanceOf(ExportedTestController);
+    expect((testController as ExportedTestController).getData(mockContext)).toBeInstanceOf(Response);
   });
 
   test('should throw error when no components provided', async () => {
@@ -99,7 +102,7 @@ describe('IocEngine', () => {
   });
 
   test('should register dependencies correct when extending class', async () => {
-    const components: ComponentType[] = [
+    const components: InjectableComponent[] = [
       { Class: TestService2, interface: null },
       { Class: TestController, interface: null },
       { Class: TestService, interface: null },
@@ -107,8 +110,8 @@ describe('IocEngine', () => {
 
     await iocEngine.searchAndRegister(components);
 
-    const testService = iocEngine.container.get<TestService>(TestService.name);
-    const testService2 = iocEngine.container.get<TestService2>(TestService2.name);
+    const testService = await iocEngine.container.resolve<TestService>(TestService.name);
+    const testService2 = await iocEngine.container.resolve<TestService2>(TestService2.name);
 
     expect(testService).toBeInstanceOf(TestService);
     expect(testService2).toBeInstanceOf(TestService2);

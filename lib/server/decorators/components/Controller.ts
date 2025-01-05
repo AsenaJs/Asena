@@ -1,8 +1,10 @@
 import { ComponentType, type ControllerParams } from '../../../ioc/types';
-import { defineComponent } from '../../../ioc/component/componentUtils';
-import { defineMetadata } from 'reflect-metadata/no-conflict';
+import { defineComponent } from '../../../ioc/component';
 import { ComponentConstants } from '../../../ioc/constants';
 import { defineMiddleware } from '../../web/helper';
+import { defineTypedMetadata } from '../../../utils/typedMetadata';
+
+import type {MiddlewareClass} from "../../web/middleware";
 
 /**
  * Decorator for defining a Controller component. String is used for defining the path.
@@ -15,10 +17,18 @@ export const Controller = (params?: ControllerParams | string): ClassDecorator =
     typeof params === 'string' ? { path: params, name: undefined } : params || { path: '', name: undefined };
 
   return defineComponent(ComponentType.CONTROLLER, _params, (target) => {
-    defineMetadata(ComponentConstants.PathKey, (_params as ControllerParams).path.replace(/^\/+/, '') || '', target);
+    defineTypedMetadata<string>(
+      ComponentConstants.PathKey,
+      (_params as ControllerParams).path.replace(/^\/+/, '/') || '/',
+      target,
+    );
 
     defineMiddleware(target, (_params as ControllerParams).middlewares || []);
 
-    defineMetadata(ComponentConstants.MiddlewaresKey, (_params as ControllerParams).middlewares || [], target);
+    defineTypedMetadata<MiddlewareClass[]>(
+      ComponentConstants.MiddlewaresKey,
+      (_params as ControllerParams).middlewares || ([] as MiddlewareClass[]),
+      target,
+    );
   });
 };

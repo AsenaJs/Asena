@@ -1,10 +1,13 @@
 import type { HttpMethod } from '../../server/web/http';
+import type { BaseMiddleware, BaseValidator } from '../../server/web/types';
+import type { AsenaHandler } from './AsenaHandler';
+import type { AsenaContext } from '../AsenaContext';
 
-export interface RouteParams<M, H> {
+export interface RouteParams<C extends AsenaContext<any, any>, VS> {
   method: HttpMethod;
   path: string;
-  middleware: M[];
-  handler: H;
+  middleware: BaseMiddleware<C>[];
+  handler: AsenaHandler<C>;
   staticServe: boolean;
-  validator: M[];
+  validator: BaseValidator<VS>;
 }

@@ -1,82 +1,92 @@
 export enum InfoStatusCode {
-  CONTINUE = 100,
-  SWITCHING_PROTOCOLS = 101,
-  PROCESSING = 102,
-  EARLY_HINTS = 103,
+  Continue = 100,
+  SwitchingProtocols = 101,
+  Processing = 102,
+  EarlyHints = 103,
 }
 
 export enum SuccessStatusCode {
-  OK = 200,
-  CREATED = 201,
-  ACCEPTED = 202,
-  NON_AUTHORITATIVE_INFORMATION = 203,
-  NO_CONTENT = 204,
-  RESET_CONTENT = 205,
-  PARTIAL_CONTENT = 206,
-  MULTI_STATUS = 207,
-  ALREADY_REPORTED = 208,
-  IM_USED = 226,
-}
-
-export enum DeprecatedStatusCode {
-  USE_PROXY = 305,
-  SWITCH_PROXY = 306,
+  Ok = 200,
+  Created = 201,
+  Accepted = 202,
+  NonAuthoritativeInformation = 203,
+  NoContent = 204,
+  ResetContent = 205,
+  PartialContent = 206,
+  MultiStatus = 207,
+  AlreadyReported = 208,
+  ImUsed = 226,
 }
 
 export enum RedirectStatusCode {
-  MULTIPLE_CHOICES = 300,
-  MOVED_PERMANENTLY = 301,
-  FOUND = 302,
-  SEE_OTHER = 303,
-  NOT_MODIFIED = 304,
-  USE_PROXY = DeprecatedStatusCode.USE_PROXY,
-  SWITCH_PROXY = DeprecatedStatusCode.SWITCH_PROXY,
-  TEMPORARY_REDIRECT = 307,
-  PERMANENT_REDIRECT = 308,
+  MultipleChoices = 300,
+  MovedPermanently = 301,
+  Found = 302,
+  SeeOther = 303,
+  NotModified = 304,
+  UseProxy = 305,
+  TemporaryRedirect = 307,
+  PermanentRedirect = 308,
 }
 
 export enum ClientErrorStatusCode {
-  BAD_REQUEST = 400,
-  UNAUTHORIZED = 401,
-  PAYMENT_REQUIRED = 402,
-  FORBIDDEN = 403,
-  NOT_FOUND = 404,
-  METHOD_NOT_ALLOWED = 405,
-  NOT_ACCEPTABLE = 406,
-  PROXY_AUTHENTICATION_REQUIRED = 407,
-  REQUEST_TIMEOUT = 408,
-  CONFLICT = 409,
-  GONE = 410,
-  LENGTH_REQUIRED = 411,
-  PRECONDITION_FAILED = 412,
-  PAYLOAD_TOO_LARGE = 413,
-  URI_TOO_LONG = 414,
-  UNSUPPORTED_MEDIA_TYPE = 415,
-  RANGE_NOT_SATISFIABLE = 416,
-  EXPECTATION_FAILED = 417,
-  IM_A_TEAPOT = 418,
-  MISDIRECTED_REQUEST = 421,
-  UNPROCESSABLE_ENTITY = 422,
-  LOCKED = 423,
-  FAILED_DEPENDENCY = 424,
-  TOO_EARLY = 425,
-  UPGRADE_REQUIRED = 426,
-  PRECONDITION_REQUIRED = 428,
-  TOO_MANY_REQUESTS = 429,
-  REQUEST_HEADER_FIELDS_TOO_LARGE = 431,
-  UNAVAILABLE_FOR_LEGAL_REASONS = 451,
+  BadRequest = 400,
+  Unauthorized = 401,
+  PaymentRequired = 402,
+  Forbidden = 403,
+  NotFound = 404,
+  MethodNotAllowed = 405,
+  NotAcceptable = 406,
+  ProxyAuthenticationRequired = 407,
+  RequestTimeout = 408,
+  Conflict = 409,
+  Gone = 410,
+  LengthRequired = 411,
+  PreconditionFailed = 412,
+  PayloadTooLarge = 413,
+  UriTooLong = 414,
+  UnsupportedMediaType = 415,
+  RangeNotSatisfiable = 416,
+  ExpectationFailed = 417,
+  ImATeapot = 418,
+  MisdirectedRequest = 421,
+  UnprocessableEntity = 422,
+  Locked = 423,
+  FailedDependency = 424,
+  TooEarly = 425,
+  UpgradeRequired = 426,
+  PreconditionRequired = 428,
+  TooManyRequests = 429,
+  RequestHeaderFieldsTooLarge = 431,
+  UnavailableForLegalReasons = 451,
 }
 
 export enum ServerErrorStatusCode {
-  INTERNAL_SERVER_ERROR = 500,
-  NOT_IMPLEMENTED = 501,
-  BAD_GATEWAY = 502,
-  SERVICE_UNAVAILABLE = 503,
-  GATEWAY_TIMEOUT = 504,
-  HTTP_VERSION_NOT_SUPPORTED = 505,
-  VARIANT_ALSO_NEGOTIATES = 506,
-  INSUFFICIENT_STORAGE = 507,
-  LOOP_DETECTED = 508,
-  NOT_EXTENDED = 510,
-  NETWORK_AUTHENTICATION_REQUIRED = 511,
+  InternalServerError = 500,
+  NotImplemented = 501,
+  BadGateway = 502,
+  ServiceUnavailable = 503,
+  GatewayTimeout = 504,
+  HttpVersionNotSupported = 505,
+  VariantAlsoNegotiates = 506,
+  InsufficientStorage = 507,
+  LoopDetected = 508,
+  NotExtended = 510,
+  NetworkAuthenticationRequired = 511,
 }
+
+export type HttpStatusCode =
+  | InfoStatusCode
+  | SuccessStatusCode
+  | RedirectStatusCode
+  | ClientErrorStatusCode
+  | ServerErrorStatusCode;
+
+// Type-safe status code helpers
+export const isInformational = (status: number): status is InfoStatusCode => status >= 100 && status < 200;
+export const isSuccess = (status: number): status is SuccessStatusCode => status >= 200 && status < 300;
+export const isRedirection = (status: number): status is RedirectStatusCode => status >= 300 && status < 400;
+export const isClientError = (status: number): status is ClientErrorStatusCode => status >= 400 && status < 500;
+export const isServerError = (status: number): status is ServerErrorStatusCode => status >= 500 && status < 600;
+export const isError = (status: number): status is ClientErrorStatusCode | ServerErrorStatusCode =>
+  status >= 400 && status < 600;

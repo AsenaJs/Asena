@@ -1,46 +1,39 @@
-/*
- * @H is handler type of each validator controller
- *
- *
- */
-import type { MiddlewareHandler } from 'hono';
+import type { Class } from '../../types';
 
 /**
- * Abstract class representing a validation service.
- * @template H - The handler type of each validator controller.
+ * Interface representing a validation service.
+ * @template S - Schema type.
  */
-export abstract class AsenaValidationService<H> {
-
+export interface AsenaValidationService<S> {
   /**
    * Validates JSON data.
-   * @returns {H} The handler for JSON validation.
+   * @returns {Promise<S> | S} The handler for JSON validation.
    */
-  public abstract json?(): H;
+  json?(): Promise<S> | S;
 
   /**
    * Validates form data.
-   * @returns {H} The handler for form validation.
+   * @returns {Promise<S> | S} The handler for form validation.
    */
-  public abstract form?(): H;
+  form?(): Promise<S> | S;
 
   /**
    * Validates query parameters.
-   * @returns {H} The handler for query validation.
+   * @returns {Promise<S> | S} The handler for query validation.
    */
-  public abstract query?(): H;
+  query?(): Promise<S> | S;
 
   /**
    * Validates route parameters.
-   * @returns {H} The handler for parameter validation.
+   * @returns {Promise<S> | S} The handler for parameter validation.
    */
-  public abstract param?(): H;
+  param?(): Promise<S> | S;
 
   /**
    * Validates headers.
-   * @returns {H} The handler for header validation.
+   * @returns {Promise<S> | S} The handler for header validation.
    */
-  public abstract header?(): H;
-
+  header?(): Promise<S> | S;
 }
 
-export abstract class ValidationService<H = MiddlewareHandler> extends AsenaValidationService<H> {}
+export type ValidatorClass<S = unknown> = Class<AsenaValidationService<S>>;

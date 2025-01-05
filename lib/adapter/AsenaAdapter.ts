@@ -1,116 +1,104 @@
-import type { RouteParams } from './types';
+import type { AsenaServeOptions, ErrorHandler, RouteParams } from './types';
 import type { BaseMiddleware } from '../server/web/types';
-import type { ValidatorClass } from '../server/types';
 import type { Server } from 'bun';
 import type { AsenaWebsocketAdapter } from './AsenaWebsocketAdapter';
-import type { ServerLogger } from '../services';
+import type { ServerLogger } from '../logger';
+import type { AsenaContext } from './AsenaContext';
 
 /**
  * Abstract class representing an adapter for the Asena framework.
+ * This adapter serves as a base interface between the framework and different server implementations.
  *
- * @template A - Type for the application instance.
- * @template H - Type for the handler.
- * @template AM - Type for the middleware.
- * @template AH - Type for the handler.
- * @template R - Type for the request.
- * @template S - Type for the response.
- * @template WSA - Type for the WebSocket adapter.
+ * @template A - Type for the application instance (e.g., Express, Bun, etc.)
+ * @template R - Type for the request object
+ * @template S - Type for the response object
+ * @template VS - Type for the validator schema
+ * @template WSA - Type for the WebSocket adapter implementation
  */
-export abstract class AsenaAdapter<
-  A = unknown,
-  H = unknown,
-  AM = unknown,
-  AH = unknown,
-  R = unknown,
-  S = unknown,
-  WSA extends AsenaWebsocketAdapter<A, AM> = AsenaWebsocketAdapter<A, AM>,
-> {
+export abstract class AsenaAdapter<A, C extends AsenaContext<any, any>, VS, WSA extends AsenaWebsocketAdapter<A, C>> {
 
   /**
-   * The application instance.
+   * The name identifier of the adapter
+   */
+  public readonly name: string;
+
+  /**
+   * The main application instance
    */
   public app: A;
 
   /**
-   * The WebSocket adapter instance.
+   * WebSocket adapter instance for handling real-time communications
    */
   public websocketAdapter: WSA;
 
   /**
-   * The port number.
+   * Server port number
    */
   protected port: number;
 
   /**
-   * The logger instance.
+   * Logger instance for server operations
    */
   protected logger: ServerLogger = console;
 
+  /**
+   * Creates a new adapter instance
+   * @param websocketAdapter - WebSocket adapter implementation
+   * @param logger - Optional custom logger implementation
+   */
   protected constructor(websocketAdapter: WSA, logger?: ServerLogger) {
     this.websocketAdapter = websocketAdapter;
     if (logger) {
       this.logger = logger;
+
+      if (!this.websocketAdapter.logger) {
+        this.websocketAdapter.logger = logger;
+      }
     }
   }
 
   /**
-   * Sets the port number.
-   *
-   * @param {number} port - The port number to set.
+   * Configures the server port
+   * @param port - Port number to listen on
    */
   public abstract setPort(port: number): void;
 
   /**
-   * Uses a middleware.
-   *
-   * @param {BaseMiddleware<R, S>} middleware - The middleware to use.
-   * @param path - The path to use the middleware on.
+   * Registers middleware to the application
+   * @param middleware - Middleware implementation
+   * @param path - Optional path to apply the middleware to
    */
-  public abstract use(middleware: BaseMiddleware<R, S>, path?: string): void;
+  public abstract use(middleware: BaseMiddleware<C>, path?: string): Promise<void> | void;
 
   /**
-   * Registers a route.
-   *
-   * @param {RouteParams<AM, AH>} params - The route parameters.
+   * Registers a new route with the application
+   * @param params - Route configuration parameters
    */
-  public abstract registerRoute(params: RouteParams<AM, AH>): void;
+  public abstract registerRoute(params: RouteParams<C, VS>): Promise<void> | void;
 
   /**
-   * Prepares middlewares.
-   *
-   * @param {BaseMiddleware<R, S> | BaseMiddleware<R, S>[]} middlewares - The middlewares to prepare.
-   * @returns {any[]} The prepared middlewares.
+   * Initializes and starts the server
+   * @returns Server instance
    */
-  public abstract prepareMiddlewares(middlewares: BaseMiddleware<R, S> | BaseMiddleware<R, S>[]): any[];
+  public abstract start(): Promise<Server> | Server;
 
   /**
-   * Prepares a handler.
-   *
-   * @param {H} handler - The handler to prepare.
-   * @returns {any} The prepared handler.
+   * Sets up global error handling
+   * @param errorHandler - Error handler implementation
    */
-  public abstract prepareHandler(handler: H): any;
+  public abstract onError(errorHandler: ErrorHandler<C>): Promise<void> | void;
 
   /**
-   * Starts the server.
+   * Configures server options.
    *
-   * @returns {Promise<Server>} A promise that resolves to the server instance.
+   * @param options - Configuration options for the server, which can include:
+   *   - `ServeOptions`: Basic server options.
+   *   - `TLSServeOptions`: Options for TLS/SSL configuration.
+   *   - `UnixServeOptions`: Options for Unix domain sockets.
+   *   - `UnixTLSServeOptions`: Options for Unix domain sockets with TLS/SSL.
+   * @returns A promise that resolves when the options are set, or void.
    */
-  public abstract start(): Promise<Server>;
-
-  /**
-   * Sets an error handler.
-   *
-   * @param {any} errorHandler - The error handler to set.
-   */
-  public abstract onError(errorHandler: any): void;
-
-  /**
-   * Prepares a validator.
-   *
-   * @param {ValidatorClass<AM>} validator - The validator to prepare.
-   * @returns {any} The prepared validator.
-   */
-  public abstract prepareValidator(validator: ValidatorClass<AM>): any;
+  public abstract serveOptions(options: () => Promise<AsenaServeOptions> | AsenaServeOptions): Promise<void> | void;
 
 }

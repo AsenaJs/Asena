@@ -1,46 +1,54 @@
 import type { AsenaWebSocketService, WSOptions } from '../server/web/websocket';
 import type { WebSocketHandler } from 'bun';
-import type { ServerLogger } from '../services';
-import type { WebsocketAdapterParams } from './types';
-import type { WebSocketRegistry } from './types';
+import type { WebsocketAdapterParams, WebSocketRegistry } from './types';
+import type { ServerLogger } from '../logger';
+import type { BaseMiddleware } from '../server/web/types';
+import type { AsenaContext } from './AsenaContext';
 
 /**
- * Abstract class representing a WebSocket adapter.
+ * Abstract class that provides a base implementation for WebSocket adapters.
+ * Handles WebSocket connections, registration, and management.
  *
- * @template A - The type of the application.
- * @template AM - The type of the message.
+ * @template A - Type of the application instance
+ * @template R - Type of the request object
+ * @template S - Type of the response object
  */
-export abstract class AsenaWebsocketAdapter<A, MH> {
+export abstract class AsenaWebsocketAdapter<A, C extends AsenaContext<any, any>> {
+
+  public readonly name: string;
 
   /**
-   * The WebSocket services.
-   * @ string - The namespace of the WebSocket.
-   * @ AsenaWebSocketService<any> - The WebSocket service.
-   * @ MH[] - The middlewares to use.
+   * Registry containing WebSocket services and their configurations
+   * Structure:
+   * - Key: WebSocket namespace
+   * - Value: Object containing:
+   *   - service: WebSocket service instance
+   *   - middlewares: Array of middleware functions
    * @protected
    */
-  protected _websockets: WebSocketRegistry;
+  protected _websockets: WebSocketRegistry<C>;
 
   /**
-   * The application instance.
+   * Reference to the main application instance
    * @private
    */
   private _app: A;
 
   /**
-   * The WebSocket handler.
+   * WebSocket handler instance for managing connections
    * @private
    */
   private _websocket: WebSocketHandler;
 
   /**
-   * The logger instance.
+   * Logger instance for WebSocket-related logging
+   * @private
    */
   private _logger: ServerLogger = console;
 
   /**
-   * Constructor for the AsenaWebSocketAdapter class.
-   * @param params - The parameters for the constructor.
+   * Initializes a new WebSocket adapter instance
+   * @param params - Configuration parameters including app instance and logger
    */
   protected constructor(params?: WebsocketAdapterParams<A>) {
     this._app = params?.app;
@@ -48,60 +56,81 @@ export abstract class AsenaWebsocketAdapter<A, MH> {
   }
 
   /**
-   * Registers a WebSocket handler.
-   *
-   * @param {websocket<any>} websocket - The WebSocket to register.
-   * @param middlewares to used in upgrade function
+   * Registers a new WebSocket service with associated middlewares
+   * @param websocket - WebSocket service instance to register
+   * @param middlewares - Array of middleware functions to be executed during connection upgrade
    */
-  public abstract registerWebSocket(websocket: AsenaWebSocketService<any>, middlewares: MH[]): void;
+  public abstract registerWebSocket(
+    websocket: AsenaWebSocketService<any>,
+    middlewares: BaseMiddleware<C>[],
+  ): Promise<void> | void;
 
   /**
-   * Prepares the WebSocket with the given options.
-   *
-   * @param {WSOptions} [wsOptions] - Optional WebSocket options.
+   * Configures and initializes the WebSocket server with provided options
+   * @param wsOptions - Configuration options for the WebSocket server
    */
-  public abstract prepareWebSocket(wsOptions?: WSOptions): void;
+  public abstract buildWebsocket(wsOptions?: WSOptions): Promise<void> | void;
 
   /**
-   * Build the WebSocket object for the server.
+   * Starts the WebSocket server on the provided HTTP/S server instance
+   * @param server - HTTP/S server instance to attach the WebSocket server to
    */
-  public abstract buildWebsocket(): void;
+  public abstract startWebsocket(server: any): Promise<void> | void;
+
+  // Getters and Setters with improved documentation
 
   /**
-   * Start the WebSocket server.
-   *
-   * @param {Server} server - The server to start.
+   * Gets the application instance
    */
-  public abstract startWebsocket(server: any): void;
-
   public get app(): A {
     return this._app;
   }
 
+  /**
+   * Sets the application instance
+   */
   public set app(value: A) {
     this._app = value;
   }
 
-  protected get websockets(): WebSocketRegistry {
+  /**
+   * Gets the WebSocket registry
+   */
+  protected get websockets(): WebSocketRegistry<C> {
     return this._websockets;
   }
 
-  protected set websockets(value: WebSocketRegistry) {
+  /**
+   * Sets the WebSocket registry
+   */
+  protected set websockets(value: WebSocketRegistry<C>) {
     this._websockets = value;
   }
 
+  /**
+   * Gets the WebSocket handler
+   */
   public get websocket(): WebSocketHandler {
     return this._websocket;
   }
 
+  /**
+   * Sets the WebSocket handler
+   */
   public set websocket(value: WebSocketHandler) {
     this._websocket = value;
   }
 
+  /**
+   * Gets the logger instance
+   */
   public get logger(): ServerLogger {
     return this._logger;
   }
 
+  /**
+   * Sets the logger instance
+   */
   public set logger(value: ServerLogger) {
     this._logger = value;
   }

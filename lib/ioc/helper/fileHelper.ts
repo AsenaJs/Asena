@@ -25,13 +25,19 @@ export const readJson = (path) => {
   return JSON.parse(file);
 };
 
-export const readConfigFile = (): IocConfig | null => {
+export const readConfigFile = async (): Promise<IocConfig | null> => {
   const folderPath = path.join(process.cwd());
   const files: string[] = getAllFiles(folderPath);
 
   for (const file of files) {
-    if (file.endsWith('asenarc.json')) {
-      return readJson(file) as IocConfig;
+    if (file.endsWith('asena-config.ts')) {
+      try {
+        return (await import(file)).default as IocConfig;
+      } catch (e) {
+        console.error('Cannot read config file', e);
+
+        throw new Error('AsenaConfig file cannot read.');
+      }
     }
   }
 

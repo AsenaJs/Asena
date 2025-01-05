@@ -4,15 +4,17 @@
 export enum ComponentConstants {
   RouteKey = '_routeKey',
   DependencyKey = '_IDependencies',
+  SoftDependencyKey = '_ISoftDependencies',
+  PostConstructKey = '_IPostConstruct',
   ScopeKey = '_IScope',
   NameKey = '_IName',
   StrategyKey = '_IStrategy',
   InterfaceKey = '_Interface',
   PathKey = '_IPath',
   MiddlewaresKey = '_IMiddlewares',
-  IsMiddlewareKey = '_IIsMiddleware',
   CronKey = '_ICron',
   IOCObjectKey = '_IIocObject',
   OverrideKey = '_IOverride',
   ExpressionKey = '_IExpression',
+  ValidatorKey = '_IValidator',
 }
