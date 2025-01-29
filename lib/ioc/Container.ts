@@ -1,7 +1,7 @@
 import type { Class } from '../server/types';
 import type { ComponentType, ContainerService, Dependencies, Expressions, Strategies } from './types';
 import { ComponentConstants } from './constants';
-import { getTypedMetadata } from '../utils/typedMetadata';
+import {getOwnTypedMetadata, getTypedMetadata} from '../utils/typedMetadata';
 
 export class Container {
 
@@ -116,7 +116,7 @@ export class Container {
   }
 
   private async executePostConstructs(newInstance: any, Class: Class) {
-    const postConstructs: string[] = getTypedMetadata<string[]>(ComponentConstants.PostConstructKey, Class);
+    const postConstructs: string[] = getOwnTypedMetadata<string[]>(ComponentConstants.PostConstructKey, Class);
 
     if (!postConstructs) {
       return;
@@ -128,7 +128,7 @@ export class Container {
   }
 
   private async injectStrategies(newInstance: any, Class: Class) {
-    const strategyList = getTypedMetadata<Strategies>(ComponentConstants.StrategyKey, Class);
+    const strategyList = getOwnTypedMetadata<Strategies>(ComponentConstants.StrategyKey, Class);
 
     for (const [propertyKey, interfaceName] of Object.entries(strategyList)) {
       if (!interfaceName) {
@@ -141,7 +141,7 @@ export class Container {
 
       const strategy: Class[] = await this.resolveStrategy<Class>(interfaceName);
 
-      const expression: Expressions = getTypedMetadata<Expressions>(ComponentConstants.ExpressionKey, Class);
+      const expression: Expressions = getOwnTypedMetadata<Expressions>(ComponentConstants.ExpressionKey, Class);
 
       Object.defineProperty(newInstance, propertyKey, {
         get() {
@@ -154,7 +154,7 @@ export class Container {
   }
 
   private async injectDependencies(newInstance: any, Class: Class) {
-    const deps = getTypedMetadata<Dependencies>(ComponentConstants.DependencyKey, Class);
+    const deps = getOwnTypedMetadata<Dependencies>(ComponentConstants.DependencyKey, Class);
 
     for (const [k, name] of Object.entries(deps)) {
       const instance: Class | Class[] = await this.resolve<Class>(name);
@@ -167,7 +167,7 @@ export class Container {
         throw new Error('instance error cannot be null');
       }
 
-      const expression: Expressions = getTypedMetadata<Expressions>(ComponentConstants.ExpressionKey, Class);
+      const expression: Expressions = getOwnTypedMetadata<Expressions>(ComponentConstants.ExpressionKey, Class);
 
       Object.defineProperty(newInstance, k, {
         get: () => {

@@ -7,7 +7,7 @@ import {
   type Strategies,
 } from '../types';
 import { ComponentConstants } from '../constants';
-import { defineTypedMetadata, getTypedMetadata } from '../../utils/typedMetadata';
+import { defineTypedMetadata, getOwnTypedMetadata } from '../../utils/typedMetadata';
 
 export const defineComponent = <T extends ComponentParams>(
   componentType: ComponentType,
@@ -29,11 +29,11 @@ export const defineComponent = <T extends ComponentParams>(
       extra(target);
     }
 
-    if (getTypedMetadata<Dependencies>(ComponentConstants.DependencyKey, target) === undefined) {
+    if (getOwnTypedMetadata<Dependencies>(ComponentConstants.DependencyKey, target) === undefined) {
       defineTypedMetadata<Dependencies>(ComponentConstants.DependencyKey, {}, target);
     }
 
-    if (getTypedMetadata<Strategies>(ComponentConstants.StrategyKey, target) === undefined) {
+    if (getOwnTypedMetadata<Strategies>(ComponentConstants.StrategyKey, target) === undefined) {
       defineTypedMetadata<Strategies>(ComponentConstants.StrategyKey, {}, target);
     }
   };

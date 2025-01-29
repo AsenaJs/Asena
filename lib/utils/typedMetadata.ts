@@ -1,7 +1,11 @@
-import { defineMetadata, getMetadata } from 'reflect-metadata/no-conflict';
+import { defineMetadata, getMetadata, getOwnMetadata } from 'reflect-metadata/no-conflict';
 
 export const getTypedMetadata = <T>(key: string, target: any): T | undefined => {
   return getMetadata(key, target);
+};
+
+export const getOwnTypedMetadata = <T>(key: string, target: any): T | undefined => {
+  return getOwnMetadata(key, target);
 };
 
 // eslint-disable-next-line max-params

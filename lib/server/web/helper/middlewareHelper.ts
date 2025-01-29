@@ -1,6 +1,6 @@
-import type { Dependencies } from '../../../ioc/types';
-import { ComponentConstants } from '../../../ioc/constants';
-import { defineTypedMetadata, getTypedMetadata } from '../../../utils/typedMetadata';
+import type {Dependencies} from '../../../ioc/types';
+import {ComponentConstants} from '../../../ioc/constants';
+import {defineTypedMetadata, getOwnTypedMetadata, getTypedMetadata} from '../../../utils/typedMetadata';
 import type {MiddlewareClass} from "../middleware";
 
 /**
@@ -9,8 +9,8 @@ import type {MiddlewareClass} from "../middleware";
  * @param {Function} target - The target class to which the middleware will be applied.
  * @param {MiddlewareClass[]} middlewares - An array of middleware classes to be defined.
  */
-export const defineMiddleware = (target: Function, middlewares: MiddlewareClass[]): void => {
-  const deps: Dependencies = getTypedMetadata<Dependencies>(ComponentConstants.SoftDependencyKey, target) || {};
+export const defineMiddleware = (target: Object, middlewares: MiddlewareClass[]): void => {
+  const deps: Dependencies = getOwnTypedMetadata<Dependencies>(ComponentConstants.SoftDependencyKey, target.constructor) || {};
 
   for (const middleware of middlewares) {
     const keys = Object.keys(deps);

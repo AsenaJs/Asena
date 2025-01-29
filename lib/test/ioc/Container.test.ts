@@ -196,9 +196,7 @@ describe('Container', () => {
   test('should execute PostConstruct method', async () => {
     container.register('ExportedServerServiceTest', ExportedServerService, true);
 
-    const exportedServerServiceTest = (await container.resolve(
-      'ExportedServerServiceTest',
-    )) as ExportedServerService;
+    const exportedServerServiceTest = (await container.resolve('ExportedServerServiceTest')) as ExportedServerService;
 
     expect(exportedServerServiceTest).toBeInstanceOf(ExportedServerService);
 

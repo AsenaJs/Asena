@@ -12,12 +12,12 @@ import { defineTypedMetadata, getTypedMetadata } from '../../utils/typedMetadata
  */
 export const Override = (): PropertyDecorator => {
   return (target: object, propertyKey: string) => {
-    const overrides: string[] = getTypedMetadata<string[]>(ComponentConstants.OverrideKey, target.constructor) || [];
+    const overrides: string[] = getTypedMetadata<string[]>(ComponentConstants.OverrideKey, target) || [];
 
     if (!overrides.includes(propertyKey)) {
       overrides.push(propertyKey);
     }
 
-    defineTypedMetadata<string[]>(ComponentConstants.OverrideKey, overrides, target.constructor);
+    defineTypedMetadata<string[]>(ComponentConstants.OverrideKey, overrides, target);
   };
 };

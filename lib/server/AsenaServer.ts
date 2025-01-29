@@ -20,7 +20,7 @@ import { ComponentConstants } from '../ioc/constants';
 import * as bun from 'bun';
 import { green, type ServerLogger, yellow } from '../logger';
 import type { AsenaConfig } from './config/AsenaConfig';
-import { getTypedMetadata } from '../utils/typedMetadata';
+import {getOwnTypedMetadata, getTypedMetadata} from '../utils/typedMetadata';
 
 export class AsenaServer<A extends AsenaAdapter<any, any, any, AsenaWebsocketAdapter<any, any>>> {
 
@@ -129,9 +129,9 @@ export class AsenaServer<A extends AsenaAdapter<any, any, any, AsenaWebsocketAda
 
       this._logger.info(`Controller: ${green(name)} found:`);
 
-      const routes = getTypedMetadata<Route>(ComponentConstants.RouteKey, controller) || {};
+      const routes = getOwnTypedMetadata<Route>(ComponentConstants.RouteKey, controller.constructor) || {};
 
-      const routePath: string = getTypedMetadata<string>(ComponentConstants.PathKey, controller.constructor) || '';
+      const routePath: string = getOwnTypedMetadata<string>(ComponentConstants.PathKey, controller.constructor) || '';
 
       await this.prepareTopMiddlewares({ controller, routePath });
 
