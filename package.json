@@ -90,11 +90,11 @@
     "eslint-plugin-alloy": "^1.2.1",
     "eslint-plugin-import": "^2.31.0",
     "eslint-plugin-n": "^16.6.2",
-    "eslint-plugin-prettier": "^5.2.1",
+    "eslint-plugin-prettier": "^5.2.3",
     "eslint-plugin-promise": "^6.6.0",
-    "hono": "^4.6.16",
-    "prettier": "^3.4.2",
-    "typescript": "^5.7.2",
+    "hono": "^4.7.2",
+    "prettier": "^3.5.3",
+    "typescript": "^5.8.2",
     "winston": "^3.17.0"
   },
   "peerDependencies": {

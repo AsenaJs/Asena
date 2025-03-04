@@ -162,6 +162,10 @@ export class AsenaSocket<T> implements ServerWebSocket<WebSocketData<T>> {
     this._id = value;
   }
 
+  public getBufferedAmount(): number {
+    return this.ws.getBufferedAmount();
+  }
+
   private createTopic(topic: string): string {
     return `${this.namespace}.${topic}`;
   }

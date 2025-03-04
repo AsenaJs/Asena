@@ -8,7 +8,7 @@ import { ComponentConstants } from './constants';
 import * as process from 'node:process';
 import * as console from 'node:console';
 import { getStrategyClass } from './helper/iocHelper';
-import {getOwnTypedMetadata, getTypedMetadata} from '../utils/typedMetadata';
+import { getOwnTypedMetadata, getTypedMetadata } from '../utils/typedMetadata';
 
 export class IocEngine {
 
@@ -253,11 +253,11 @@ export class IocEngine {
   private getDependencies(component: Class): string[] {
     try {
       const directDependencies = Object.values(
-          getOwnTypedMetadata<Dependencies>(ComponentConstants.DependencyKey, component) || {},
+        getOwnTypedMetadata<Dependencies>(ComponentConstants.DependencyKey, component) || {},
       ) as string[];
 
       const softDependencies = Object.values(
-          getOwnTypedMetadata<Dependencies>(ComponentConstants.SoftDependencyKey, component) || {},
+        getOwnTypedMetadata<Dependencies>(ComponentConstants.SoftDependencyKey, component) || {},
       ) as string[];
 
       const parentClass = Object.getPrototypeOf(component);
@@ -270,8 +270,16 @@ export class IocEngine {
         parentClass.toString() !== 'function () {\n' + '    [native code]\n' + '}'
       ) {
         const parentDependencies = this.getDependencies(parentClass);
+        const parentName = getTypedMetadata<string>(ComponentConstants.NameKey, parentClass) || parentClass.name;
 
-        return [...new Set([...directDependencies, ...parentDependencies, ...softDependencies])];
+        return [
+          ...new Set([
+            ...directDependencies,
+            ...parentDependencies,
+            ...softDependencies,
+            parentName, // We are adding parent class as soft dep so extenden classes will be created after parent class generete
+          ]),
+        ];
       }
 
       return [...new Set([...directDependencies, ...softDependencies])];
