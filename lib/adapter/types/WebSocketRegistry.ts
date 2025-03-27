@@ -1,6 +1,6 @@
 import type { AsenaWebSocketService } from '../../server/web/websocket';
-import type { BaseMiddleware } from '../../server/web/types';
 import type { AsenaContext } from '../AsenaContext';
+import type {BaseMiddleware} from "./BaseMiddleware";
 
 export interface WebsocketServiceRegistry<C extends AsenaContext<any, any>> {
   socket: AsenaWebSocketService<any>;

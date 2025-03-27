@@ -1,11 +1,11 @@
 import { Middleware } from '../../../server/decorators';
-import type { Context } from '../../../adapter/hono';
-import { MiddlewareService } from '../../../adapter/hono';
+import {AsenaMiddlewareService} from "../../../server/web/middleware";
+import type {AsenaContext} from "../../../adapter";
 
 @Middleware()
-export class ExportedTestMiddleware extends MiddlewareService {
+export class ExportedTestMiddleware extends AsenaMiddlewareService {
 
-  public handle(context: Context, next: Function): any {
+  public handle(context: AsenaContext<any, any>, next: Function): any {
     context.setValue('test', 'Test Value');
     next();
   }

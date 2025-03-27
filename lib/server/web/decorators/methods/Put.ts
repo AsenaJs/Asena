@@ -1,6 +1,6 @@
-import type { ControllerDecoratorParams } from '../../types';
 import { generateHandlerParams, genericHandler } from '../http.base';
-import { HttpMethod } from '../../http';
+import { HttpMethod } from '../../types';
+import type {ControllerDecoratorParams} from "../../../../adapter";
 
 /**
  * Decorator for handling HTTP PUT requests.

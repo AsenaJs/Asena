@@ -1,6 +1,6 @@
-import type { HttpMethod } from '../http';
-import type { AsenaContext } from '../../../adapter';
-import type {MiddlewareClass, ValidatorClass} from "../middleware";
+import type { HttpMethod } from '../../server/web/types';
+import type { AsenaContext } from '../index';
+import type {MiddlewareClass, ValidatorClass} from "../../server/web/middleware";
 
 /**
  * Interface representing a route configuration.

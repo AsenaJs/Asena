@@ -40,7 +40,7 @@ export class AsenaWebSocketServer {
    * @returns void
    */
   public to(nameSpace: string, data?: any) {
-    if (data instanceof ArrayBuffer || ArrayBuffer.isView(data) || data instanceof SharedArrayBuffer) {
+    if (data instanceof ArrayBuffer || data instanceof DataView || data instanceof SharedArrayBuffer) {
       this.server.publish(nameSpace, data);
       return;
     }

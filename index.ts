@@ -1,1 +1,1 @@
-export { AsenaServer, createHonoAdapter } from './lib/server';
+export { AsenaServer } from './lib/server';

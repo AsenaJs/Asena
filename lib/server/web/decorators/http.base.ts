@@ -1,7 +1,12 @@
-import type { ApiParams, ControllerDecoratorParams, ControllerHandler, Route } from '../types';
 import { ComponentConstants } from '../../../ioc/constants';
 import { defineMiddleware } from '../helper';
 import { defineTypedMetadata, getOwnTypedMetadata } from '../../../utils/typedMetadata';
+import type {
+  ApiParams,
+  ControllerDecoratorParams,
+  ControllerHandler,
+  Route
+} from "../../../adapter";
 
 export function genericHandler({ method, path, description, middlewares, staticServe, validator }: ApiParams) {
   return function (route: Object, propertyKey: string, _descriptor: TypedPropertyDescriptor<ControllerHandler>) {

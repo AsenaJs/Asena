@@ -11,7 +11,7 @@ import {
   type Route,
   VALIDATOR_METHODS,
   type ValidatorHandler,
-} from './web/types';
+} from '../adapter';
 import * as path from 'node:path';
 import type { AsenaMiddlewareService, AsenaValidationService, MiddlewareClass, ValidatorClass } from './web/middleware';
 import type { AsenaAdapter, AsenaWebsocketAdapter } from '../adapter';
@@ -19,7 +19,7 @@ import type { AsenaWebSocketService, WebSocketData } from './web/websocket';
 import { ComponentConstants } from '../ioc/constants';
 import * as bun from 'bun';
 import { green, type ServerLogger, yellow } from '../logger';
-import type { AsenaConfig } from './config/AsenaConfig';
+import type { AsenaConfig } from './config';
 import {getOwnTypedMetadata, getTypedMetadata} from '../utils/typedMetadata';
 
 export class AsenaServer<A extends AsenaAdapter<any, any, any, AsenaWebsocketAdapter<any, any>>> {
