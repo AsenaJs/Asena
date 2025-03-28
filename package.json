@@ -25,10 +25,6 @@
       "import": "./dist/lib/adapter/index.js",
       "types": "./dist/lib/adapter/index.d.ts"
     },
-    "./adapter/hono": {
-      "import": "./dist/lib/adapter/hono/index.js",
-      "types": "./dist/lib/adapter/hono/index.d.ts"
-    },
     "./logger": {
       "import": "./dist/lib/logger/index.js",
       "types": "./dist/lib/logger/index.d.ts"
