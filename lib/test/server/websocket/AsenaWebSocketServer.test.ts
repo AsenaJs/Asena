@@ -1,5 +1,5 @@
 import { describe, test, expect, mock, beforeEach } from 'bun:test';
-import { AsenaWebSocketServer } from '../../../server/web/websocket/AsenaWebSocketServer';
+import { AsenaWebSocketServer } from '../../../server/web/websocket';
 
 describe('AsenaWebSocketServer', () => {
   let server: AsenaWebSocketServer;

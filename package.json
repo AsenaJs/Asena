@@ -25,10 +25,6 @@
       "import": "./dist/lib/adapter/index.js",
       "types": "./dist/lib/adapter/index.d.ts"
     },
-    "./adapter/hono": {
-      "import": "./dist/lib/adapter/hono/index.js",
-      "types": "./dist/lib/adapter/hono/index.d.ts"
-    },
     "./logger": {
       "import": "./dist/lib/logger/index.js",
       "types": "./dist/lib/logger/index.d.ts"
@@ -41,9 +37,17 @@
       "import": "./dist/lib/server/web/decorators/index.js",
       "types": "./dist/lib/server/web/decorators/index.d.ts"
     },
+    "./web-types": {
+      "import": "./dist/lib/server/web/types/index.js",
+      "types": "./dist/lib/server/web/types/index.d.ts"
+    },
     "./server": {
       "import": "./dist/lib/server/decorators/index.js",
       "types": "./dist/lib/server/decorators/index.d.ts"
+    },
+    "./server/config": {
+      "import": "./dist/lib/server/config/index.js",
+      "types": "./dist/lib/server/config/index.d.ts"
     },
     "./ioc": {
       "import": "./dist/lib/ioc/component/decorators/index.js",
@@ -82,6 +86,7 @@
     "reflect-metadata": "^0.2.2"
   },
   "devDependencies": {
+    "@changesets/cli": "^2.28.1",
     "@types/bun": "latest",
     "@typescript-eslint/eslint-plugin": "^6.21.0",
     "eslint": "^8.57.1",
@@ -90,17 +95,13 @@
     "eslint-plugin-alloy": "^1.2.1",
     "eslint-plugin-import": "^2.31.0",
     "eslint-plugin-n": "^16.6.2",
-    "eslint-plugin-prettier": "^5.2.1",
+    "eslint-plugin-prettier": "^5.2.5",
     "eslint-plugin-promise": "^6.6.0",
-    "hono": "^4.6.16",
-    "prettier": "^3.4.2",
-    "typescript": "^5.7.2",
+    "prettier": "^3.5.3",
+    "typescript": "^5.8.2",
     "winston": "^3.17.0"
   },
   "peerDependencies": {
-    "@hono/zod-validator": "^0.4.1",
-    "hono": "^4.5.9",
-    "winston": "^3.13.0",
-    "zod": "^3.23.8"
+    "winston": "^3.13.0"
   }
 }

@@ -1,3 +1,3 @@
-export * from '../web/http/HttpMethod';
+export * from '../web/types/HttpMethod';
 export * from './Class';
-export * from '../web/http/HttpStatus';
+export * from '../web/types/HttpStatus';

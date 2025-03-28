@@ -2,8 +2,8 @@ import type { MiddlewareParams } from '../../../ioc/types/decorators/MiddlewareP
 import { defineComponent } from '../../../ioc/component';
 import { ComponentType } from '../../../ioc/types';
 import { ComponentConstants } from '../../../ioc/constants';
-import { VALIDATOR_METHODS } from '../../web/types';
 import { defineTypedMetadata, getTypedMetadata } from '../../../utils/typedMetadata';
+import {VALIDATOR_METHODS} from "../../../adapter";
 
 /**
  * Decorator for defining a Middleware component.

@@ -1,7 +1,7 @@
 import type { Class } from '../server/types';
 import type { ComponentType, ContainerService, Dependencies, Expressions, Strategies } from './types';
 import { ComponentConstants } from './constants';
-import { getTypedMetadata } from '../utils/typedMetadata';
+import { getOwnTypedMetadata, getTypedMetadata } from '../utils/typedMetadata';
 
 export class Container {
 
@@ -116,67 +116,113 @@ export class Container {
   }
 
   private async executePostConstructs(newInstance: any, Class: Class) {
-    const postConstructs: string[] = getTypedMetadata<string[]>(ComponentConstants.PostConstructKey, Class);
+    const prototypeChain = this.getPrototypeChain(Class);
 
-    if (!postConstructs) {
-      return;
-    }
 
-    for (const postConstruct of postConstructs) {
-      await newInstance[postConstruct]();
+    for (const classInChain of prototypeChain.reverse()) {
+      const postConstructs: string[] = getOwnTypedMetadata<string[]>(
+        ComponentConstants.PostConstructKey, 
+        classInChain
+      );
+
+      if (!postConstructs) {
+        continue;
+      }
+
+      for (const postConstruct of postConstructs) {
+        await newInstance[postConstruct]();
+      }
     }
   }
 
   private async injectStrategies(newInstance: any, Class: Class) {
-    const strategyList = getTypedMetadata<Strategies>(ComponentConstants.StrategyKey, Class);
+    const prototypeChain = this.getPrototypeChain(Class);
 
-    for (const [propertyKey, interfaceName] of Object.entries(strategyList)) {
-      if (!interfaceName) {
-        continue;
+    for (const classInChain of prototypeChain.reverse()) {
+      const strategyList = getOwnTypedMetadata<Strategies>(ComponentConstants.StrategyKey, classInChain);
+
+      if (!strategyList) continue;
+
+      for (const [propertyKey, interfaceName] of Object.entries(strategyList)) {
+        if (!interfaceName) {
+          continue;
+        }
+
+        if (typeof interfaceName !== 'string') {
+          throw new Error('interfaceName must be a string');
+        }
+
+        if (Object.getOwnPropertyDescriptor(newInstance, propertyKey)) continue;
+
+        const strategy: Class[] = await this.resolveStrategy<Class>(interfaceName);
+
+        const expression: Expressions = getOwnTypedMetadata<Expressions>(
+          ComponentConstants.ExpressionKey,
+          classInChain,
+        );
+
+        Object.defineProperty(newInstance, propertyKey, {
+          get() {
+            return expression && expression[propertyKey] ? strategy.map((s) => expression[propertyKey](s)) : strategy;
+          },
+          enumerable: true,
+          configurable: true,
+        });
       }
-
-      if (typeof interfaceName !== 'string') {
-        throw new Error('interfaceName must be a string');
-      }
-
-      const strategy: Class[] = await this.resolveStrategy<Class>(interfaceName);
-
-      const expression: Expressions = getTypedMetadata<Expressions>(ComponentConstants.ExpressionKey, Class);
-
-      Object.defineProperty(newInstance, propertyKey, {
-        get() {
-          return expression && expression[propertyKey] ? strategy.map((s) => expression[propertyKey](s)) : strategy;
-        },
-        enumerable: true,
-        configurable: true,
-      });
     }
   }
 
   private async injectDependencies(newInstance: any, Class: Class) {
-    const deps = getTypedMetadata<Dependencies>(ComponentConstants.DependencyKey, Class);
+    const prototypeChain = this.getPrototypeChain(Class);
 
-    for (const [k, name] of Object.entries(deps)) {
-      const instance: Class | Class[] = await this.resolve<Class>(name);
+    for (const classInChain of prototypeChain.reverse()) {
+      const deps = getOwnTypedMetadata<Dependencies>(ComponentConstants.DependencyKey, classInChain);
 
-      if (instance === null) {
-        throw new Error('Instance cant be null ' + name);
+      if (!deps) continue;
+
+      for (const [k, name] of Object.entries(deps)) {
+        if (Object.getOwnPropertyDescriptor(newInstance, k)) continue;
+
+        const instance: Class | Class[] = await this.resolve<Class>(name);
+
+        if (instance === null) {
+          throw new Error('Instance cant be null ' + name);
+        }
+
+        if (Array.isArray(instance) && instance.length < 1) {
+          throw new Error('instance error cannot be null');
+        }
+
+        const expression: Expressions = getOwnTypedMetadata<Expressions>(
+          ComponentConstants.ExpressionKey,
+          classInChain,
+        );
+
+        Object.defineProperty(newInstance, k, {
+          get: () => {
+            return expression && expression[k] ? expression[k](instance) : instance;
+          },
+          enumerable: true,
+          configurable: true,
+        });
       }
-
-      if (Array.isArray(instance) && instance.length < 1) {
-        throw new Error('instance error cannot be null');
-      }
-
-      const expression: Expressions = getTypedMetadata<Expressions>(ComponentConstants.ExpressionKey, Class);
-
-      Object.defineProperty(newInstance, k, {
-        get: () => {
-          return expression && expression[k] ? expression[k](instance) : instance;
-        },
-        enumerable: true,
-        configurable: true,
-      });
     }
+  }
+
+  private getPrototypeChain(Class: any): any[] {
+    const chain: any[] = [];
+    let currentClass = Class;
+
+    while (
+      currentClass &&
+      currentClass !== Object.prototype &&
+      !currentClass.toString().includes('[native code]')
+    ) {
+      chain.push(currentClass);
+      currentClass = Object.getPrototypeOf(currentClass);
+    }
+
+    return chain;
   }
 
   public get services(): { [p: string]: ContainerService | ContainerService[] } {

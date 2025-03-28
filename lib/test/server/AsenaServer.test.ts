@@ -6,7 +6,7 @@ import { Inject, PostConstruct } from '../../ioc/component';
 import { AsenaWebSocketService, type Socket } from '../../server/web/websocket';
 import { Get } from '../../server/web/decorators';
 import type { AsenaContext, AsenaServeOptions } from '../../adapter';
-import type { AsenaConfig } from '../../server/config/AsenaConfig';
+import type { AsenaConfig } from '../../server/config';
 
 @Service()
 class TestServerService {

@@ -1,6 +1,6 @@
-import type { Class } from '../../types';
+import type { Class } from '../../server/types';
 import type { ApiParams } from './ApiParams';
-import type { AsenaContext, AsenaMiddlewareHandler } from '../../../adapter';
+import type { AsenaContext, AsenaMiddlewareHandler } from '../index';
 
 /**
  * Interface representing a base middleware.

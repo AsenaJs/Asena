@@ -1,5 +1,4 @@
-import type { AsenaServeOptions, ErrorHandler, RouteParams } from './types';
-import type { BaseMiddleware } from '../server/web/types';
+import type {AsenaServeOptions, BaseMiddleware, ErrorHandler, RouteParams} from './types';
 import type { Server } from 'bun';
 import type { AsenaWebsocketAdapter } from './AsenaWebsocketAdapter';
 import type { ServerLogger } from '../logger';
