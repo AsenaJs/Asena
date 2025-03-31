@@ -1,7 +1,7 @@
 {
   "name": "@asenajs/asena",
-  "version": "0.2.0",
-  "description": "Asena is a spring like framework for building web applications built with hono and bun",
+  "version": "0.2.1",
+  "description": "Asena is a spring like framework for building web applications built with bun",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [
