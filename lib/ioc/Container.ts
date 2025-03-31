@@ -130,7 +130,14 @@ export class Container {
       }
 
       for (const postConstruct of postConstructs) {
-        await newInstance[postConstruct]();
+        try {
+          await newInstance[postConstruct]();
+        } catch (error) {
+          console.log("Error in post construct, exiting process");
+          console.error(error);
+          // then exit the process
+          process.exit(1);
+        }
       }
     }
   }

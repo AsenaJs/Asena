@@ -50,8 +50,8 @@
       "types": "./dist/lib/server/config/index.d.ts"
     },
     "./ioc": {
-      "import": "./dist/lib/ioc/component/decorators/index.js",
-      "types": "./dist/lib/ioc/component/decorators/index.d.ts"
+      "import": "./dist/lib/ioc/component/index.js",
+      "types": "./dist/lib/ioc/component/index.d.ts"
     },
     "./http-status": {
       "import": "./dist/lib/server/web/http/HttpStatus.js",

@@ -1,7 +1,7 @@
 import type { Class } from '../../../server/types';
 import type { Dependencies, Expressions } from '../../types';
 import { ComponentConstants } from '../../constants';
-import { defineTypedMetadata, getOwnTypedMetadata } from '../../../utils/typedMetadata';
+import { defineTypedMetadata, getOwnTypedMetadata, getTypedMetadata } from '../../../utils/typedMetadata';
 
 /**
  * Property decorator to inject a dependency.
@@ -16,7 +16,8 @@ export const Inject = (Injection: Class | string, expression?: (injectedClass: a
       getOwnTypedMetadata<Dependencies>(ComponentConstants.DependencyKey, target.constructor) || {};
 
     if (!dependencies[propertyKey]) {
-      dependencies[propertyKey] = typeof Injection === 'string' ? Injection : Injection.name;
+      dependencies[propertyKey] =
+        typeof Injection === 'string' ? Injection : getTypedMetadata<string>(ComponentConstants.NameKey, Injection);
     }
 
     defineTypedMetadata<Dependencies>(ComponentConstants.DependencyKey, dependencies, target.constructor);
