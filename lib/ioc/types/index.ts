@@ -3,7 +3,6 @@ export * from './decorators/ControllerParams';
 export * from './decorators/ComponentType';
 export * from './decorators/ServiceParams';
 export * from './decorators/ScheduleParams';
-export * from './Scope';
 export * from './IocConfig';
 export * from './InjectableComponent';
 export * from './ContainerService';

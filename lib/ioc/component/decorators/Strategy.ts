@@ -1,7 +1,7 @@
 import type { Class } from '../../../server/types';
 import type { Expressions, Strategies } from '../../types';
 import { ComponentConstants } from '../../constants';
-import { defineTypedMetadata, getOwnTypedMetadata } from '../../../utils/typedMetadata';
+import { defineTypedMetadata, getOwnTypedMetadata, getTypedMetadata } from '../../../utils/typedMetadata';
 
 /**
  * Property decorator to define a strategy.
@@ -12,18 +12,21 @@ import { defineTypedMetadata, getOwnTypedMetadata } from '../../../utils/typedMe
  */
 export const Strategy = (Injection: Class | string, expression?: (injectedClass) => any): PropertyDecorator => {
   return (target: Object, propertyKey: string) => {
-    const strategies: Strategies = getOwnTypedMetadata<Strategies>(ComponentConstants.StrategyKey, target.constructor) || {};
+    const strategies: Strategies =
+      getOwnTypedMetadata<Strategies>(ComponentConstants.StrategyKey, target.constructor) || {};
 
     defineTypedMetadata<Class | string>('design:type', Injection, target.constructor, propertyKey);
 
-    const injectionName = typeof Injection === 'string' ? Injection : Injection.name;
+    const injectionName =
+      typeof Injection === 'string' ? Injection : getTypedMetadata<string>(ComponentConstants.NameKey, Injection);
 
     if (!strategies[propertyKey]) {
       strategies[propertyKey] = injectionName;
     }
 
     if (expression) {
-      const expressions: Expressions = getOwnTypedMetadata<Expressions>(ComponentConstants.ExpressionKey, target.constructor) || {};
+      const expressions: Expressions =
+        getOwnTypedMetadata<Expressions>(ComponentConstants.ExpressionKey, target.constructor) || {};
 
       if (!expressions[propertyKey]) {
         expressions[propertyKey] = expression;

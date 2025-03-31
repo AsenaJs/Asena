@@ -1,4 +1,4 @@
-import type { Scope } from '../Scope';
+import type { Scope } from '../../component';
 
 export interface ComponentParams {
   name?: string;

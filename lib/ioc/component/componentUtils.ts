@@ -1,13 +1,7 @@
-import {
-  type ComponentParams,
-  ComponentType,
-  type Dependencies,
-  Scope,
-  type ServiceParams,
-  type Strategies,
-} from '../types';
+import { type ComponentParams, ComponentType, type Dependencies, type ServiceParams, type Strategies } from '../types';
 import { ComponentConstants } from '../constants';
 import { defineTypedMetadata, getOwnTypedMetadata } from '../../utils/typedMetadata';
+import { Scope } from './Scope';
 
 export const defineComponent = <T extends ComponentParams>(
   componentType: ComponentType,

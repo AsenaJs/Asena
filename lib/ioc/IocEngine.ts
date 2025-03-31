@@ -1,5 +1,4 @@
 import type { InjectableComponent, Dependencies, IocConfig, Strategies } from './types';
-import { Scope } from './types';
 import { Container } from './Container';
 import { getAllFiles } from './helper/fileHelper';
 import * as path from 'node:path';
@@ -9,6 +8,7 @@ import * as process from 'node:process';
 import * as console from 'node:console';
 import { getStrategyClass } from './helper/iocHelper';
 import { getOwnTypedMetadata, getTypedMetadata } from '../utils/typedMetadata';
+import { Scope } from './component';
 
 export class IocEngine {
 

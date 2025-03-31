@@ -4,6 +4,7 @@ import type { ServerLogger } from './Logger';
 
 export const defaultFormat = winston.format.combine(
   winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
+  winston.format.splat(),
   winston.format.colorize(),
   winston.format.align(),
   winston.format.printf((info) => {
