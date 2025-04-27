@@ -1,4 +1,4 @@
-import type {AsenaServeOptions, BaseMiddleware, ErrorHandler, RouteParams} from './types';
+import type { AsenaServeOptions, BaseMiddleware, ErrorHandler, RouteParams, WebsocketRouteParams } from './types';
 import type { Server } from 'bun';
 import type { AsenaWebsocketAdapter } from './AsenaWebsocketAdapter';
 import type { ServerLogger } from '../logger';
@@ -8,28 +8,15 @@ import type { AsenaContext } from './AsenaContext';
  * Abstract class representing an adapter for the Asena framework.
  * This adapter serves as a base interface between the framework and different server implementations.
  *
- * @template A - Type for the application instance (e.g., Express, Bun, etc.)
- * @template R - Type for the request object
- * @template S - Type for the response object
+ * @template C - Type for the context object
  * @template VS - Type for the validator schema
- * @template WSA - Type for the WebSocket adapter implementation
  */
-export abstract class AsenaAdapter<A, C extends AsenaContext<any, any>, VS, WSA extends AsenaWebsocketAdapter<A, C>> {
+export abstract class AsenaAdapter<C extends AsenaContext<any, any>, VS> {
 
   /**
    * The name identifier of the adapter
    */
   public readonly name: string;
-
-  /**
-   * The main application instance
-   */
-  public app: A;
-
-  /**
-   * WebSocket adapter instance for handling real-time communications
-   */
-  public websocketAdapter: WSA;
 
   /**
    * Server port number
@@ -42,18 +29,20 @@ export abstract class AsenaAdapter<A, C extends AsenaContext<any, any>, VS, WSA 
   protected logger: ServerLogger = console;
 
   /**
+   * WebSocket adapter instance for handling real-time communications
+   */
+  protected websocketAdapter: AsenaWebsocketAdapter;
+
+  /**
    * Creates a new adapter instance
    * @param websocketAdapter - WebSocket adapter implementation
    * @param logger - Optional custom logger implementation
    */
-  protected constructor(websocketAdapter: WSA, logger?: ServerLogger) {
-    this.websocketAdapter = websocketAdapter;
-    if (logger) {
-      this.logger = logger;
+  protected constructor(logger: ServerLogger, websocketAdapter?: AsenaWebsocketAdapter) {
+    this.logger = logger;
 
-      if (!this.websocketAdapter.logger) {
-        this.websocketAdapter.logger = logger;
-      }
+    if (websocketAdapter) {
+      this.websocketAdapter = websocketAdapter;
     }
   }
 
@@ -75,6 +64,17 @@ export abstract class AsenaAdapter<A, C extends AsenaContext<any, any>, VS, WSA 
    * @param params - Route configuration parameters
    */
   public abstract registerRoute(params: RouteParams<C, VS>): Promise<void> | void;
+
+  /**
+   * Registers a WebSocket route with the application. This method establishes the connection
+   * between HTTP routes and WebSocket handlers, allowing the adapter to properly route
+   * WebSocket connection requests to the appropriate handlers.
+   *
+   * @param {WebsocketRouteParams<C>} params - Configuration parameters for the WebSocket route,
+   *                                          including path, handlers, and middleware
+   * @returns {Promise<void> | void} - Promise that resolves when registration is complete
+   */
+  public abstract registerWebsocketRoute(params: WebsocketRouteParams<C>): Promise<void> | void;
 
   /**
    * Initializes and starts the server

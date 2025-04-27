@@ -5,7 +5,7 @@ import { ComponentType } from '../../ioc/types';
 import { Inject, PostConstruct } from '../../ioc/component';
 import { AsenaWebSocketService, type Socket } from '../../server/web/websocket';
 import { Get } from '../../server/web/decorators';
-import type { AsenaContext, AsenaServeOptions } from '../../adapter';
+import type { AsenaContext, AsenaServeOptions, WebsocketRouteParams } from '../../adapter';
 import type { AsenaConfig } from '../../server/config';
 
 @Service()
@@ -81,6 +81,7 @@ describe('AsenaServer', () => {
       setPort: mock(() => {}),
       start: mock(async () => {}),
       registerRoute: mock(() => {}),
+      registerWebsocketRoute: mock(() => {}),
       prepareMiddlewares: mock(() => []),
       prepareHandler: mock(() => () => {}),
       prepareValidator: mock(() => {}),
@@ -89,9 +90,8 @@ describe('AsenaServer', () => {
         mockAdapter.options = await options();
       }),
       websocketAdapter: {
-        buildWebsocket: mock(() => {}),
         registerWebSocket: mock(() => {}),
-        prepareWebSocket: mock(() => {}),
+        startWebsocket: mock(() => {}),
       },
     };
 
@@ -175,7 +175,18 @@ describe('AsenaServer', () => {
     server.components(components);
     await server.start();
 
-    expect(mockAdapter.websocketAdapter.registerWebSocket).toHaveBeenCalledWith(expect.any(TestWebSocket), []);
+    // @ts-ignore - private property access for testing
+    const ioc = server._ioc;
+
+    const webSocketService: TestWebSocket[] | TestWebSocket = await ioc.container.resolve('TestWebSocket');
+
+    const params: WebsocketRouteParams<any> = {
+      path: 'ws',
+      middlewares: [],
+      websocketService: webSocketService as TestWebSocket,
+    };
+
+    expect(mockAdapter.registerWebsocketRoute).toHaveBeenCalledWith(params);
   });
 
   test('should handle websocket registration', async () => {
@@ -200,7 +211,7 @@ describe('AsenaServer', () => {
 
     await server.start();
 
-    expect(mockAdapter.websocketAdapter.registerWebSocket).toHaveBeenCalled();
+    expect(mockAdapter.registerWebsocketRoute).toHaveBeenCalled();
   });
 
   test('should handle errors during initialization', async () => {

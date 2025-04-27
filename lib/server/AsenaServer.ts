@@ -3,6 +3,7 @@ import type { Container } from '../ioc';
 import { IocEngine } from '../ioc';
 import { readConfigFile } from '../ioc/helper/fileHelper';
 import { ComponentType, type InjectableComponent } from '../ioc/types';
+import type { AsenaAdapter } from '../adapter';
 import {
   type ApiParams,
   type BaseMiddleware,
@@ -14,15 +15,14 @@ import {
 } from '../adapter';
 import * as path from 'node:path';
 import type { AsenaMiddlewareService, AsenaValidationService, MiddlewareClass, ValidatorClass } from './web/middleware';
-import type { AsenaAdapter, AsenaWebsocketAdapter } from '../adapter';
 import type { AsenaWebSocketService, WebSocketData } from './web/websocket';
 import { ComponentConstants } from '../ioc/constants';
 import * as bun from 'bun';
 import { green, type ServerLogger, yellow } from '../logger';
 import type { AsenaConfig } from './config';
-import {getOwnTypedMetadata, getTypedMetadata} from '../utils/typedMetadata';
+import { getOwnTypedMetadata, getTypedMetadata } from '../utils/typedMetadata';
 
-export class AsenaServer<A extends AsenaAdapter<any, any, any, AsenaWebsocketAdapter<any, any>>> {
+export class AsenaServer<A extends AsenaAdapter<any, any>> {
 
   private _port: number;
 
@@ -144,7 +144,7 @@ export class AsenaServer<A extends AsenaAdapter<any, any, any, AsenaWebsocketAda
         await this._adapter.registerRoute({
           method: params.method,
           path: lastPath,
-          middleware: middlewares,
+          middlewares: middlewares,
           handler: controller[name].bind(controller),
           staticServe: params.staticServe,
           validator: validatorInstance,
@@ -278,7 +278,11 @@ export class AsenaServer<A extends AsenaAdapter<any, any, any, AsenaWebsocketAda
 
       const middlewares = await this.prepareTopMiddlewares({ controller: webSocket as unknown as Class }, true);
 
-      await this._adapter.websocketAdapter.registerWebSocket(webSocket, middlewares);
+      await this._adapter.registerWebsocketRoute({
+        path: path,
+        middlewares: middlewares,
+        websocketService: webSocket,
+      });
     }
   }
 

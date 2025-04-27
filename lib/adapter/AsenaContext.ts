@@ -7,7 +7,7 @@ import type { CookieExtra, SendOptions } from './types';
  * @template R - Type parameter for the underlying request object
  * @template S - Type parameter for the underlying response object
  */
-export interface AsenaContext<R, S> {
+export interface AsenaContext<R, S extends Response> {
   /** The original request object */
   req: R;
   /** The original response object */
