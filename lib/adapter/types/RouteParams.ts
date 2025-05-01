@@ -10,6 +10,7 @@ export interface RouteParams<C extends AsenaContext<any, any>, VS> {
   middlewares: BaseMiddleware<C>[];
   handler: AsenaHandler<C>;
   staticServe: boolean;
+  staticServeNew: object;
   validator: BaseValidator<VS>;
 }
 

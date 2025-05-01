@@ -17,4 +17,5 @@ export enum ComponentConstants {
   OverrideKey = '_IOverride',
   ExpressionKey = '_IExpression',
   ValidatorKey = '_IValidator',
+  StaticServeKey = '_IStaticServe',
 }
