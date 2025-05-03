@@ -26,7 +26,7 @@ export const DEFAULT_PARAMS: ControllerDecoratorParams = {
   path: '',
   middlewares: [],
   description: '',
-  staticServe: false,
+  staticServe: undefined,
   validator: undefined,
 };
 

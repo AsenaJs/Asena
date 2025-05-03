@@ -118,12 +118,8 @@ export class Container {
   private async executePostConstructs(newInstance: any, Class: Class) {
     const prototypeChain = this.getPrototypeChain(Class);
 
-
     for (const classInChain of prototypeChain.reverse()) {
-      const postConstructs: string[] = getOwnTypedMetadata<string[]>(
-        ComponentConstants.PostConstructKey, 
-        classInChain
-      );
+      const postConstructs: string[] = getOwnTypedMetadata<string[]>(ComponentConstants.PostConstructKey, classInChain);
 
       if (!postConstructs) {
         continue;
@@ -133,7 +129,7 @@ export class Container {
         try {
           await newInstance[postConstruct]();
         } catch (error) {
-          console.log("Error in post construct, exiting process");
+          console.log('Error in post construct, exiting process');
           console.error(error);
           // then exit the process
           process.exit(1);
@@ -220,11 +216,7 @@ export class Container {
     const chain: any[] = [];
     let currentClass = Class;
 
-    while (
-      currentClass &&
-      currentClass !== Object.prototype &&
-      !currentClass.toString().includes('[native code]')
-    ) {
+    while (currentClass && currentClass !== Object.prototype && !currentClass.toString().includes('[native code]')) {
       chain.push(currentClass);
       currentClass = Object.getPrototypeOf(currentClass);
     }

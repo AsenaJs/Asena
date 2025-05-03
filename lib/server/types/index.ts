@@ -1,2 +1,2 @@
 export * from './Class';
-export * from '../web/middleware/StaticServeConfig';
+export * from '../web/middleware/AsenaStaticServeService';

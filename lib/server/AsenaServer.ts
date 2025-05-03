@@ -1,18 +1,19 @@
-import type { Class } from './types';
+import type { AsenaStaticServeService, Class, StaticServeClass } from './types';
 import type { Container } from '../ioc';
 import { IocEngine } from '../ioc';
 import { readConfigFile } from '../ioc/helper/fileHelper';
 import { ComponentType, type InjectableComponent } from '../ioc/types';
-import type { AsenaAdapter } from '../adapter';
-import {
-  type ApiParams,
-  type BaseMiddleware,
-  type BaseValidator,
-  type PrepareMiddlewareParams,
-  type Route,
-  VALIDATOR_METHODS,
-  type ValidatorHandler,
+import type {
+  ApiParams,
+  AsenaAdapter,
+  BaseMiddleware,
+  BaseStaticServeParams,
+  BaseValidator,
+  PrepareMiddlewareParams,
+  Route,
+  ValidatorHandler,
 } from '../adapter';
+import { VALIDATOR_METHODS } from '../adapter';
 import * as path from 'node:path';
 import type { AsenaMiddlewareService, AsenaValidationService, MiddlewareClass, ValidatorClass } from './web/middleware';
 import type { AsenaWebSocketService, WebSocketData } from './web/websocket';
@@ -146,7 +147,7 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> {
           path: lastPath,
           middlewares: middlewares,
           handler: controller[name].bind(controller),
-          staticServe: params.staticServe,
+          staticServe: await this.prepareStaticServeConfig(params.staticServe),
           validator: validatorInstance,
         });
       }
@@ -166,6 +167,59 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> {
 
       this.controllers = controllers as Class[];
     }
+  }
+
+  private async prepareStaticServeConfig(staticServeClass: StaticServeClass): Promise<BaseStaticServeParams> {
+    if (!staticServeClass) {
+      return;
+    }
+
+    const name = getTypedMetadata<string>(ComponentConstants.NameKey, staticServeClass);
+    const root = getTypedMetadata<string>(ComponentConstants.StaticServeRootKey, staticServeClass);
+    const overrides: string[] = getTypedMetadata<string[]>(ComponentConstants.OverrideKey, staticServeClass);
+
+    const staticServeService: AsenaStaticServeService<any>[] | AsenaStaticServeService<any> =
+      await this._ioc.container.resolve<AsenaStaticServeService<any>>(name);
+
+    if (!staticServeService) {
+      throw new Error(`Static Serve service ${name} not found.`);
+    }
+
+    if (Array.isArray(staticServeService)) {
+      throw new Error('Static serve service cannot be array');
+    }
+
+    const baseStaticServeParams: BaseStaticServeParams = {
+      extra: undefined,
+      root,
+      rewriteRequestPath: undefined,
+      onFound: undefined,
+      onNotFound: undefined,
+    };
+
+    if (staticServeService.extra) {
+      baseStaticServeParams.extra = staticServeService.extra;
+    }
+
+    if (staticServeService.rewriteRequestPath) {
+      baseStaticServeParams.rewriteRequestPath = staticServeService.rewriteRequestPath;
+    }
+
+    if (staticServeService.onFound) {
+      baseStaticServeParams.onFound = {
+        handler: staticServeService.onFound.bind(staticServeService),
+        override: overrides?.includes('onFound'),
+      };
+    }
+
+    if (staticServeService.onNotFound) {
+      baseStaticServeParams.onNotFound = {
+        handler: staticServeService.onNotFound.bind(staticServeService),
+        override: overrides?.includes('onNotFound'),
+      };
+    }
+
+    return baseStaticServeParams;
   }
 
   private async prepareTopMiddlewares(

@@ -8,3 +8,4 @@ export * from './ServeOptions';
 export * from "./BaseMiddleware"
 export * from "./ApiParams"
 export * from "./AsenaHandler"
+export * from "./BaseStaticServeParams"

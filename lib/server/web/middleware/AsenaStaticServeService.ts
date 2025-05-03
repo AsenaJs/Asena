@@ -1,4 +1,6 @@
 import type { AsenaContext } from '../../../adapter';
+import type { ComponentParams } from '../../../ioc/types';
+import type { Class } from '../../types';
 
 /**
  * Abstract configuration class for serving static files in Asena applications.
@@ -7,7 +9,13 @@ import type { AsenaContext } from '../../../adapter';
  * @template C - Type extending AsenaContext for request/response handling
  * @template E - Type for additional configuration options
  */
-export abstract class StaticServeConfig<C extends AsenaContext<any, any>, E = any> {
+export abstract class AsenaStaticServeService<C extends AsenaContext<any, any>, E = any> {
+
+  /**
+   * Additional configuration options specific to the implementation
+   * @protected
+   */
+  public extra?: E;
 
   /**
    * Root directory path from which to serve static files
@@ -16,18 +24,12 @@ export abstract class StaticServeConfig<C extends AsenaContext<any, any>, E = an
   protected root?: string;
 
   /**
-   * Additional configuration options specific to the implementation
-   * @protected
-   */
-  protected extra?: E;
-
-  /**
    * Function to rewrite incoming request paths before serving files
    * @param {string} path - The original request path
    * @returns {string} The rewritten path to use for file lookup
    * @protected
    */
-  protected rewriteRequestPath?: (path: string) => string;
+  public abstract rewriteRequestPath?(path: string): string;
 
   /**
    * Callback triggered when a requested static file is successfully found
@@ -36,7 +38,7 @@ export abstract class StaticServeConfig<C extends AsenaContext<any, any>, E = an
    * @returns {void | Promise<void>} Optional Promise for asynchronous operations
    * @abstract
    */
-  public abstract onFound?: (path: string, c: C) => void | Promise<void>;
+  public abstract onFound?(path: string, c: C): void | Promise<void>;
 
   /**
    * Callback triggered when a requested static file cannot be found
@@ -45,12 +47,20 @@ export abstract class StaticServeConfig<C extends AsenaContext<any, any>, E = an
    * @returns {void | Promise<void>} Optional Promise for asynchronous operations
    * @abstract
    */
-  public abstract onNotFound?: (path: string, c: C) => void | Promise<void>;
+  public abstract onNotFound?(path: string, c: C): void | Promise<void>;
 
 }
 
+/**
+ * Interface defining parameters for static file serving configuration.
+ * Used to configure path resolution and request processing for static assets.
+ */
+export interface StaticServeParams extends ComponentParams {
+  /**
+   * Root directory path from which to serve static files.
+   * This path serves as the base directory for all static assets.
+   */
+  root?: string;
+}
 
-export interface StaticServeParams{
-  root: string;
-  rewriteRequestPath?: (path: string) => string;
-};
+export type StaticServeClass = Class<AsenaStaticServeService<AsenaContext<any, any>>>;
