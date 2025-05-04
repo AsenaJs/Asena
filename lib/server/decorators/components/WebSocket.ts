@@ -4,7 +4,7 @@ import { ComponentConstants } from '../../../ioc/constants';
 import { defineMiddleware } from '../../web/helper';
 import { defineTypedMetadata } from '../../../utils/typedMetadata';
 
-import type {MiddlewareClass} from "../../web/middleware";
+import type { MiddlewareClass } from '../../web/middleware';
 
 /**
  * Decorator for defining a WebSocket component.
@@ -15,6 +15,11 @@ import type {MiddlewareClass} from "../../web/middleware";
 export const WebSocket = (params: ControllerParams | string): ClassDecorator => {
   return defineComponent(ComponentType.WEBSOCKET, params, (target) => {
     let path = typeof params === 'string' ? params : params.path;
+
+    if (!path) {
+      console.error('path parameter is required');
+      process.exit();
+    }
 
     path = path.replace(/^\/+/, '');
 

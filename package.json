@@ -86,7 +86,7 @@
     "reflect-metadata": "^0.2.2"
   },
   "devDependencies": {
-    "@changesets/cli": "^2.28.1",
+    "@changesets/cli": "^2.29.3",
     "@types/bun": "latest",
     "@typescript-eslint/eslint-plugin": "^6.21.0",
     "eslint": "^8.57.1",
@@ -95,10 +95,10 @@
     "eslint-plugin-alloy": "^1.2.1",
     "eslint-plugin-import": "^2.31.0",
     "eslint-plugin-n": "^16.6.2",
-    "eslint-plugin-prettier": "^5.2.5",
+    "eslint-plugin-prettier": "^5.4.0",
     "eslint-plugin-promise": "^6.6.0",
     "prettier": "^3.5.3",
-    "typescript": "^5.8.2",
+    "typescript": "^5.8.3",
     "winston": "^3.17.0"
   },
   "peerDependencies": {

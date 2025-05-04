@@ -1,4 +1,4 @@
-import type { AsenaStaticServeService, Class, StaticServeClass } from './types';
+import type { Class, StaticServeClass } from './types';
 import type { Container } from '../ioc';
 import { IocEngine } from '../ioc';
 import { readConfigFile } from '../ioc/helper/fileHelper';
@@ -11,17 +11,18 @@ import type {
   BaseValidator,
   PrepareMiddlewareParams,
   Route,
-  ValidatorHandler,
 } from '../adapter';
-import { VALIDATOR_METHODS } from '../adapter';
 import * as path from 'node:path';
-import type { AsenaMiddlewareService, AsenaValidationService, MiddlewareClass, ValidatorClass } from './web/middleware';
-import type { AsenaWebSocketService, WebSocketData } from './web/websocket';
+import type { MiddlewareClass, ValidatorClass } from './web/middleware';
 import { ComponentConstants } from '../ioc/constants';
 import * as bun from 'bun';
 import { green, type ServerLogger, yellow } from '../logger';
-import type { AsenaConfig } from './config';
 import { getOwnTypedMetadata, getTypedMetadata } from '../utils/typedMetadata';
+import { PrepareMiddlewareService } from './src/services/PrepareMiddlewareService';
+import { PrepareConfigService } from './src/services/PrepareConfigService';
+import { PrepareWebsocketService } from './src/services/PrepareWebsocketService';
+import { PrepareValidatorService } from './src/services/PrepareValidatorService';
+import { PrepareStaticServeConfigService } from './src/services/PrepareStaticServeConfigService';
 
 export class AsenaServer<A extends AsenaAdapter<any, any>> {
 
@@ -37,16 +38,28 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> {
 
   private readonly _adapter: A;
 
-  public constructor(adapter: A, logger?: ServerLogger) {
+  private prepareMiddleware: PrepareMiddlewareService;
+
+  private prepareConfigService: PrepareConfigService;
+
+  private prepareWebsocketService: PrepareWebsocketService;
+
+  private prepareValidatorService: PrepareValidatorService;
+
+  private prepareStaticServeConfigService: PrepareStaticServeConfigService;
+
+  public constructor(adapter: A, logger: ServerLogger) {
+    this._adapter = adapter;
+
     this._logger = logger;
 
-    if (!logger) {
-      this.prepareLogger();
-    }
-
-    if (adapter) {
-      this._adapter = adapter;
-    }
+    this._logger.info(`
+    ___    _____  ______ _   __ ___ 
+   /   |  / ___/ / ____// | / //   |
+  / /| |  \\__ \\ / __/  /  |/ // /| |
+ / ___ | ___/ // /___ / /|  // ___ |
+/_/  |_|/____//_____//_/ |_//_/  |_|  
+                            `);
   }
 
   public async initialize(): Promise<Container> {
@@ -60,18 +73,20 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> {
 
     await this._ioc.searchAndRegister(this._components);
 
+    this.prepareMiddleware = new PrepareMiddlewareService(this._ioc.container, this._logger);
+
+    this.prepareConfigService = new PrepareConfigService(this._ioc.container, this._logger);
+
+    this.prepareWebsocketService = new PrepareWebsocketService(this._ioc.container, this._logger);
+
+    this.prepareValidatorService = new PrepareValidatorService(this._ioc.container, this._logger);
+
+    this.prepareStaticServeConfigService = new PrepareStaticServeConfigService(this._ioc.container, this._logger);
+
     return this._ioc.container;
   }
 
   public async start(gc = false): Promise<void> {
-    this._logger.info(`
-    ___    _____  ______ _   __ ___ 
-   /   |  / ___/ / ____// | / //   |
-  / /| |  \\__ \\ / __/  /  |/ // /| |
- / ___ | ___/ // /___ / /|  // ___ |
-/_/  |_|/____//_____//_/ |_//_/  |_|  
-                            `);
-
     await this.initialize();
 
     this._logger.info(`Adapter: ${green(this._adapter.name)} implemented`);
@@ -170,56 +185,7 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> {
   }
 
   private async prepareStaticServeConfig(staticServeClass: StaticServeClass): Promise<BaseStaticServeParams> {
-    if (!staticServeClass) {
-      return;
-    }
-
-    const name = getTypedMetadata<string>(ComponentConstants.NameKey, staticServeClass);
-    const root = getTypedMetadata<string>(ComponentConstants.StaticServeRootKey, staticServeClass);
-    const overrides: string[] = getTypedMetadata<string[]>(ComponentConstants.OverrideKey, staticServeClass);
-
-    const staticServeService: AsenaStaticServeService<any>[] | AsenaStaticServeService<any> =
-      await this._ioc.container.resolve<AsenaStaticServeService<any>>(name);
-
-    if (!staticServeService) {
-      throw new Error(`Static Serve service ${name} not found.`);
-    }
-
-    if (Array.isArray(staticServeService)) {
-      throw new Error('Static serve service cannot be array');
-    }
-
-    const baseStaticServeParams: BaseStaticServeParams = {
-      extra: undefined,
-      root,
-      rewriteRequestPath: undefined,
-      onFound: undefined,
-      onNotFound: undefined,
-    };
-
-    if (staticServeService.extra) {
-      baseStaticServeParams.extra = staticServeService.extra;
-    }
-
-    if (staticServeService.rewriteRequestPath) {
-      baseStaticServeParams.rewriteRequestPath = staticServeService.rewriteRequestPath;
-    }
-
-    if (staticServeService.onFound) {
-      baseStaticServeParams.onFound = {
-        handler: staticServeService.onFound.bind(staticServeService),
-        override: overrides?.includes('onFound'),
-      };
-    }
-
-    if (staticServeService.onNotFound) {
-      baseStaticServeParams.onNotFound = {
-        handler: staticServeService.onNotFound.bind(staticServeService),
-        override: overrides?.includes('onNotFound'),
-      };
-    }
-
-    return baseStaticServeParams;
+    return await this.prepareStaticServeConfigService.prepare(staticServeClass);
   }
 
   private async prepareTopMiddlewares(
@@ -241,34 +207,7 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> {
   }
 
   private async prepareValidator(Validator: ValidatorClass<any>): Promise<BaseValidator> {
-    if (!Validator) {
-      return;
-    }
-
-    const name = getTypedMetadata<string>(ComponentConstants.NameKey, Validator);
-
-    const validator = await this._ioc.container.resolve<AsenaValidationService<any>>(name);
-
-    if (!validator) {
-      throw new Error('Validator not found:' + name);
-    }
-
-    if (Array.isArray(validator)) {
-      throw new Error('Validator cannot be array');
-    }
-
-    const overrides: string[] = getTypedMetadata<string[]>(ComponentConstants.OverrideKey, validator.constructor);
-
-    const baseValidatorMiddleware: BaseValidator = {};
-
-    VALIDATOR_METHODS.filter((key) => typeof validator[key] === 'function').forEach((key) => {
-      baseValidatorMiddleware[key] = {
-        handle: validator[key].bind(validator),
-        override: overrides?.includes(key) || false,
-      } satisfies ValidatorHandler;
-    });
-
-    return baseValidatorMiddleware;
+    return await this.prepareValidatorService.prepare(Validator);
   }
 
   private async prepareRouteMiddleware(middlewareParams: ApiParams): Promise<BaseMiddleware[]> {
@@ -278,92 +217,32 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> {
   }
 
   private async prepareMiddlewares(middlewares: MiddlewareClass[]): Promise<BaseMiddleware[]> {
-    const preparedMiddlewares: BaseMiddleware[] = [];
-
-    for (const middleware of middlewares) {
-      const name = getTypedMetadata<string>(ComponentConstants.NameKey, middleware);
-      const override = getTypedMetadata<string[]>(ComponentConstants.OverrideKey, middleware);
-      const isOverride = override ? override.includes('handle') : false;
-
-      const instances = await this._ioc.container.resolve<AsenaMiddlewareService>(name);
-
-      if (!instances) continue;
-
-      const normalizedInstances = Array.isArray(instances) ? instances : [instances];
-
-      for (const instance of normalizedInstances) {
-        preparedMiddlewares.push({
-          handle: instance.handle.bind(instance),
-          override: isOverride,
-        });
-      }
-    }
-
-    return preparedMiddlewares;
+    return this.prepareMiddleware.prepare(middlewares);
   }
 
   private async prepareWebSocket() {
-    const webSockets = await this._ioc.container.resolveAll<AsenaWebSocketService<WebSocketData>>(
-      ComponentType.WEBSOCKET,
-    );
+    const websockets = await this.prepareWebsocketService.prepare();
 
-    if (!webSockets?.length) {
-      this._logger.info('No websockets found');
+    if (!websockets) {
       return;
     }
 
-    // flat the array
-    const flatWebSockets = webSockets.flat();
-    const registeredPaths = new Set<string>();
-
-    for (const webSocket of flatWebSockets) {
-      const path = getTypedMetadata<string>(ComponentConstants.PathKey, webSocket.constructor);
-
-      if (!path) {
-        throw new Error('Path not found in WebSocket');
-      }
-
-      if (registeredPaths.has(path)) {
-        throw new Error(`Duplicate WebSocket path found: ${path}`);
-      }
-
-      registeredPaths.add(path);
-      webSocket.namespace = path;
-
-      const middlewares = await this.prepareTopMiddlewares({ controller: webSocket as unknown as Class }, true);
+    for (const websocket of websockets) {
+      const path = getTypedMetadata<string>(ComponentConstants.PathKey, websocket.constructor);
+      const middlewares = await this.prepareTopMiddlewares({ controller: websocket as unknown as Class }, true);
 
       await this._adapter.registerWebsocketRoute({
         path: path,
         middlewares: middlewares,
-        websocketService: webSocket,
+        websocketService: websocket,
       });
     }
   }
 
   private async prepareConfigs() {
-    const config = await this._ioc.container.resolveAll<AsenaConfig>(ComponentType.CONFIG);
-
-    if (!config?.length) {
-      this._logger.info('No configs found');
-      return;
-    }
-
-    if (config.length > 1) {
-      throw new Error('Only one config is allowed');
-    }
-
-    if (Array.isArray(config[0])) {
-      throw new Error('Config cannot be array');
-    }
-
-    const name = getTypedMetadata<string>(ComponentConstants.NameKey, config[0].constructor);
-
-    this._logger.info(`Config found ${yellow(name)}`);
-
-    const configInstance = config[0];
+    const configInstance = await this.prepareConfigService.prepare();
 
     if (!configInstance) {
-      this._logger.info('Config instance not found');
       return;
     }
 
@@ -385,13 +264,9 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> {
       }
     }
 
-    this._logger.info(`Config ${yellow(name)} applied`);
-  }
+    const name = getTypedMetadata<string>(ComponentConstants.NameKey, configInstance);
 
-  private prepareLogger() {
-    if (!this._logger) {
-      this._logger = console;
-    }
+    this._logger.info(`Config ${yellow(name)} applied`);
   }
 
 }
