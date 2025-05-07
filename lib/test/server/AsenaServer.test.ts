@@ -1,11 +1,11 @@
-import { beforeEach, describe, expect, mock, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, mock, spyOn, test } from 'bun:test';
 import { AsenaServer } from '../../server';
 import { Config, Controller, Service, WebSocket } from '../../server/decorators';
 import { ComponentType } from '../../ioc/types';
 import { Inject, PostConstruct } from '../../ioc/component';
 import { AsenaWebSocketService, type Socket } from '../../server/web/websocket';
 import { Get } from '../../server/web/decorators';
-import type { AsenaContext, AsenaServeOptions } from '../../adapter';
+import type { AsenaContext, AsenaServeOptions, WebsocketRouteParams } from '../../adapter';
 import type { AsenaConfig } from '../../server/config';
 
 @Service()
@@ -81,6 +81,7 @@ describe('AsenaServer', () => {
       setPort: mock(() => {}),
       start: mock(async () => {}),
       registerRoute: mock(() => {}),
+      registerWebsocketRoute: mock(() => {}),
       prepareMiddlewares: mock(() => []),
       prepareHandler: mock(() => () => {}),
       prepareValidator: mock(() => {}),
@@ -89,14 +90,17 @@ describe('AsenaServer', () => {
         mockAdapter.options = await options();
       }),
       websocketAdapter: {
-        buildWebsocket: mock(() => {}),
         registerWebSocket: mock(() => {}),
-        prepareWebSocket: mock(() => {}),
+        startWebsocket: mock(() => {}),
       },
     };
 
-    server = new AsenaServer(mockAdapter);
+    server = new AsenaServer(mockAdapter, console);
     server.logger(mockLogger);
+  });
+
+  afterEach(() => {
+    mock().mockClear();
   });
 
   test('should initialize server with default configuration', () => {
@@ -161,7 +165,7 @@ describe('AsenaServer', () => {
       expect.objectContaining({
         path: '/test/',
         method: 'get',
-        staticServe: false,
+        staticServe: undefined,
       }),
     );
 
@@ -175,10 +179,32 @@ describe('AsenaServer', () => {
     server.components(components);
     await server.start();
 
-    expect(mockAdapter.websocketAdapter.registerWebSocket).toHaveBeenCalledWith(expect.any(TestWebSocket), []);
+    // @ts-ignore - private property access for testing
+    const ioc = server._ioc;
+
+    const webSocketService: TestWebSocket[] | TestWebSocket = await ioc.container.resolve('TestWebSocket');
+
+    const params: WebsocketRouteParams<any> = {
+      path: 'ws',
+      middlewares: [],
+      websocketService: webSocketService as TestWebSocket,
+    };
+
+    expect(mockAdapter.registerWebsocketRoute).toHaveBeenCalledWith(params);
   });
 
   test('should handle websocket registration', async () => {
+    const websocketService = new TestWebSocket();
+
+    mockPrepareServices(server);
+
+    // @ts-ignore
+    spyOn(server, 'prepareWebsocketService').mockImplementation(() => {
+      return {
+        prepare: mock().mockReturnValue(Array.of(websocketService)),
+      };
+    });
+
     // Mock initialize method
     // @ts-ignore - private property access for testing
     server.initialize = mock(async () => {
@@ -188,7 +214,7 @@ describe('AsenaServer', () => {
           // @ts-ignore
           resolveAll: mock((type: ComponentType) => {
             if (type === ComponentType.WEBSOCKET) {
-              return [new TestWebSocket()];
+              return [websocketService];
             }
 
             return [];
@@ -200,10 +226,12 @@ describe('AsenaServer', () => {
 
     await server.start();
 
-    expect(mockAdapter.websocketAdapter.registerWebSocket).toHaveBeenCalled();
+    expect(mockAdapter.registerWebsocketRoute).toHaveBeenCalled();
   });
 
   test('should handle errors during initialization', async () => {
+    mockPrepareServices(server);
+
     // @ts-ignore
     server.initialize = mock(async () => {
       // @ts-ignore
@@ -223,3 +251,19 @@ describe('AsenaServer', () => {
     expect(server.start()).rejects.toThrow('Test Error');
   });
 });
+
+const mockPrepareServices = (server) => {
+  // @ts-ignore
+  spyOn(server, 'prepareConfigService').mockImplementation(() => {
+    return {
+      prepare: mock(),
+    };
+  });
+
+  // @ts-ignore
+  spyOn(server, 'prepareMiddleware').mockImplementation(() => {
+    return {
+      prepare: mock(),
+    };
+  });
+};

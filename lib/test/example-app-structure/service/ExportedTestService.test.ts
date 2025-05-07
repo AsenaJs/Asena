@@ -1,5 +1,5 @@
 import { Component } from '../../../server/decorators';
-import { Scope } from '../../../ioc/types';
+import { Scope } from '../../../ioc/component';
 
 @Component({
   name: 'ExportedTestService',

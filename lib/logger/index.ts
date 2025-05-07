@@ -1,2 +1,2 @@
-export * from './DefaultLogger';
 export * from './Logger';
+export * from './defaults';

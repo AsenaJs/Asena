@@ -2,8 +2,8 @@ import type { MiddlewareParams } from '../../../ioc/types/decorators/MiddlewareP
 import { defineComponent } from '../../../ioc/component';
 import { ComponentType } from '../../../ioc/types';
 import { ComponentConstants } from '../../../ioc/constants';
-import { defineTypedMetadata, getTypedMetadata } from '../../../utils/typedMetadata';
-import {VALIDATOR_METHODS} from "../../../adapter";
+import { defineTypedMetadata } from '../../../utils/typedMetadata';
+import { VALIDATOR_METHODS } from '../../../adapter';
 
 /**
  * Decorator for defining a Middleware component.
@@ -13,11 +13,6 @@ import {VALIDATOR_METHODS} from "../../../adapter";
  */
 export const Middleware = (params?: MiddlewareParams): ClassDecorator => {
   return defineComponent(ComponentType.MIDDLEWARE, params, (target) => {
-    const overrides = getTypedMetadata<string[]>(ComponentConstants.OverrideKey, target);
-
-    defineTypedMetadata<string[]>(ComponentConstants.OverrideKey, overrides, target);
-    // defineMetadata(ComponentConstants.OverrideKey, overdrive || params?.override || false, target);
-
     defineTypedMetadata<boolean>(ComponentConstants.ValidatorKey, params?.validator || false, target);
 
     if (params?.validator) {

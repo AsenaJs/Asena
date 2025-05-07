@@ -1,6 +1,6 @@
 import type { HttpMethod } from '../../server/web/types';
 import type { AsenaContext } from '../index';
-import type {MiddlewareClass, ValidatorClass} from "../../server/web/middleware";
+import type { MiddlewareClass, StaticServeClass, ValidatorClass } from '../../server/web/middleware';
 
 /**
  * Interface representing a route configuration.
@@ -32,7 +32,7 @@ export interface ApiParams<C extends AsenaContext<any, any> = any, SH = unknown>
   /** An array of middleware classes to be applied to the route. */
   middlewares: MiddlewareClass<C>[];
   /** A flag indicating whether to serve static files. */
-  staticServe: boolean;
+  staticServe: StaticServeClass;
   /** The validator class for request validation. */
   validator: ValidatorClass<SH>;
 }
@@ -76,7 +76,7 @@ export interface ControllerDecoratorParams<C extends AsenaContext<any, any> = an
   /**
    * Optional flag to serve static files.
    */
-  staticServe?: boolean;
+  staticServe?: StaticServeClass;
 
   /**
    * Optional validator class for request validation.

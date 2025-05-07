@@ -1,5 +1,5 @@
 import { ComponentConstants } from '../../ioc/constants';
-import { defineTypedMetadata, getTypedMetadata } from '../../utils/typedMetadata';
+import { defineTypedMetadata, getOwnTypedMetadata } from '../../utils/typedMetadata';
 
 /**
  * Decorator for marking a property as an override.
@@ -12,7 +12,7 @@ import { defineTypedMetadata, getTypedMetadata } from '../../utils/typedMetadata
  */
 export const Override = (): PropertyDecorator => {
   return (target: object, propertyKey: string) => {
-    const overrides: string[] = getTypedMetadata<string[]>(ComponentConstants.OverrideKey, target) || [];
+    const overrides: string[] = getOwnTypedMetadata<string[]>(ComponentConstants.OverrideKey, target) || [];
 
     if (!overrides.includes(propertyKey)) {
       overrides.push(propertyKey);

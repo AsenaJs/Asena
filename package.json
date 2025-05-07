@@ -1,20 +1,29 @@
 {
   "name": "@asenajs/asena",
   "version": "0.2.1",
-  "description": "Asena is a spring like framework for building web applications built with bun",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
-  "files": [
-    "dist"
-  ],
+  "author": "LibirSoft",
   "repository": {
     "type": "git",
     "url": "https://github.com/AsenaJs/Asena.git"
   },
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "build": "bun run clean && tsc",
-    "clean": "rm -rf dist"
+  "main": "dist/index.js",
+  "dependencies": {
+    "reflect-metadata": "^0.2.2"
+  },
+  "devDependencies": {
+    "@changesets/cli": "^2.29.3",
+    "@types/bun": "latest",
+    "@typescript-eslint/eslint-plugin": "^6.21.0",
+    "eslint": "^8.57.1",
+    "eslint-config-alloy": "^5.1.2",
+    "eslint-config-prettier": "^9.1.0",
+    "eslint-plugin-alloy": "^1.2.1",
+    "eslint-plugin-import": "^2.31.0",
+    "eslint-plugin-n": "^16.6.2",
+    "eslint-plugin-prettier": "^5.4.0",
+    "eslint-plugin-promise": "^6.6.0",
+    "prettier": "^3.5.3",
+    "typescript": "^5.8.3"
   },
   "exports": {
     ".": {
@@ -66,6 +75,10 @@
       "types": "./dist/lib/ioc/Container.d.ts"
     }
   },
+  "description": "Asena is a spring like framework for building web applications built with bun",
+  "files": [
+    "dist"
+  ],
   "keywords": [
     "asena",
     "framework",
@@ -80,28 +93,11 @@
     "app",
     "api"
   ],
-  "author": "LibirSoft",
   "license": "MIT",
-  "dependencies": {
-    "reflect-metadata": "^0.2.2"
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "bun run clean && tsc",
+    "clean": "rm -rf dist"
   },
-  "devDependencies": {
-    "@changesets/cli": "^2.28.1",
-    "@types/bun": "latest",
-    "@typescript-eslint/eslint-plugin": "^6.21.0",
-    "eslint": "^8.57.1",
-    "eslint-config-alloy": "^5.1.2",
-    "eslint-config-prettier": "^9.1.0",
-    "eslint-plugin-alloy": "^1.2.1",
-    "eslint-plugin-import": "^2.31.0",
-    "eslint-plugin-n": "^16.6.2",
-    "eslint-plugin-prettier": "^5.2.5",
-    "eslint-plugin-promise": "^6.6.0",
-    "prettier": "^3.5.3",
-    "typescript": "^5.8.2",
-    "winston": "^3.17.0"
-  },
-  "peerDependencies": {
-    "winston": "^3.13.0"
-  }
+  "types": "dist/index.d.ts"
 }

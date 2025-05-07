@@ -1,18 +1,15 @@
 import type { AsenaWebSocketService, WSOptions } from '../server/web/websocket';
 import type { WebSocketHandler } from 'bun';
-import type {BaseMiddleware, WebsocketAdapterParams, WebSocketRegistry} from './types';
+import type { WebSocketRegistry } from './types';
 import type { ServerLogger } from '../logger';
-import type { AsenaContext } from './AsenaContext';
 
 /**
  * Abstract class that provides a base implementation for WebSocket adapters.
  * Handles WebSocket connections, registration, and management.
  *
- * @template A - Type of the application instance
- * @template R - Type of the request object
- * @template S - Type of the response object
+ * @template A - Type of the Adapter object
  */
-export abstract class AsenaWebsocketAdapter<A, C extends AsenaContext<any, any>> {
+export abstract class AsenaWebsocketAdapter {
 
   public readonly name: string;
 
@@ -25,13 +22,7 @@ export abstract class AsenaWebsocketAdapter<A, C extends AsenaContext<any, any>>
    *   - middlewares: Array of middleware functions
    * @protected
    */
-  protected _websockets: WebSocketRegistry<C>;
-
-  /**
-   * Reference to the main application instance
-   * @private
-   */
-  private _app: A;
+  protected _websockets: WebSocketRegistry;
 
   /**
    * WebSocket handler instance for managing connections
@@ -47,28 +38,23 @@ export abstract class AsenaWebsocketAdapter<A, C extends AsenaContext<any, any>>
 
   /**
    * Initializes a new WebSocket adapter instance
-   * @param params - Configuration parameters including app instance and logger
+   * @param logger - Logger instance for WebSocket-related logging
    */
-  protected constructor(params?: WebsocketAdapterParams<A>) {
-    this._app = params?.app;
-    this._logger = params?.logger;
+  protected constructor(logger: ServerLogger) {
+    this._logger = logger;
   }
 
   /**
    * Registers a new WebSocket service with associated middlewares
    * @param websocket - WebSocket service instance to register
-   * @param middlewares - Array of middleware functions to be executed during connection upgrade
    */
-  public abstract registerWebSocket(
-    websocket: AsenaWebSocketService<any>,
-    middlewares: BaseMiddleware<C>[],
-  ): Promise<void> | void;
+  public abstract registerWebSocket(websocket: AsenaWebSocketService<any>): Promise<void> | void;
 
   /**
    * Configures and initializes the WebSocket server with provided options
    * @param wsOptions - Configuration options for the WebSocket server
    */
-  public abstract buildWebsocket(wsOptions?: WSOptions): Promise<void> | void;
+  public abstract prepareWebSocket(wsOptions?: WSOptions): Promise<void> | void;
 
   /**
    * Starts the WebSocket server on the provided HTTP/S server instance
@@ -76,33 +62,17 @@ export abstract class AsenaWebsocketAdapter<A, C extends AsenaContext<any, any>>
    */
   public abstract startWebsocket(server: any): Promise<void> | void;
 
-  // Getters and Setters with improved documentation
-
-  /**
-   * Gets the application instance
-   */
-  public get app(): A {
-    return this._app;
-  }
-
-  /**
-   * Sets the application instance
-   */
-  public set app(value: A) {
-    this._app = value;
-  }
-
   /**
    * Gets the WebSocket registry
    */
-  protected get websockets(): WebSocketRegistry<C> {
+  protected get websockets(): WebSocketRegistry {
     return this._websockets;
   }
 
   /**
    * Sets the WebSocket registry
    */
-  protected set websockets(value: WebSocketRegistry<C>) {
+  protected set websockets(value: WebSocketRegistry) {
     this._websockets = value;
   }
 

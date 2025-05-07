@@ -4,3 +4,4 @@ export * from './Middleware';
 export * from './Schedule';
 export * from './Service';
 export * from './WebSocket';
+export * from './StaticServe';
