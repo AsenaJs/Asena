@@ -22,16 +22,20 @@ export class PrepareMiddlewareService extends PrepareService {
 
     for (const middleware of middlewares) {
       const name = getTypedMetadata<string>(ComponentConstants.NameKey, middleware);
-      const override = getTypedMetadata<string[]>(ComponentConstants.OverrideKey, middleware);
-      const isOverride = override ? override.includes('handle') : false;
 
       const instances = await this.container.resolve<AsenaMiddlewareService>(name);
 
       if (!instances) continue;
 
       const normalizedInstances = Array.isArray(instances) ? instances : [instances];
+      let override: string[];
+      let isOverride: boolean;
 
       for (const instance of normalizedInstances) {
+        override = getTypedMetadata<string[]>(ComponentConstants.OverrideKey, instance);
+
+        isOverride = override ? override.includes('handle') : false;
+
         preparedMiddlewares.push({
           handle: instance.handle.bind(instance),
           override: isOverride,

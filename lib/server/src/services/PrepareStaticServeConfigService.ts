@@ -1,5 +1,5 @@
 import { PrepareService } from '../PrepareService';
-import { getTypedMetadata } from '../../../utils/typedMetadata';
+import { getOwnTypedMetadata, getTypedMetadata } from '../../../utils/typedMetadata';
 import { ComponentConstants } from '../../../ioc/constants';
 import type { AsenaStaticServeService, StaticServeClass } from '../../web/middleware';
 import type { BaseStaticServeParams } from '../../../adapter';
@@ -17,21 +17,21 @@ export class PrepareStaticServeConfigService extends PrepareService {
       return;
     }
 
-    const name = getTypedMetadata<string>(ComponentConstants.NameKey, staticServeClass);
-    const root = getTypedMetadata<string>(ComponentConstants.StaticServeRootKey, staticServeClass);
+    const name = getOwnTypedMetadata<string>(ComponentConstants.NameKey, staticServeClass);
+    const root = getOwnTypedMetadata<string>(ComponentConstants.StaticServeRootKey, staticServeClass);
 
-    const staticServeService: AsenaStaticServeService<any>[] | AsenaStaticServeService<any> =
+    const staticServeServiceInstance: AsenaStaticServeService<any>[] | AsenaStaticServeService<any> =
       await this.container.resolve<AsenaStaticServeService<any>>(name);
 
-    if (!staticServeService) {
+    if (!staticServeServiceInstance) {
       throw new Error(`Static Serve service ${name} not found.`);
     }
 
-    if (Array.isArray(staticServeService)) {
+    if (Array.isArray(staticServeServiceInstance)) {
       throw new Error('Static serve service cannot be array');
     }
 
-    const overrides: string[] = getTypedMetadata<string[]>(ComponentConstants.OverrideKey, staticServeService);
+    const overrides: string[] = getTypedMetadata<string[]>(ComponentConstants.OverrideKey, staticServeServiceInstance);
 
     const baseStaticServeParams: BaseStaticServeParams = {
       extra: undefined,
@@ -41,24 +41,24 @@ export class PrepareStaticServeConfigService extends PrepareService {
       onNotFound: undefined,
     };
 
-    if (staticServeService.extra) {
-      baseStaticServeParams.extra = staticServeService.extra;
+    if (staticServeServiceInstance.extra) {
+      baseStaticServeParams.extra = staticServeServiceInstance.extra;
     }
 
-    if (staticServeService.rewriteRequestPath) {
-      baseStaticServeParams.rewriteRequestPath = staticServeService.rewriteRequestPath;
+    if (staticServeServiceInstance.rewriteRequestPath) {
+      baseStaticServeParams.rewriteRequestPath = staticServeServiceInstance.rewriteRequestPath;
     }
 
-    if (staticServeService.onFound) {
+    if (staticServeServiceInstance.onFound) {
       baseStaticServeParams.onFound = {
-        handler: staticServeService.onFound.bind(staticServeService),
+        handler: staticServeServiceInstance.onFound.bind(staticServeServiceInstance),
         override: overrides?.includes('onFound'),
       };
     }
 
-    if (staticServeService.onNotFound) {
+    if (staticServeServiceInstance.onNotFound) {
       baseStaticServeParams.onNotFound = {
-        handler: staticServeService.onNotFound.bind(staticServeService),
+        handler: staticServeServiceInstance.onNotFound.bind(staticServeServiceInstance),
         override: overrides?.includes('onNotFound'),
       };
     }
