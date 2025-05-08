@@ -1,5 +1,11 @@
 # @asenajs/asena
 
+## 0.3.1
+
+### Patch Changes
+
+- fc9e310: Config service name undefined bug fixed
+
 ## 0.3.0
 
 ### Minor Changes
