@@ -1,11 +1,11 @@
 # Asena
 
-Asena is a NestJS-like IoC web framework built on top of Hono and Bun. It combines the power of dependency injection
+Asena is a NestJS-like IoC web framework built on top of Bun. It combines the power of dependency injection
 with the performance of Bun runtime and the flexibility of Adapter design system.
 
 ## Documentation
 
-For detailed documentation, please visit [not ready yet](https://asena.sh). Documentation is still in progress, but updates are being made regularly.
+For detailed documentation, please visit [not ready yet](https://asena.sh). Documentation is still in progress, but updates are being made regularly. You can check this project [AsenaExample](https://github.com/LibirSoft/AsenaExample). I am always updating it to latest usages.
 
 ## Key Features
 
@@ -19,12 +19,6 @@ For detailed documentation, please visit [not ready yet](https://asena.sh). Docu
 - **TypeScript Support**: Full TypeScript support with strict mode
 - **Modular Architecture**: Easy to extend and customize
 
-## Installation
-
-```bash
-bun add @asenajs/asena
-```
-
 ## Quick Start
 
 The easiest way to create a new Asena project is using the CLI:
@@ -36,6 +30,7 @@ asena create
 ```
 
 This will create a new project with the following structure:
+
 ```
 ├── src/
 │ ├── controllers/
@@ -47,6 +42,8 @@ This will create a new project with the following structure:
 ├── .eslintignore
 └── .prettierrc.js
 ```
+## Alternative start
+
 
 Alternatively, you can create a project manually:
 
@@ -89,24 +86,26 @@ For decorators working properly, you need to add some settings to your tsconfig.
   }
 }
 ```
-
-Then, install the required packages:
-
+After that you need to make sure to edit your tsConfig.json it should look like this
+Then, install these packages:
+* `@asenajs/asena`: Base package
+* `@asenajs/hono-adapter`: For web-server. Asena currently only support hono adapter.
+* `@asenajs/asena-logger`: For better logs
 ```bash
-bun add @asenajs/asena @asenajs/hono-adapter 
+bun install @asenajs/asena @asenajs/hono-adapter @asenajs/asena-logger
 ```
 
-Add @asenajs/asena-cli to your package. This package provides a CLI for creating and managing Asena projects.
+* `@asenajs/asena-cli`: This package provides a CLI for creating and managing Asena projects.
 
 ```bash
-bun add -D @asenajs/asena-cli
+bun install -D @asenajs/asena-cli
 ```
-
-Then, create a new asena-config.ts file using the CLI:
+After installation, you need to create asena-config.ts file you can create it with asena-cli
 
 ```bash
 asena init
 ```
+this will create you asena-config file.
 
 `Note`: Built options directly copy of bun options, you can check bun documentation for more
 options. [Bun Documentation](https://bun.sh/docs/bundler#reference)
@@ -115,15 +114,14 @@ Create index.ts file under your src folder:
 
 ```typescript
 // src/index.ts
-import { AsenaServer } from '@asenajs/asena';
-import { DefaultLogger } from "@asenajs/asena/logger";
-import { createHonoAdapter } from '@asenajs/hono-adapter';
+import {AsenaServer} from '@asenajs/asena';
+import {createHonoAdapter} from '@asenajs/hono-adapter';
+import {logger} from './logger/logger';
 
-const [adapter, logger] = createHonoAdapter(new DefaultLogger());
-await new AsenaServer(adapter)
-  .logger(logger)
-  .port(3000)
-  .start(true);
+const [honoAdapter,asenaLogger] = createHonoAdapter(logger);
+
+
+await new AsenaServer(honoAdapter, asenaLogger).port(3000).start();
 ```
 
 To run asena you need at least one controller. Create a new controller:
@@ -136,10 +134,10 @@ import { Get } from '@asenajs/asena/web';
 
 @Controller('/hello')
 export class TestController {
-    @Get('/world')
-    public async getHello(context: Context) {
-        return context.send('Hello World');
-    }
+  @Get('/world')
+  public async getHello(context: Context) {
+    return context.send('Hello World');
+  }
 }
 ```
 
@@ -160,8 +158,7 @@ bun index.asena.js
 ## CLI Commands
 
 For more information about CLI commands and usage, please visit:
-[Asena CLI Documentation](https://github.com/AsenaJs/Asena-cli/blob/master/README.md)
-
+[Asena CLI Documentation](https://asena.sh/docs/cli/overview.html)
 
 ## Project Structure
 
@@ -172,7 +169,6 @@ lib/
 ├── ioc/         # Dependency injection container
 ├── utils/       # Utility functions
 ├── test/        # Test utilities
-└── logger/      # Logging system
 ```
 
 ## Core Concepts
