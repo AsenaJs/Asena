@@ -66,7 +66,7 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> {
     const config = await readConfigFile();
 
     if (!config) {
-      this._logger.warn('Config file not found');
+      this._logger.warn('asena-config file not found');
     }
 
     this._ioc = new IocEngine(config);
@@ -264,7 +264,7 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> {
       }
     }
 
-    const name = getTypedMetadata<string>(ComponentConstants.NameKey, configInstance);
+    const name = getOwnTypedMetadata<string>(ComponentConstants.NameKey, configInstance.constructor);
 
     this._logger.info(`Config ${yellow(name)} applied`);
   }
