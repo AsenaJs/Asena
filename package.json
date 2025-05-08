@@ -97,7 +97,8 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "build": "bun run clean && tsc",
-    "clean": "rm -rf dist"
+    "clean": "rm -rf dist",
+    "pre-release": "bun update && bun run build"
   },
   "types": "dist/index.d.ts"
 }

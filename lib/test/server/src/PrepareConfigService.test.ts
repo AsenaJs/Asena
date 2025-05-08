@@ -1,7 +1,6 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
 import { PrepareConfigService } from '../../../server/src/services/PrepareConfigService';
 import { ComponentType } from '../../../ioc/types';
-import { ComponentConstants } from '../../../ioc/constants';
 import type { AsenaConfig } from '../../../server/config';
 import { Config } from '../../../server/decorators';
 import { yellow } from '../../../logger';
@@ -55,21 +54,11 @@ describe('PrepareConfigService', () => {
 
     mockContainer.resolveAll.mockImplementation(() => [mockConfig]);
 
-    const getTypedMetadataMock = mock().mockReturnValue('TestConfig');
-
-    mock.module('../../../utils/typedMetadata', () => {
-      return {
-        getTypedMetadata: getTypedMetadataMock,
-      };
-    });
-
     const result = await service.prepare();
 
     expect(mockContainer.resolveAll).toHaveBeenCalledWith(ComponentType.CONFIG);
-    expect(getTypedMetadataMock).toHaveBeenCalledWith(ComponentConstants.NameKey, mockConfig.constructor);
-    expect(mockLogger.info).toHaveBeenCalledWith(`Config found ${yellow('TestConfig')}`);
+    expect(mockLogger.info).toHaveBeenCalledWith(`AsenaConfig service found ${yellow('TestConfig')}`);
     expect(result).toBe(mockConfig);
-    getTypedMetadataMock.mockClear();
   });
 
   test('should return when config not found in instance object', async () => {

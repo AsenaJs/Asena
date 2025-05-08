@@ -37,7 +37,7 @@ export class PrepareConfigService extends PrepareService {
 
     const name = getTypedMetadata<string>(ComponentConstants.NameKey, config[0].constructor);
 
-    this.logger.info(`Config found ${yellow(name)}`);
+    this.logger.info(`AsenaConfig service found ${yellow(name)}`);
 
     return configInstance;
   }

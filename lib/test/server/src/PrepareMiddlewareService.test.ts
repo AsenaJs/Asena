@@ -1,12 +1,21 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
 import { PrepareMiddlewareService } from '../../../server/src/services/PrepareMiddlewareService';
-import { ComponentConstants } from '../../../ioc/constants';
 import type { MiddlewareClass } from '../../../server/web/middleware';
 import { AsenaMiddlewareService } from '../../../server/web/middleware';
-import { Middleware } from '../../../server/decorators';
+import { Middleware, Override } from '../../../server/decorators';
 
 @Middleware()
 class TestMiddleware extends AsenaMiddlewareService {
+
+  @Override()
+  public handle(_c: any, next: any): void {
+    next();
+  }
+
+}
+
+@Middleware()
+class TestMiddleware2 extends AsenaMiddlewareService {
 
   public handle(_c: any, next: any): void {
     next();
@@ -30,7 +39,7 @@ describe('PrepareMiddlewareService', () => {
     mockContainer.resolve.mockClear();
     mockLogger.info.mockClear();
     service = new PrepareMiddlewareService(mockContainer as any, mockLogger as any);
-    middlewareClasses = [TestMiddleware as any];
+    middlewareClasses = [TestMiddleware, TestMiddleware2];
   });
 
   test('should return empty array when no middleware classes are provided', async () => {
@@ -42,14 +51,6 @@ describe('PrepareMiddlewareService', () => {
   test('should skip middleware when instance is not resolved', async () => {
     mockContainer.resolve.mockImplementation(() => null);
 
-    const getTypedMetadataMock = mock().mockReturnValue('TestMiddleware');
-
-    mock.module('../../../utils/typedMetadata', () => {
-      return {
-        getTypedMetadata: getTypedMetadataMock,
-      };
-    });
-
     const result = await service.prepare(middlewareClasses);
 
     expect(mockContainer.resolve).toHaveBeenCalledWith('TestMiddleware');
@@ -57,31 +58,19 @@ describe('PrepareMiddlewareService', () => {
   });
 
   test('should prepare a single middleware instance', async () => {
-    const middlewareInstance = new TestMiddleware();
+    const middlewareInstance = new TestMiddleware2();
     const handleSpy = mock(middlewareInstance.handle);
 
     middlewareInstance.handle = handleSpy;
 
     mockContainer.resolve.mockImplementation(() => middlewareInstance);
 
-    const getTypedMetadataMock = mock()
-      .mockImplementationOnce(() => 'TestMiddleware') // For name
-      .mockImplementationOnce(() => null); // For override
-
-    mock.module('../../../utils/typedMetadata', () => {
-      return {
-        getTypedMetadata: getTypedMetadataMock,
-      };
-    });
-
     const result = await service.prepare(middlewareClasses);
 
-    expect(mockContainer.resolve).toHaveBeenCalledWith('TestMiddleware');
-    expect(getTypedMetadataMock).toHaveBeenCalledWith(ComponentConstants.NameKey, TestMiddleware);
-    expect(getTypedMetadataMock).toHaveBeenCalledWith(ComponentConstants.OverrideKey, TestMiddleware);
-    expect(result).toHaveLength(1);
-    expect(result[0].override).toBe(false);
-    expect(typeof result[0].handle).toBe('function');
+    expect(mockContainer.resolve).toHaveBeenCalledWith('TestMiddleware2');
+    expect(result).toHaveLength(2);
+    expect(result[1].override).toBe(false);
+    expect(typeof result[1].handle).toBe('function');
   });
 
   test('should handle array of middleware instances', async () => {
@@ -90,19 +79,9 @@ describe('PrepareMiddlewareService', () => {
 
     mockContainer.resolve.mockImplementation(() => [middlewareInstance1, middlewareInstance2]);
 
-    const getTypedMetadataMock = mock()
-      .mockImplementationOnce(() => 'TestMiddleware') // For name
-      .mockImplementationOnce(() => null); // For override
-
-    mock.module('../../../utils/typedMetadata', () => {
-      return {
-        getTypedMetadata: getTypedMetadataMock,
-      };
-    });
-
     const result = await service.prepare(middlewareClasses);
 
-    expect(result).toHaveLength(2);
+    expect(result).toHaveLength(4);
     expect(typeof result[0].handle).toBe('function');
     expect(typeof result[1].handle).toBe('function');
   });
@@ -112,19 +91,9 @@ describe('PrepareMiddlewareService', () => {
 
     mockContainer.resolve.mockImplementation(() => middlewareInstance);
 
-    const getTypedMetadataMock = mock()
-      .mockImplementationOnce(() => 'TestMiddleware') // For name
-      .mockImplementationOnce(() => ['handle']); // For override with 'handle'
-
-    mock.module('../../../utils/typedMetadata', () => {
-      return {
-        getTypedMetadata: getTypedMetadataMock,
-      };
-    });
-
     const result = await service.prepare(middlewareClasses);
 
-    expect(result).toHaveLength(1);
+    expect(result).toHaveLength(2);
     expect(result[0].override).toBe(true);
   });
 });
