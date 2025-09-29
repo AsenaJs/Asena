@@ -91,6 +91,7 @@ Then, install these packages:
 * `@asenajs/asena`: Base package
 * `@asenajs/hono-adapter`: For web-server. Asena currently only support hono adapter.
 * `@asenajs/asena-logger`: For better logs
+* **OPTIONAL** `@asenajs/asena-drizzle`: For better drizzle integration (completely **optional**) you can check package from here [asena-drizzle](https://github.com/AsenaJs/asena-drizzle) 
 ```bash
 bun install @asenajs/asena @asenajs/hono-adapter @asenajs/asena-logger
 ```
