@@ -24,17 +24,10 @@ updates:
         update-types:
           - "minor"
           - "patch"
-      
-      # Security updates in separate PR
-      security-critical:
-        patterns:
-          - "*"
-        update-types:
-          - "security"
     
-    
+    # Auto-assign to yourself
     assignees:
-      - "LibirSoft" 
+      - "LibirSoft"
     
     # Clear labels for easy filtering
     labels:
