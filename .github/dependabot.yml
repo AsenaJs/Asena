@@ -25,7 +25,6 @@ updates:
           - "minor"
           - "patch"
     
-    # Auto-assign to yourself
     assignees:
       - "LibirSoft"
     
@@ -43,8 +42,3 @@ updates:
     commit-message:
       prefix: "chore"
       include: "scope"
-    
-    # Only allow Asena packages and security updates
-    allow:
-      - dependency-name: "@asenajs/*"
-      - dependency-type: "security"
