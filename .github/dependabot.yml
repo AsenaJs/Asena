@@ -1,0 +1,57 @@
+version: 2
+updates:
+  - package-ecosystem: "npm"
+    directory: "/"
+    
+    # Daily check for quick hotfix detection
+    schedule:
+      interval: "daily"
+      time: "06:00"
+      timezone: "Europe/Istanbul"
+    
+    # Limit open PRs to avoid overwhelming
+    open-pull-requests-limit: 5
+    
+    # Group all Asena packages in ONE PR
+    groups:
+      asena-framework:
+        patterns:
+          - "@asenajs/asena"
+          - "@asenajs/asena-cli"
+          - "@asenajs/hono-adapter"
+          - "@asenajs/asena-logger"
+          - "@asenajs/asena-drizzle"
+        update-types:
+          - "minor"
+          - "patch"
+      
+      # Security updates in separate PR
+      security-critical:
+        patterns:
+          - "*"
+        update-types:
+          - "security"
+    
+    
+    assignees:
+      - "LibirSoft" 
+    
+    # Clear labels for easy filtering
+    labels:
+      - "dependencies"
+      - "bot"
+    
+    # Ignore major version updates (requires manual testing)
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+    
+    # Clean commit messages
+    commit-message:
+      prefix: "chore"
+      include: "scope"
+    
+    # Only allow Asena packages and security updates
+    allow:
+      - dependency-name: "@asenajs/*"
+      - dependency-type: "security"
