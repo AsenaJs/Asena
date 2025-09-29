@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, spyOn, test } from 'bun:test';
 import { Container } from '../../ioc';
 import { Component } from '../../server/decorators';
-import { Inject, Strategy } from '../../ioc/component';
+import { Inject, PostConstruct, Strategy } from '../../ioc/component';
 import { ComponentType } from '../../ioc/types';
 import { ExportedServerService } from '../example-app-structure/database/ExportedServerService.test';
 
@@ -87,23 +87,103 @@ class TestClass7 {
 
 }
 
+// Test classes for PostConstruct duplicate execution prevention
+@Component()
+class BaseServiceWithPostConstruct {
+
+  private executionCount = 0;
+
+  private log: string[] = [];
+
+  @PostConstruct()
+  public onStart() {
+    this.executionCount++;
+    this.log.push('base');
+  }
+
+  public getExecutionCount(): number {
+    return this.executionCount;
+  }
+
+  public getLog(): string[] {
+    return this.log;
+  }
+
+}
+
+@Component()
+class ChildServiceWithPostConstruct extends BaseServiceWithPostConstruct {
+  // onStart inherited, not overridden
+}
+
+@Component()
+class GrandChildServiceWithPostConstruct extends ChildServiceWithPostConstruct {
+  // onStart inherited, not overridden
+}
+
+@Component()
+class BaseWithAsyncPostConstruct {
+
+  public isReady = false;
+
+  public initTime = 0;
+
+  @PostConstruct()
+  public async initialize() {
+    await new Promise((resolve) => {
+      setTimeout(resolve, 100);
+    });
+    this.isReady = true;
+    this.initTime = Date.now();
+  }
+
+}
+
+@Component()
+class ChildWithAsyncPostConstruct extends BaseWithAsyncPostConstruct {
+  // async initialize inherited
+}
+
+@Component()
+class ParentWithPostConstruct {
+
+  public log: string[] = [];
+
+  @PostConstruct()
+  public init() {
+    this.log.push('parent');
+  }
+
+}
+
+@Component()
+class ChildWithOverridePostConstruct extends ParentWithPostConstruct {
+
+  @PostConstruct()
+  public override init() {
+    super.init();
+    this.log.push('child');
+  }
+
+}
+
 describe('Container', () => {
   let container: Container;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     container = new Container();
 
-    container.register('TestClass', TestClass, true);
-    container.register('TestClass2', TestClass2, true);
-    container.register('TestClass3', TestClass3, true);
+    await container.register('TestClass', TestClass, true);
+    await container.register('TestClass2', TestClass2, true);
+    await container.register('TestClass3', TestClass3, true);
 
-    container.register('TestClass4', TestClass4, true);
-    container.register('TestInterface', TestClass4, true);
+    await container.register('TestClass4', TestClass4, true);
+    await container.register('TestInterface', TestClass4, true);
 
-    container.register('TestClass5', TestClass5, true);
-    container.register('TestInterface', TestClass5, true);
+    await container.register('TestClass5', TestClass5, true);
+    await container.register('TestInterface', TestClass5, true);
 
-    container.register('TestClass6', TestClass6, true);
+    await container.register('TestClass6', TestClass6, true);
   });
 
   test('should store components', () => {
@@ -117,7 +197,7 @@ describe('Container', () => {
   });
 
   test('should register component', async () => {
-    container.register('TestClass7', TestClass7, true);
+    await container.register('TestClass7', TestClass7, true);
 
     expect(await container.resolve('TestClass7')).toBeInstanceOf(TestClass7);
   });
@@ -194,12 +274,85 @@ describe('Container', () => {
   });
 
   test('should execute PostConstruct method', async () => {
-    container.register('ExportedServerServiceTest', ExportedServerService, true);
+    await container.register('ExportedServerServiceTest', ExportedServerService, true);
 
     const exportedServerServiceTest = (await container.resolve('ExportedServerServiceTest')) as ExportedServerService;
 
     expect(exportedServerServiceTest).toBeInstanceOf(ExportedServerService);
 
     expect(exportedServerServiceTest.testValue).toBe('Test Value');
+  });
+
+  test('should not execute PostConstruct multiple times for inherited methods', async () => {
+    await container.register('GrandChildServiceWithPostConstruct', GrandChildServiceWithPostConstruct, true);
+
+    const instance = (await container.resolve(
+      'GrandChildServiceWithPostConstruct',
+    )) as GrandChildServiceWithPostConstruct;
+
+    expect(instance).toBeInstanceOf(GrandChildServiceWithPostConstruct);
+    // Should execute only once, not 3 times
+    expect(instance.getExecutionCount()).toBe(1);
+    expect(instance.getLog()).toEqual(['base']);
+  });
+
+  test('should not execute PostConstruct multiple times for child service', async () => {
+    await container.register('ChildServiceWithPostConstruct', ChildServiceWithPostConstruct, true);
+
+    const instance = (await container.resolve('ChildServiceWithPostConstruct')) as ChildServiceWithPostConstruct;
+
+    expect(instance).toBeInstanceOf(ChildServiceWithPostConstruct);
+    // Should execute only once, not 2 times
+    expect(instance.getExecutionCount()).toBe(1);
+  });
+
+  test('should properly await async PostConstruct in singleton registration', async () => {
+    const startTime = Date.now();
+
+    await container.register('BaseWithAsyncPostConstruct', BaseWithAsyncPostConstruct, true);
+
+    const instance = (await container.resolve('BaseWithAsyncPostConstruct')) as BaseWithAsyncPostConstruct;
+
+    // Instance should be ready immediately since register awaited the PostConstruct
+    expect(instance.isReady).toBe(true);
+    expect(instance.initTime).toBeGreaterThan(0);
+
+    // Verify that at least 100ms passed (async PostConstruct delay)
+    const elapsedTime = Date.now() - startTime;
+
+    expect(elapsedTime).toBeGreaterThanOrEqual(100);
+  });
+
+  test('should properly await async PostConstruct for inherited async methods', async () => {
+    await container.register('ChildWithAsyncPostConstruct', ChildWithAsyncPostConstruct, true);
+
+    const instance = (await container.resolve('ChildWithAsyncPostConstruct')) as ChildWithAsyncPostConstruct;
+
+    expect(instance).toBeInstanceOf(ChildWithAsyncPostConstruct);
+    expect(instance.isReady).toBe(true);
+  });
+
+  test('should execute overridden PostConstruct correctly', async () => {
+    await container.register('ChildWithOverridePostConstruct', ChildWithOverridePostConstruct, true);
+
+    const instance = (await container.resolve('ChildWithOverridePostConstruct')) as ChildWithOverridePostConstruct;
+
+    expect(instance).toBeInstanceOf(ChildWithOverridePostConstruct);
+    // Both parent and child should execute once
+    expect(instance.log).toEqual(['parent', 'child']);
+  });
+
+  test('should create prototype instances with PostConstruct each time', async () => {
+    await container.register('BaseServiceWithPostConstruct', BaseServiceWithPostConstruct, false);
+
+    const instance1 = (await container.resolve('BaseServiceWithPostConstruct')) as BaseServiceWithPostConstruct;
+    const instance2 = (await container.resolve('BaseServiceWithPostConstruct')) as BaseServiceWithPostConstruct;
+
+    // Each instance should have executed PostConstruct once
+    expect(instance1.getExecutionCount()).toBe(1);
+    expect(instance2.getExecutionCount()).toBe(1);
+
+    // They should be different instances
+    expect(instance1).not.toBe(instance2);
   });
 });

@@ -56,21 +56,21 @@ export class IocEngine {
   private async validateAndRegisterComponents(injectableClasses: Class[]): Promise<void> {
     const sortedInjectables = this.topologicalSort(injectableClasses, this.injectables);
 
-    this.register(sortedInjectables);
+    await this.register(sortedInjectables);
   }
 
-  private register(injectables: Class[]) {
+  private async register(injectables: Class[]) {
     for (const injectable of injectables) {
       const name = getTypedMetadata<string>(ComponentConstants.NameKey, injectable) || injectable.name;
 
       const isSingleton = getTypedMetadata<Scope>(ComponentConstants.ScopeKey, injectable) === Scope.SINGLETON;
 
-      this._container.register(name, injectable, isSingleton);
+      await this._container.register(name, injectable, isSingleton);
 
       const _interface = getTypedMetadata<string>(ComponentConstants.InterfaceKey, injectable);
 
       if (_interface) {
-        this._container.register(_interface, injectable, isSingleton);
+        await this._container.register(_interface, injectable, isSingleton);
       }
     }
   }
