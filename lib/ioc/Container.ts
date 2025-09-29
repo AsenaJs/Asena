@@ -11,23 +11,23 @@ export class Container {
     this._services = services || {};
   }
 
-  public register(key: string, Class: Class, singleton: boolean) {
+  public async register(key: string, Class: Class, singleton: boolean) {
     if (this._services[key]) {
       if (Array.isArray(this._services[key])) {
-        this._services[key].push({ Class, instance: singleton ? this.prepareInstance(Class) : null, singleton });
+        this._services[key].push({ Class, instance: singleton ? (await this.prepareInstance(Class)) : null, singleton });
 
         return;
       }
 
       this._services[key] = [
         this._services[key],
-        { Class, instance: singleton ? this.prepareInstance(Class) : null, singleton },
+        { Class, instance: singleton ? (await this.prepareInstance(Class)) : null, singleton },
       ];
 
       return;
     }
 
-    this._services[key] = { Class, instance: singleton ? this.prepareInstance(Class) : null, singleton };
+    this._services[key] = { Class, instance: singleton ? (await this.prepareInstance(Class)) : null, singleton };
   }
 
   public async resolve<T>(key: string): Promise<(T | T[]) | null> {
@@ -115,8 +115,16 @@ export class Container {
     return newInstance as T;
   }
 
-  private async executePostConstructs(newInstance: any, Class: Class) {
+  /**
+   * @description Executes PostConstruct methods on the instance.
+   * Prevents duplicate execution of inherited methods by tracking executed method names.
+   * @param {any} newInstance - The instance to execute PostConstructs on
+   * @param {Class} Class - The class of the instance
+   * @returns {Promise<void>}
+   */
+  private async executePostConstructs(newInstance: any, Class: Class): Promise<void> {
     const prototypeChain = this.getPrototypeChain(Class);
+    const executedMethods = new Set<string>();
 
     for (const classInChain of prototypeChain.reverse()) {
       const postConstructs: string[] = getOwnTypedMetadata<string[]>(ComponentConstants.PostConstructKey, classInChain);
@@ -126,12 +134,17 @@ export class Container {
       }
 
       for (const postConstruct of postConstructs) {
+        // Skip if already executed (prevents duplicate execution in inheritance chain)
+        if (executedMethods.has(postConstruct)) {
+          continue;
+        }
+
         try {
           await newInstance[postConstruct]();
+          executedMethods.add(postConstruct);
         } catch (error) {
           console.log('Error in post construct, exiting process');
           console.error(error);
-          // then exit the process
           process.exit(1);
         }
       }
