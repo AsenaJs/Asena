@@ -134,7 +134,7 @@ export class AsenaWebSocketService<T> {
 
     ws.unsubscribe(`__`);
 
-    ws.unsubscribe(`.${ws.data.id}`);
+    ws.unsubscribe(`${ws.data.id}`);
 
     this.sockets.delete(ws.id);
 
