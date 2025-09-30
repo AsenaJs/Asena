@@ -90,14 +90,14 @@ export class AsenaSocket<T> implements ServerWebSocket<WebSocketData<T>> {
     const room = this._websocketService.rooms.get(topic);
 
     if (room) {
-      const index = room.findIndex((s) => s.id === this.id);
+      // Filter out this socket instead of splice for better safety
+      const filteredRoom = room.filter((s) => s.id !== this.id);
 
-      if (index !== -1) {
-        room.splice(index, 1);
-
-        if (room.length === 0) {
-          this._websocketService.rooms.delete(topic);
-        }
+      if (filteredRoom.length === 0) {
+        this._websocketService.rooms.delete(topic);
+      } else if (filteredRoom.length !== room.length) {
+        // Only update if we actually removed something
+        this._websocketService.rooms.set(topic, filteredRoom);
       }
     }
 
@@ -105,9 +105,11 @@ export class AsenaSocket<T> implements ServerWebSocket<WebSocketData<T>> {
   }
 
   public cleanup(): void {
-    this._websocketService.rooms.forEach((_, topic) => {
+    // Create a snapshot of topics to avoid modification during iteration
+    const topics = Array.from(this._websocketService.rooms.keys());
+    for (const topic of topics) {
       this.unsubscribe(topic);
-    });
+    }
   }
 
   public isSubscribed(topic: string): boolean {

@@ -102,4 +102,67 @@ describe('AsenaWebSocketService', () => {
     expect(sockets).toBeDefined();
     expect(sockets.size).toBe(1);
   });
+
+  test('should not have memory leak with multiple connect/disconnect cycles', async () => {
+    const initialRoomCount = service.rooms.size;
+    const initialSocketCount = service.sockets.size;
+
+    // Simulate multiple connect/disconnect cycles
+    for (let i = 0; i < 100; i++) {
+      const tempSocket = {
+        id: `socket-${i}`,
+        data: { id: `user-${i}` },
+        subscribe: mock(() => {}),
+        unsubscribe: mock(() => {}),
+        cleanup: mock(() => {
+          // Simulate actual cleanup behavior
+          const topics = Array.from(service.rooms.keys());
+          for (const topic of topics) {
+            const room = service.rooms.get(topic);
+            if (room) {
+              const filteredRoom = room.filter((s) => s.id !== tempSocket.id);
+              if (filteredRoom.length === 0) {
+                service.rooms.delete(topic);
+              } else if (filteredRoom.length !== room.length) {
+                service.rooms.set(topic, filteredRoom);
+              }
+            }
+          }
+        }),
+      } as any;
+
+      // Simulate connection
+      await service['onOpenInternal'](tempSocket);
+
+      // Simulate joining a test room
+      const testRoom = service.rooms.get('test-room') || [];
+      testRoom.push(tempSocket);
+      service.rooms.set('test-room', testRoom);
+
+      // Simulate disconnection
+      await service['onCloseInternal'](tempSocket, 1000, 'test');
+    }
+
+    // After all connections are closed, counts should return to initial state
+    expect(service.rooms.size).toBe(initialRoomCount);
+    expect(service.sockets.size).toBe(initialSocketCount);
+  });
+
+  test('onCloseInternal() properly unsubscribes with correct topic format', async () => {
+    // This test specifically verifies the bug fix for Issue #2
+    await service['onOpenInternal'](mockSocket);
+
+    // Verify subscriptions were called with correct format
+    expect(mockSocket.subscribe).toHaveBeenCalledWith('__');
+    expect(mockSocket.subscribe).toHaveBeenCalledWith(mockSocket.data.id); // No leading dot
+
+    // Clear previous calls
+    (mockSocket.unsubscribe as any).mockClear();
+
+    await service['onCloseInternal'](mockSocket, 1000, 'test');
+
+    // Verify unsubscriptions are called with matching format (no leading dot)
+    expect(mockSocket.unsubscribe).toHaveBeenCalledWith('__');
+    expect(mockSocket.unsubscribe).toHaveBeenCalledWith(mockSocket.data.id); // Should match subscribe format
+  });
 });
