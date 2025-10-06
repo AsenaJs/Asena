@@ -17,20 +17,20 @@ export class Container {
   public async register(key: string, Class: Class, singleton: boolean) {
     if (this._services[key]) {
       if (Array.isArray(this._services[key])) {
-        this._services[key].push({ Class, instance: singleton ? (await this.prepareInstance(Class)) : null, singleton });
+        this._services[key].push({ Class, instance: singleton ? await this.prepareInstance(Class) : null, singleton });
 
         return;
       }
 
       this._services[key] = [
         this._services[key],
-        { Class, instance: singleton ? (await this.prepareInstance(Class)) : null, singleton },
+        { Class, instance: singleton ? await this.prepareInstance(Class) : null, singleton },
       ];
 
       return;
     }
 
-    this._services[key] = { Class, instance: singleton ? (await this.prepareInstance(Class)) : null, singleton };
+    this._services[key] = { Class, instance: singleton ? await this.prepareInstance(Class) : null, singleton };
   }
 
   /**
@@ -226,8 +226,12 @@ export class Container {
 
       if (!deps) continue;
 
+      let property: PropertyDescriptor;
+
       for (const [k, name] of Object.entries(deps)) {
-        if (Object.getOwnPropertyDescriptor(newInstance, k)) continue;
+        property = Object.getOwnPropertyDescriptor(newInstance, k);
+
+        if (property && property.value !== undefined) continue;
 
         const instance: Class | Class[] = await this.resolve<Class>(name);
 
@@ -259,7 +263,11 @@ export class Container {
     const chain: any[] = [];
     let currentClass = Class;
 
-    while (currentClass && currentClass !== Object.prototype && !currentClass.toString().includes('[native code]')) {
+    while (
+      currentClass &&
+      currentClass !== Object.prototype &&
+      (currentClass.name === 'IocEngine' || !currentClass.toString().includes('[native code]'))
+    ) {
       chain.push(currentClass);
       currentClass = Object.getPrototypeOf(currentClass);
     }

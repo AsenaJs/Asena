@@ -34,7 +34,6 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
 
   public serviceName = 'AsenaServer';
 
-  // Injected dependencies - NO manual instantiation
   @Inject('CoreContainer')
   private _coreContainer!: CoreContainer;
 

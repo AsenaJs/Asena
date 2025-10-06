@@ -62,7 +62,7 @@ export class CoreContainer {
    * @returns {Promise<T>}
    */
   public async resolve<T>(key: string): Promise<T> {
-    return await this._container.resolve<T>(key) as Promise<T>;
+    return (await this._container.resolve<T>(key)) as Promise<T>;
   }
 
   /**
@@ -73,7 +73,6 @@ export class CoreContainer {
   public setPhase(phase: CoreBootstrapPhase): void {
     this._phase = phase;
   }
-
 
   /**
    * @description Phase 1: Register Container itself
@@ -133,7 +132,6 @@ export class CoreContainer {
 
     this._phase = CoreBootstrapPhase.USER_COMPONENTS_SCAN;
   }
-
 
   /**
    * @description Get container instance

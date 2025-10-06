@@ -36,15 +36,6 @@ export class IocEngine implements ICoreService {
     this.config = config;
   }
 
-  /**
-   * @description Set Container manually (workaround for decorator injection issue)
-   * @param {Container} container - Container instance
-   * @returns {void}
-   */
-  public setContainer(container: Container): void {
-    this._container = container;
-  }
-
   public async searchAndRegister(components?: InjectableComponent[]): Promise<void> {
     // load components
     await this.loadComponents(components);

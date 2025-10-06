@@ -33,7 +33,7 @@ export class AsenaServerFactory {
    * @returns {Promise<AsenaServer<A>>} Fully configured AsenaServer instance
    */
   public static async create<A extends AsenaAdapter<any, any>>(
-    options: AsenaServerOptions<A>
+    options: AsenaServerOptions<A>,
   ): Promise<AsenaServer<A>> {
     const { adapter, logger, port, components, gc } = options;
 
@@ -55,9 +55,7 @@ export class AsenaServerFactory {
 
     // Phase 6: Register user components
     const iocEngine = await coreContainer.resolve<IocEngine>('IocEngine');
-    
-    // Workaround: Manually set Container (decorator injection not working yet)
-    iocEngine.setContainer(coreContainer.container);
+
     iocEngine.setConfig(config);
 
     if (components?.length) {
@@ -94,4 +92,3 @@ export class AsenaServerFactory {
   }
 
 }
-

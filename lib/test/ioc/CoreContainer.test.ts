@@ -96,7 +96,7 @@ describe('CoreContainer', () => {
     test('should throw error on double initialization', async () => {
       await coreContainer.bootstrap(mockAdapter as any, mockLogger);
 
-       expect(coreContainer.bootstrap(mockAdapter as any, mockLogger)).rejects.toThrow(
+      expect(coreContainer.bootstrap(mockAdapter as any, mockLogger)).rejects.toThrow(
         'CoreContainer already initialized',
       );
     });
@@ -244,14 +244,14 @@ describe('CoreContainer', () => {
     });
 
     test('should handle missing logger gracefully', async () => {
-       expect(coreContainer.bootstrap(mockAdapter as any, null as any)).rejects.toThrow();
+      expect(coreContainer.bootstrap(mockAdapter as any, null as any)).rejects.toThrow();
     });
   });
 
   describe('IocEngine Integration', () => {
     // TODO: These tests have minor issues with IocEngine.container injection
     // They will be fully resolved in Phase 7 (AsenaServer Factory Pattern)
-    test.skip('IocEngine should be registered and resolvable', async () => {
+    test('IocEngine should be registered and resolvable', async () => {
       await coreContainer.bootstrap(mockAdapter as any, mockLogger);
 
       const iocEngine = await coreContainer.resolve<IocEngine>('IocEngine');
@@ -260,7 +260,7 @@ describe('CoreContainer', () => {
       expect(iocEngine.container).toBeInstanceOf(Container);
     });
 
-    test.skip('IocEngine should inject CoreContainer Container', async () => {
+    test('IocEngine should inject CoreContainer Container', async () => {
       await coreContainer.bootstrap(mockAdapter as any, mockLogger);
 
       const iocEngine = await coreContainer.resolve<IocEngine>('IocEngine');

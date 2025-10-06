@@ -1,1 +1,1 @@
-export { AsenaServer } from './lib/server';
+export { AsenaServerFactory, AsenaServer } from './lib/server';

@@ -1,13 +1,13 @@
-import { afterEach, beforeEach, describe, expect, mock, spyOn, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
 import { AsenaServerFactory } from '../../server';
 import { Config, Controller, Service, WebSocket } from '../../server/decorators';
-import { ComponentType } from '../../ioc/types';
+import { ComponentType } from '../../ioc';
 import { Inject, PostConstruct } from '../../ioc/component';
 import { AsenaWebSocketService, type Socket } from '../../server/web/websocket';
 import { Get } from '../../server/web/decorators';
 import type { AsenaContext, AsenaServeOptions, WebsocketRouteParams } from '../../adapter';
 import type { AsenaConfig } from '../../server/config';
-import type { AsenaServer } from '../../server/AsenaServer';
+import type { AsenaServer } from '../../server';
 
 @Service()
 class TestServerService {
@@ -107,9 +107,9 @@ describe('AsenaServer', () => {
       adapter: mockAdapter,
       logger: mockLogger,
       port: 3000,
-      components: []
+      components: [],
     });
-    
+
     expect(server).toBeDefined();
     expect(server.coreContainer).toBeDefined();
   });
@@ -121,7 +121,7 @@ describe('AsenaServer', () => {
       adapter: mockAdapter,
       logger: mockLogger,
       port,
-      components: [TestServerService, TestController, TestWebSocket]
+      components: [TestServerService, TestController, TestWebSocket],
     });
 
     await server.start();
@@ -135,12 +135,12 @@ describe('AsenaServer', () => {
       adapter: mockAdapter,
       logger: mockLogger,
       port: 3000,
-      components
+      components,
     });
 
     await server.start();
 
-    const instance: TestConfig = await server.coreContainer.container.resolve<TestConfig>('TestConfig');
+    const instance: TestConfig | TestConfig[] = await server.coreContainer.container.resolve<TestConfig>('TestConfig');
 
     expect(instance).toBeDefined();
     expect(mockAdapter.options).toBe(options);
@@ -153,7 +153,7 @@ describe('AsenaServer', () => {
       adapter: mockAdapter,
       logger: mockLogger,
       port: 3000,
-      components
+      components,
     });
 
     await server.start();
@@ -178,7 +178,7 @@ describe('AsenaServer', () => {
       adapter: mockAdapter,
       logger: mockLogger,
       port: 3000,
-      components
+      components,
     });
 
     await server.start();
@@ -202,12 +202,13 @@ describe('AsenaServer', () => {
       adapter: mockAdapter,
       logger: mockLogger,
       port: 3000,
-      components
+      components,
     });
 
     await server.start();
 
-    const webSocketService: TestWebSocket[] | TestWebSocket = await server.coreContainer.container.resolve('TestWebSocket');
+    const webSocketService: TestWebSocket[] | TestWebSocket =
+      await server.coreContainer.container.resolve('TestWebSocket');
 
     const params: WebsocketRouteParams<any> = {
       path: 'ws',
@@ -223,7 +224,7 @@ describe('AsenaServer', () => {
       adapter: mockAdapter,
       logger: mockLogger,
       port: 3000,
-      components: [TestWebSocket]
+      components: [TestWebSocket],
     });
 
     await server.start();
@@ -235,18 +236,20 @@ describe('AsenaServer', () => {
     // Create a service that will throw during resolution
     @Service()
     class FailingService {
-      constructor() {
+
+      public constructor() {
         throw new Error('Test Error');
       }
-    }
+    
+}
 
-    await expect(
+    expect(
       AsenaServerFactory.create({
         adapter: mockAdapter,
         logger: mockLogger,
         port: 3000,
-        components: [FailingService]
-      })
+        components: [FailingService],
+      }),
     ).rejects.toThrow('Test Error');
   });
 });

@@ -1,6 +1,7 @@
-import { defineTypedMetadata } from '../../utils/typedMetadata';
+import { defineTypedMetadata, getOwnTypedMetadata } from '../../utils/typedMetadata';
 import { ComponentConstants } from '../constants';
 import { Scope } from '../component';
+import type { Dependencies, Strategies } from '../types';
 
 export const CORE_SERVICE = Symbol('CORE_SERVICE');
 
@@ -17,6 +18,15 @@ export function CoreService(name?: string) {
 
     defineTypedMetadata(ComponentConstants.NameKey, serviceName, target);
     defineTypedMetadata(ComponentConstants.ScopeKey, Scope.SINGLETON, target);
+
+    // Initialize dependency metadata for injection to work
+    if (getOwnTypedMetadata<Dependencies>(ComponentConstants.DependencyKey, target) === undefined) {
+      defineTypedMetadata<Dependencies>(ComponentConstants.DependencyKey, {}, target);
+    }
+
+    // Initialize strategy metadata for injection to work
+    if (getOwnTypedMetadata<Strategies>(ComponentConstants.StrategyKey, target) === undefined) {
+      defineTypedMetadata<Strategies>(ComponentConstants.StrategyKey, {}, target);
+    }
   };
 }
-
