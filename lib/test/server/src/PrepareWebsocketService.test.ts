@@ -52,7 +52,10 @@ describe('PrepareWebsocketService', () => {
       resolveAll: mock(() => []),
     };
 
-    service = new PrepareWebsocketService(mockContainer as any, mockLogger as any);
+    service = new PrepareWebsocketService();
+    // Manually inject dependencies for testing (field injection)
+    (service as any)['container'] = mockContainer;
+    (service as any)['logger'] = mockLogger;
   });
 
   afterEach(() => {

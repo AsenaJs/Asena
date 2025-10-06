@@ -22,7 +22,10 @@ describe('PrepareConfigService', () => {
   beforeEach(() => {
     mockContainer.resolveAll.mockClear();
     mockLogger.info.mockClear();
-    service = new PrepareConfigService(mockContainer as any, mockLogger as any);
+    service = new PrepareConfigService();
+    // Manually inject dependencies for testing (field injection)
+    (service as any)['container'] = mockContainer;
+    (service as any)['logger'] = mockLogger;
   });
 
   test('should return undefined when no config is found', async () => {

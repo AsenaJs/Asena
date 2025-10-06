@@ -36,11 +36,9 @@ describe('PrepareValidatorService', () => {
       resolve: mock(() => mockValidator),
     };
 
-    const mockLogger = {
-      info: mock(() => {}),
-    };
-
-    service = new PrepareValidatorService(mockContainer as any, mockLogger as any);
+    service = new PrepareValidatorService();
+    // Manually inject dependencies for testing (field injection)
+    (service as any)['container'] = mockContainer;
   });
 
   it('should return undefined when validator is not provided', async () => {

@@ -1,5 +1,5 @@
-import type { InjectableComponent, Dependencies, IocConfig, Strategies } from './types';
-import { Container } from './Container';
+import type { InjectableComponent, Dependencies, IocConfig, Strategies, ICoreService } from './types';
+import type { Container } from './Container';
 import { getAllFiles } from './helper/fileHelper';
 import * as path from 'node:path';
 import type { Class } from '../server/types';
@@ -8,20 +8,41 @@ import * as process from 'node:process';
 import * as console from 'node:console';
 import { getStrategyClass } from './helper/iocHelper';
 import { getOwnTypedMetadata, getTypedMetadata } from '../utils/typedMetadata';
-import { Scope } from './component';
+import { Scope, Inject } from './component';
+import { CoreService } from './decorators';
 
-export class IocEngine {
+/**
+ * @description IoC Engine - Manages component registration and dependency injection
+ * Core service that handles automatic component discovery and registration
+ */
+@CoreService('IocEngine')
+export class IocEngine implements ICoreService {
 
-  private readonly _container: Container;
+  public serviceName = 'IocEngine';
+
+  @Inject('Container')
+  private _container: Container;
 
   private injectables: InjectableComponent[] = [];
 
-  private readonly config: IocConfig;
+  private config?: IocConfig;
 
-  public constructor(config?: IocConfig) {
-    this._container = new Container();
-
+  /**
+   * @description Set IoC configuration
+   * @param {IocConfig} config - IoC configuration object
+   * @returns {void}
+   */
+  public setConfig(config?: IocConfig): void {
     this.config = config;
+  }
+
+  /**
+   * @description Set Container manually (workaround for decorator injection issue)
+   * @param {Container} container - Container instance
+   * @returns {void}
+   */
+  public setContainer(container: Container): void {
+    this._container = container;
   }
 
   public async searchAndRegister(components?: InjectableComponent[]): Promise<void> {

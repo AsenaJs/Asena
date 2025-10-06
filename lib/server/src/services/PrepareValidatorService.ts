@@ -1,16 +1,22 @@
-import { PrepareService } from '../PrepareService';
 import { getTypedMetadata } from '../../../utils/typedMetadata';
 import { ComponentConstants } from '../../../ioc/constants';
 import type { AsenaValidationService, ValidatorClass } from '../../web/middleware';
 import { type BaseValidator, VALIDATOR_METHODS, type ValidatorHandler } from '../../../adapter';
-import type { Container } from '../../../ioc';
-import type { ServerLogger } from '../../../logger';
+import type { Container, ICoreService } from '../../../ioc';
+import { CoreService } from '../../../ioc/decorators/CoreService';
+import { Inject } from '../../../ioc/component';
 
-export class PrepareValidatorService extends PrepareService {
+/**
+ * @description Core service for preparing validator instances
+ * Handles validator resolution and method binding
+ */
+@CoreService('PrepareValidatorService')
+export class PrepareValidatorService implements ICoreService {
 
-  public constructor(container: Container, logger: ServerLogger) {
-    super(container, logger);
-  }
+  public serviceName = 'PrepareValidatorService';
+
+  @Inject('Container')
+  private container: Container;
 
   public async prepare(Validator: ValidatorClass<any>): Promise<BaseValidator> {
     if (!Validator) {

@@ -1,8 +1,6 @@
 import type { Class, StaticServeClass } from './types';
-import type { Container } from '../ioc';
-import { IocEngine } from '../ioc';
-import { readConfigFile } from '../ioc/helper/fileHelper';
-import { ComponentType, type InjectableComponent } from '../ioc/types';
+import type { CoreContainer, ICoreService } from '../ioc';
+import { ComponentType, CoreBootstrapPhase, CoreService } from '../ioc';
 import type {
   ApiParams,
   AsenaAdapter,
@@ -18,126 +16,121 @@ import { ComponentConstants } from '../ioc/constants';
 import * as bun from 'bun';
 import { green, type ServerLogger, yellow } from '../logger';
 import { getOwnTypedMetadata, getTypedMetadata } from '../utils/typedMetadata';
-import { PrepareMiddlewareService } from './src/services/PrepareMiddlewareService';
-import { PrepareConfigService } from './src/services/PrepareConfigService';
-import { PrepareWebsocketService } from './src/services/PrepareWebsocketService';
-import { PrepareValidatorService } from './src/services/PrepareValidatorService';
-import { PrepareStaticServeConfigService } from './src/services/PrepareStaticServeConfigService';
+import type { PrepareMiddlewareService } from './src/services/PrepareMiddlewareService';
+import type { PrepareConfigService } from './src/services/PrepareConfigService';
+import type { PrepareWebsocketService } from './src/services/PrepareWebsocketService';
+import type { PrepareValidatorService } from './src/services/PrepareValidatorService';
+import type {
+  PrepareStaticServeConfigService
+} from './src/services/PrepareStaticServeConfigService';
+import { Inject } from '../ioc/component';
 
-export class AsenaServer<A extends AsenaAdapter<any, any>> {
+/**
+ * @description AsenaServer - Main server class for Asena framework
+ * Now a core service managed by IoC container with field injection
+ */
+@CoreService('AsenaServer')
+export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreService {
 
-  private _port: number;
+  public serviceName = 'AsenaServer';
+
+  // Injected dependencies - NO manual instantiation
+  @Inject('CoreContainer')
+  private _coreContainer!: CoreContainer;
+
+  @Inject('AsenaAdapter')
+  private _adapter!: A;
+
+  @Inject('ServerLogger')
+  private _logger!: ServerLogger;
+
+  @Inject('PrepareMiddlewareService')
+  private prepareMiddleware!: PrepareMiddlewareService;
+
+  @Inject('PrepareConfigService')
+  private prepareConfigService!: PrepareConfigService;
+
+  @Inject('PrepareWebsocketService')
+  private prepareWebsocketService!: PrepareWebsocketService;
+
+  @Inject('PrepareValidatorService')
+  private prepareValidatorService!: PrepareValidatorService;
+
+  @Inject('PrepareStaticServeConfigService')
+  private prepareStaticServeConfigService!: PrepareStaticServeConfigService;
+
+  // Instance state
+  private _port!: number;
+
+  private _gc = false;
 
   private controllers: Class[] = [];
 
-  private _components: InjectableComponent[] = [];
-
-  private _ioc: IocEngine;
-
-  private _logger: ServerLogger;
-
-  private readonly _adapter: A;
-
-  private prepareMiddleware: PrepareMiddlewareService;
-
-  private prepareConfigService: PrepareConfigService;
-
-  private prepareWebsocketService: PrepareWebsocketService;
-
-  private prepareValidatorService: PrepareValidatorService;
-
-  private prepareStaticServeConfigService: PrepareStaticServeConfigService;
-
-  public constructor(adapter: A, logger: ServerLogger) {
-    this._adapter = adapter;
-
-    this._logger = logger;
-
+  /**
+   * @description Lifecycle hook - called after dependencies are injected
+   * @returns {void}
+   */
+  public onInit(): void {
     this._logger.info(`
     ___    _____  ______ _   __ ___ 
    /   |  / ___/ / ____// | / //   |
   / /| |  \\__ \\ / __/  /  |/ // /| |
  / ___ | ___/ // /___ / /|  // ___ |
 /_/  |_|/____//_____//_/ |_//_/  |_|  
-                            `);
+    `);
   }
 
-  public async initialize(): Promise<Container> {
-    const config = await readConfigFile();
-
-    if (!config) {
-      this._logger.warn('asena-config file not found');
-    }
-
-    this._ioc = new IocEngine(config);
-
-    await this._ioc.searchAndRegister(this._components);
-
-    this.prepareMiddleware = new PrepareMiddlewareService(this._ioc.container, this._logger);
-
-    this.prepareConfigService = new PrepareConfigService(this._ioc.container, this._logger);
-
-    this.prepareWebsocketService = new PrepareWebsocketService(this._ioc.container, this._logger);
-
-    this.prepareValidatorService = new PrepareValidatorService(this._ioc.container, this._logger);
-
-    this.prepareStaticServeConfigService = new PrepareStaticServeConfigService(this._ioc.container, this._logger);
-
-    return this._ioc.container;
-  }
-
-  public async start(gc = false): Promise<void> {
-    await this.initialize();
-
+  /**
+   * @description Start the server
+   * Main entry point after factory creation
+   * @returns {Promise<void>}
+   */
+  public async start(): Promise<void> {
     this._logger.info(`Adapter: ${green(this._adapter.name)} implemented`);
-
     this._adapter.setPort(this._port);
-
     this._logger.info('All components registered and ready to use');
 
+    // Phase 7: Application setup
+    this._coreContainer.setPhase(CoreBootstrapPhase.APPLICATION_SETUP);
     await this.prepareConfigs();
-
     await this.initializeControllers();
-
     await this.prepareWebSocket();
 
+    // Phase 8: Server ready
+    this._coreContainer.setPhase(CoreBootstrapPhase.SERVER_READY);
     this._logger.info('Server started on port ' + this._port);
 
     await this._adapter.start();
 
-    // TODO: this is wierd but when we call gc asena uses less memory rest of the time
-    if (gc) {
+    if (this._gc) {
       bun.gc(true);
     }
   }
 
-  public components(components: Class[]) {
-    this._components = components.map((_component: Class) => {
-      const face: string = getTypedMetadata<string>(ComponentConstants.InterfaceKey, _component);
-      const component: InjectableComponent = {
-        Class: _component as Class,
-        interface: face,
-      };
-
-      return component;
-    });
-
-    return this;
-  }
-
-  public port(port: number) {
+  /**
+   * @description Configure server port
+   * Builder pattern for API compatibility
+   * @param {number} port - Port number
+   * @returns {this}
+   */
+  public port(port: number): this {
     this._port = port;
-
     return this;
   }
 
-  public logger(value: ServerLogger) {
-    this._logger = value;
-
-    return this;
+  /**
+   * @description Get current CoreContainer instance
+   * @returns {CoreContainer}
+   */
+  public get coreContainer(): CoreContainer {
+    return this._coreContainer;
   }
 
-  private async initializeControllers() {
+  /**
+   * @description Initialize and register all controllers
+   * @returns {Promise<void>}
+   */
+  private async initializeControllers(): Promise<void> {
     await this.validateAndSetControllers();
 
     for (const controller of this.controllers) {
@@ -171,8 +164,12 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> {
     }
   }
 
-  private async validateAndSetControllers() {
-    const controllers = await this._ioc.container.resolveAll<Class>(ComponentType.CONTROLLER);
+  /**
+   * @description Validate and set controllers from container
+   * @returns {Promise<void>}
+   */
+  private async validateAndSetControllers(): Promise<void> {
+    const controllers = await this._coreContainer.container.resolveAll<Class>(ComponentType.CONTROLLER);
 
     if (controllers !== null) {
       // check if any controller is array or not
@@ -184,10 +181,21 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> {
     }
   }
 
+  /**
+   * @description Prepare static serve configuration
+   * @param {StaticServeClass} staticServeClass - Static serve class
+   * @returns {Promise<BaseStaticServeParams>}
+   */
   private async prepareStaticServeConfig(staticServeClass: StaticServeClass): Promise<BaseStaticServeParams> {
     return await this.prepareStaticServeConfigService.prepare(staticServeClass);
   }
 
+  /**
+   * @description Prepare top-level middlewares for controller or websocket
+   * @param {PrepareMiddlewareParams} params - Middleware parameters
+   * @param {boolean} websocket - Whether this is for websocket
+   * @returns {Promise<BaseMiddleware[]>}
+   */
   private async prepareTopMiddlewares(
     { controller, routePath }: PrepareMiddlewareParams,
     websocket = false,
@@ -206,21 +214,40 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> {
     }
   }
 
+  /**
+   * @description Prepare validator instance
+   * @param {ValidatorClass<any>} Validator - Validator class
+   * @returns {Promise<BaseValidator>}
+   */
   private async prepareValidator(Validator: ValidatorClass<any>): Promise<BaseValidator> {
     return await this.prepareValidatorService.prepare(Validator);
   }
 
+  /**
+   * @description Prepare route-level middlewares
+   * @param {ApiParams} middlewareParams - Middleware parameters
+   * @returns {Promise<BaseMiddleware[]>}
+   */
   private async prepareRouteMiddleware(middlewareParams: ApiParams): Promise<BaseMiddleware[]> {
     const routeMiddlewares = middlewareParams?.middlewares || [];
 
     return this.prepareMiddlewares(routeMiddlewares);
   }
 
+  /**
+   * @description Prepare middlewares from classes
+   * @param {MiddlewareClass[]} middlewares - Middleware classes
+   * @returns {Promise<BaseMiddleware[]>}
+   */
   private async prepareMiddlewares(middlewares: MiddlewareClass[]): Promise<BaseMiddleware[]> {
     return this.prepareMiddleware.prepare(middlewares);
   }
 
-  private async prepareWebSocket() {
+  /**
+   * @description Prepare and register WebSocket routes
+   * @returns {Promise<void>}
+   */
+  private async prepareWebSocket(): Promise<void> {
     const websockets = await this.prepareWebsocketService.prepare();
 
     if (!websockets) {
@@ -239,7 +266,11 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> {
     }
   }
 
-  private async prepareConfigs() {
+  /**
+   * @description Prepare and apply configuration
+   * @returns {Promise<void>}
+   */
+  private async prepareConfigs(): Promise<void> {
     const configInstance = await this.prepareConfigService.prepare();
 
     if (!configInstance) {

@@ -38,7 +38,9 @@ describe('PrepareMiddlewareService', () => {
   beforeEach(() => {
     mockContainer.resolve.mockClear();
     mockLogger.info.mockClear();
-    service = new PrepareMiddlewareService(mockContainer as any, mockLogger as any);
+    service = new PrepareMiddlewareService();
+    // Manually inject dependencies for testing (field injection)
+    (service as any)['container'] = mockContainer;
     middlewareClasses = [TestMiddleware, TestMiddleware2];
   });
 

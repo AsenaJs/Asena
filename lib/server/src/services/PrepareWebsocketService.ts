@@ -1,16 +1,26 @@
-import { PrepareService } from '../PrepareService';
 import { getOwnTypedMetadata } from '../../../utils/typedMetadata';
 import { ComponentConstants } from '../../../ioc/constants';
 import type { AsenaWebSocketService, WebSocketData } from '../../web/websocket';
-import { ComponentType } from '../../../ioc/types';
-import type { Container } from '../../../ioc';
+import { ComponentType } from '../../../ioc';
+import type { Container, ICoreService } from '../../../ioc';
 import type { ServerLogger } from '../../../logger';
+import { CoreService } from '../../../ioc';
+import { Inject } from '../../../ioc/component';
 
-export class PrepareWebsocketService extends PrepareService {
+/**
+ * @description Core service for preparing WebSocket services
+ * Handles WebSocket resolution and path registration
+ */
+@CoreService('PrepareWebsocketService')
+export class PrepareWebsocketService implements ICoreService {
 
-  public constructor(container: Container, logger: ServerLogger) {
-    super(container, logger);
-  }
+  public serviceName = 'PrepareWebsocketService';
+
+  @Inject('Container')
+  private container: Container;
+
+  @Inject('ServerLogger')
+  private logger: ServerLogger;
 
   public async prepare(): Promise<AsenaWebSocketService<WebSocketData<any>>[]> {
     const webSockets = await this.container.resolveAll<AsenaWebSocketService<WebSocketData>>(ComponentType.WEBSOCKET);

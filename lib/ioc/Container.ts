@@ -2,10 +2,13 @@ import type { Class } from '../server/types';
 import type { ComponentType, ContainerService, Dependencies, Expressions, Strategies } from './types';
 import { ComponentConstants } from './constants';
 import { getOwnTypedMetadata, getTypedMetadata } from '../utils/typedMetadata';
+import { CircularDependencyDetector } from './CircularDependencyDetector';
 
 export class Container {
 
   private _services: { [key: string]: ContainerService | ContainerService[] } = {};
+
+  private circularDetector = new CircularDependencyDetector();
 
   public constructor(services?: { [key: string]: ContainerService | ContainerService[] }) {
     this._services = services || {};
@@ -30,18 +33,45 @@ export class Container {
     this._services[key] = { Class, instance: singleton ? (await this.prepareInstance(Class)) : null, singleton };
   }
 
+  /**
+   * @description Register an already-created instance directly
+   * Useful for external dependencies like Logger, Adapter
+   * @param {string} key - Service identifier
+   * @param {T} instance - Pre-created instance
+   * @returns {Promise<void>}
+   */
+  public async registerInstance<T>(key: string, instance: T): Promise<void> {
+    if (this._services[key]) {
+      throw new Error(`Service '${key}' is already registered`);
+    }
+
+    this._services[key] = {
+      Class: instance.constructor as any,
+      instance: instance,
+      singleton: true,
+    };
+  }
+
   public async resolve<T>(key: string): Promise<(T | T[]) | null> {
-    const service = this._services[key];
+    // Check circular dependency
+    this.circularDetector.checkCircular(key);
+    this.circularDetector.push(key);
 
-    if (!service) {
-      throw new Error(key + ' is not registered');
+    try {
+      const service = this._services[key];
+
+      if (!service) {
+        throw new Error(key + ' is not registered');
+      }
+
+      if (Array.isArray(service)) {
+        return await this.resolveMultipleContainerService<T>(service);
+      }
+
+      return await this.resolveContainerService<T>(service);
+    } finally {
+      this.circularDetector.pop(key);
     }
-
-    if (Array.isArray(service)) {
-      return await this.resolveMultipleContainerService<T>(service);
-    }
-
-    return await this.resolveContainerService<T>(service);
   }
 
   public resolveStrategy<T>(key: string): Promise<T[] | null> {

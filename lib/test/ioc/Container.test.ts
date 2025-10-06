@@ -355,4 +355,103 @@ describe('Container', () => {
     // They should be different instances
     expect(instance1).not.toBe(instance2);
   });
+
+  test('should register external instance', async () => {
+    class ExternalLogger {
+
+      public constructor(public name: string) {}
+
+      public log(message: string) {
+        return `${this.name}: ${message}`;
+      }
+    
+}
+
+    const logger = new ExternalLogger('TestLogger');
+
+    await container.registerInstance('Logger', logger);
+
+    const resolved = (await container.resolve<ExternalLogger>('Logger')) as ExternalLogger;
+
+    expect(resolved).toBe(logger);
+    expect(resolved.name).toBe('TestLogger');
+    expect(resolved.log('test')).toBe('TestLogger: test');
+  });
+
+  test('should throw error on duplicate instance registration', async () => {
+    class TestInstance {
+
+      public value = 'test';
+    
+}
+
+    const instance = new TestInstance();
+
+    await container.registerInstance('TestInstance', instance);
+
+    expect(async () => {
+      await container.registerInstance('TestInstance', instance);
+    }).toThrow("Service 'TestInstance' is already registered");
+  });
+
+  test('should register and resolve primitive values as instances', async () => {
+    const config = { apiKey: 'test-key', timeout: 3000 };
+
+    await container.registerInstance('Config', config);
+
+    const resolved = (await container.resolve<typeof config>('Config')) as typeof config;
+
+    expect(resolved).toBe(config);
+    expect(resolved.apiKey).toBe('test-key');
+    expect(resolved.timeout).toBe(3000);
+  });
+
+  test('should register instance without dependency injection', async () => {
+    class SimpleService {
+
+      public value = 42;
+    
+}
+
+    const service = new SimpleService();
+
+    await container.registerInstance('SimpleService', service);
+
+    const resolved = (await container.resolve<SimpleService>('SimpleService')) as SimpleService;
+
+    expect(resolved).toBe(service);
+    expect(resolved.value).toBe(42);
+  });
+
+  test('registered instance should work with other services as dependency', async () => {
+    class LoggerService {
+
+     public log(msg: string) {
+        return `LOG: ${msg}`;
+      }
+    
+}
+
+    @Component()
+    class UserService {
+
+      @Inject('LoggerService')
+      public logger: LoggerService;
+
+      public getUser() {
+        return this.logger.log('Getting user');
+      }
+    
+}
+
+    const logger = new LoggerService();
+
+    await container.registerInstance('LoggerService', logger);
+    await container.register('UserService', UserService, true);
+
+    const userService = (await container.resolve<UserService>('UserService')) as UserService;
+
+    expect(userService.logger).toBe(logger);
+    expect(userService.getUser()).toBe('LOG: Getting user');
+  });
 });

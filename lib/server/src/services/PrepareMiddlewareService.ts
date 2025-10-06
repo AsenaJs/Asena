@@ -1,16 +1,22 @@
-import { PrepareService } from '../PrepareService';
 import type { AsenaMiddlewareService, MiddlewareClass } from '../../web/middleware';
 import type { BaseMiddleware } from '../../../adapter';
 import { getTypedMetadata } from '../../../utils/typedMetadata';
 import { ComponentConstants } from '../../../ioc/constants';
-import type { ServerLogger } from '../../../logger';
-import type { Container } from '../../../ioc';
+import type { Container, ICoreService } from '../../../ioc';
+import { CoreService } from '../../../ioc';
+import { Inject } from '../../../ioc/component';
 
-export class PrepareMiddlewareService extends PrepareService {
+/**
+ * @description Core service for preparing middleware instances
+ * Handles middleware resolution and preparation for routing
+ */
+@CoreService('PrepareMiddlewareService')
+export class PrepareMiddlewareService implements ICoreService {
 
-  public constructor(container: Container, logger: ServerLogger) {
-    super(container, logger);
-  }
+  public serviceName = 'PrepareMiddlewareService';
+
+  @Inject('Container')
+  private container: Container;
 
   /**
    * @description Prepares middleware instances from middleware classes

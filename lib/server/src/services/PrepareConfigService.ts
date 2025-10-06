@@ -1,16 +1,26 @@
-import { PrepareService } from '../PrepareService';
 import type { AsenaConfig } from '../../config';
-import { ComponentType } from '../../../ioc/types';
+import type { Container, ICoreService } from '../../../ioc';
+import { ComponentType } from '../../../ioc';
 import { getTypedMetadata } from '../../../utils/typedMetadata';
 import { ComponentConstants } from '../../../ioc/constants';
 import { type ServerLogger, yellow } from '../../../logger';
-import type { Container } from '../../../ioc';
+import { CoreService } from '../../../ioc';
+import { Inject } from '../../../ioc/component';
 
-export class PrepareConfigService extends PrepareService {
+/**
+ * @description Core service for preparing configuration
+ * Handles config resolution and validation
+ */
+@CoreService('PrepareConfigService')
+export class PrepareConfigService implements ICoreService {
 
-  public constructor(container: Container, logger: ServerLogger) {
-    super(container, logger);
-  }
+  public serviceName = 'PrepareConfigService';
+
+  @Inject('Container')
+  private container: Container;
+
+  @Inject('ServerLogger')
+  private logger: ServerLogger;
 
   public async prepare(): Promise<AsenaConfig> {
     const config = await this.container.resolveAll<AsenaConfig>(ComponentType.CONFIG);

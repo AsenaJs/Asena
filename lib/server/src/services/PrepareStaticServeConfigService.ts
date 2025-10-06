@@ -1,16 +1,22 @@
-import { PrepareService } from '../PrepareService';
 import { getOwnTypedMetadata, getTypedMetadata } from '../../../utils/typedMetadata';
 import { ComponentConstants } from '../../../ioc/constants';
 import type { AsenaStaticServeService, StaticServeClass } from '../../web/middleware';
 import type { BaseStaticServeParams } from '../../../adapter';
-import type { Container } from '../../../ioc';
-import type { ServerLogger } from '../../../logger';
+import type { Container, ICoreService } from '../../../ioc';
+import { CoreService } from '../../../ioc';
+import { Inject } from '../../../ioc/component';
 
-export class PrepareStaticServeConfigService extends PrepareService {
+/**
+ * @description Core service for preparing static serve configuration
+ * Handles static serve service resolution and configuration
+ */
+@CoreService('PrepareStaticServeConfigService')
+export class PrepareStaticServeConfigService implements ICoreService {
 
-  public constructor(container: Container, logger: ServerLogger) {
-    super(container, logger);
-  }
+  public serviceName = 'PrepareStaticServeConfigService';
+
+  @Inject('Container')
+  private container: Container;
 
   public async prepare(staticServeClass: StaticServeClass): Promise<BaseStaticServeParams> {
     if (!staticServeClass) {
