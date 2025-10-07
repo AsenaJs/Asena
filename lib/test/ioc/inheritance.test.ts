@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
-import { IocEngine, Container } from '../../ioc';
+import type { Dependencies, InjectableComponent } from '../../ioc';
+import { Container, IocEngine } from '../../ioc';
 import { InheritedService1Test } from '../example-app-structure/service/inheritance/InheritedService1.test';
 import { InheritedService2Test } from '../example-app-structure/service/inheritance/InheritedService2.test';
 import { BaseDataBaseServiceTest } from '../example-app-structure/service/inheritance/BaseDataBaseService.test';
-import type { Dependencies, InjectableComponent } from '../../ioc';
 import { InheritedService3Test } from '../example-app-structure/service/inheritance/InheritedService3.test';
 import { BaseServiceTest } from '../example-app-structure/service/inheritance/BaseService.test';
 import { getOwnTypedMetadata } from '../../utils/typedMetadata';

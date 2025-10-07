@@ -13,4 +13,3 @@ export enum CoreBootstrapPhase {
   APPLICATION_SETUP = 'APPLICATION_SETUP',
   SERVER_READY = 'SERVER_READY',
 }
-

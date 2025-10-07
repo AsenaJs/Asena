@@ -1,8 +1,5 @@
-import { describe, test, expect, beforeEach } from 'bun:test';
-import { CoreContainer } from '../../ioc';
-import { CoreBootstrapPhase } from '../../ioc';
-import { Container } from '../../ioc';
-import { IocEngine } from '../../ioc';
+import { beforeEach, describe, expect, test } from 'bun:test';
+import { Container, CoreBootstrapPhase, CoreContainer, ICoreServiceNames, IocEngine } from '../../ioc';
 import type { ServerLogger } from '../../logger';
 
 // Mock Logger
@@ -104,7 +101,7 @@ describe('CoreContainer', () => {
     test('should register Container in phase 1', async () => {
       await coreContainer.bootstrap(mockAdapter as any, mockLogger);
 
-      const container = await coreContainer.resolve<Container>('Container');
+      const container = await coreContainer.resolve<Container>(ICoreServiceNames.CONTAINER);
 
       expect(container).toBe(coreContainer.container);
     });
@@ -112,7 +109,7 @@ describe('CoreContainer', () => {
     test('should register Logger in phase 2', async () => {
       await coreContainer.bootstrap(mockAdapter as any, mockLogger);
 
-      const logger = await coreContainer.resolve<ServerLogger>('ServerLogger');
+      const logger = await coreContainer.resolve<ServerLogger>(ICoreServiceNames.SERVER_LOGGER);
 
       expect(logger).toBe(mockLogger);
     });
@@ -120,7 +117,7 @@ describe('CoreContainer', () => {
     test('should register IocEngine in phase 3', async () => {
       await coreContainer.bootstrap(mockAdapter as any, mockLogger);
 
-      const iocEngine = await coreContainer.resolve<IocEngine>('IocEngine');
+      const iocEngine = await coreContainer.resolve<IocEngine>(ICoreServiceNames.IOC_ENGINE);
 
       expect(iocEngine).toBeInstanceOf(IocEngine);
     });
@@ -128,7 +125,7 @@ describe('CoreContainer', () => {
     test('should register Adapter in phase 4', async () => {
       await coreContainer.bootstrap(mockAdapter as any, mockLogger);
 
-      const adapter = await coreContainer.resolve('AsenaAdapter');
+      const adapter = await coreContainer.resolve(ICoreServiceNames.ASENA_ADAPTER);
 
       expect(adapter).toBe(mockAdapter);
     });
@@ -175,10 +172,10 @@ describe('CoreContainer', () => {
     test('should resolve all registered core services', async () => {
       await coreContainer.bootstrap(mockAdapter as any, mockLogger);
 
-      const container = await coreContainer.resolve<Container>('Container');
-      const logger = await coreContainer.resolve<ServerLogger>('ServerLogger');
-      const iocEngine = await coreContainer.resolve<IocEngine>('IocEngine');
-      const adapter = await coreContainer.resolve('AsenaAdapter');
+      const container = await coreContainer.resolve<Container>(ICoreServiceNames.CONTAINER);
+      const logger = await coreContainer.resolve<ServerLogger>(ICoreServiceNames.SERVER_LOGGER);
+      const iocEngine = await coreContainer.resolve<IocEngine>(ICoreServiceNames.IOC_ENGINE);
+      const adapter = await coreContainer.resolve(ICoreServiceNames.ASENA_ADAPTER);
 
       expect(container).toBeDefined();
       expect(logger).toBeDefined();
@@ -254,7 +251,7 @@ describe('CoreContainer', () => {
     test('IocEngine should be registered and resolvable', async () => {
       await coreContainer.bootstrap(mockAdapter as any, mockLogger);
 
-      const iocEngine = await coreContainer.resolve<IocEngine>('IocEngine');
+      const iocEngine = await coreContainer.resolve<IocEngine>(ICoreServiceNames.IOC_ENGINE);
 
       expect(iocEngine).toBeInstanceOf(IocEngine);
       expect(iocEngine.container).toBeInstanceOf(Container);
@@ -263,7 +260,7 @@ describe('CoreContainer', () => {
     test('IocEngine should inject CoreContainer Container', async () => {
       await coreContainer.bootstrap(mockAdapter as any, mockLogger);
 
-      const iocEngine = await coreContainer.resolve<IocEngine>('IocEngine');
+      const iocEngine = await coreContainer.resolve<IocEngine>(ICoreServiceNames.IOC_ENGINE);
 
       // After Phase 7 migration, this should pass
       expect(iocEngine.container).toBe(coreContainer.container);

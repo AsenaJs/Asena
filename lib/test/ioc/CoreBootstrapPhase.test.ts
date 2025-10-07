@@ -1,4 +1,4 @@
-import { describe, test, expect } from 'bun:test';
+import { describe, expect, test } from 'bun:test';
 import { CoreBootstrapPhase } from '../../ioc';
 
 describe('CoreBootstrapPhase', () => {
@@ -66,7 +66,7 @@ describe('CoreBootstrapPhase', () => {
 
   test('should be usable in switch statements', () => {
     const phase = CoreBootstrapPhase.CONTAINER_INIT;
-    let result = '';
+    let result :string;
 
     switch (phase) {
       case CoreBootstrapPhase.CONTAINER_INIT:

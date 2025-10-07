@@ -1,12 +1,10 @@
-import { CoreContainer } from '../ioc';
-import { CoreBootstrapPhase } from '../ioc';
+import type { InjectableComponent, IocEngine } from '../ioc';
+import { CoreBootstrapPhase, CoreContainer, ICoreServiceNames } from '../ioc';
 import type { AsenaServer } from './AsenaServer';
 import type { AsenaAdapter } from '../adapter';
 import type { ServerLogger } from '../logger';
 import type { Class } from './types';
 import { readConfigFile } from '../ioc/helper/fileHelper';
-import type { IocEngine } from '../ioc';
-import type { InjectableComponent } from '../ioc';
 import { ComponentConstants } from '../ioc/constants';
 import { getTypedMetadata } from '../utils/typedMetadata';
 
@@ -51,10 +49,10 @@ export class AsenaServerFactory {
     await coreContainer.bootstrap(adapter, logger);
 
     // Register CoreContainer itself for AsenaServer injection
-    await coreContainer.container.registerInstance('CoreContainer', coreContainer);
+    await coreContainer.container.registerInstance(ICoreServiceNames.CORE_CONTAINER, coreContainer);
 
     // Phase 6: Register user components
-    const iocEngine = await coreContainer.resolve<IocEngine>('IocEngine');
+    const iocEngine = await coreContainer.resolve<IocEngine>(ICoreServiceNames.IOC_ENGINE);
 
     iocEngine.setConfig(config);
 
@@ -78,10 +76,10 @@ export class AsenaServerFactory {
     // Register AsenaServer as core service
     const { AsenaServer } = await import('./AsenaServer');
 
-    await coreContainer.container.register('AsenaServer', AsenaServer, true);
+    await coreContainer.container.register(ICoreServiceNames.ASENA_SERVER, AsenaServer, true);
 
     // Resolve AsenaServer (with all dependencies injected)
-    const server = await coreContainer.resolve<AsenaServer<A>>('AsenaServer');
+    const server = await coreContainer.resolve<AsenaServer<A>>(ICoreServiceNames.ASENA_SERVER);
 
     // Configure server
     if (port) server.port(port);

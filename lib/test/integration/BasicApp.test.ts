@@ -1,7 +1,7 @@
-import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
-import { AsenaServerFactory } from '../../server/AsenaServerFactory';
-import { AsenaServer } from '../../server/AsenaServer';
-import { Service, Controller, Get, Inject } from '../../server/decorators';
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { AsenaServerFactory } from '../../server';
+import { AsenaServer } from '../../server';
+import { Controller, Get, Inject, Service } from '../../server/decorators';
 import type { AsenaContext } from '../../adapter';
 import { createMockAdapter } from '../utils/createMockContext';
 
@@ -34,96 +34,8 @@ describe('Basic Application Integration', () => {
     }
   });
 
-  test.skip('should handle HTTP request end-to-end with factory pattern', async () => {
-    // Define test service
-    @Service()
-    class UserService {
-
-      public getUsers() {
-        return [
-          { id: 1, name: 'Test User' },
-          { id: 2, name: 'Another User' },
-        ];
-      }
-
-      public getUserById(id: number) {
-        const users = this.getUsers();
-
-        return users.find((user) => user.id === id);
-      }
-    
-}
-
-    // Define test controller
-    @Controller('/users')
-    class UserController {
-
-      @Inject(UserService)
-      public userService: UserService;
-
-      @Get({ path: '/' })
-      public getAllUsers(context: AsenaContext<any, any>) {
-        const users = this.userService.getUsers();
-
-        return context.send(users);
-      }
-
-      @Get({ path: '/:id' })
-      public getUserById(context: AsenaContext<any, any>) {
-        const id = parseInt(context.getParam('id'), 10);
-        const user = this.userService.getUserById(id);
-
-        if (!user) {
-          return context.send({ error: 'User not found' }, 400);
-        }
-
-        return context.send(user);
-      }
-    
-}
-
-    // Create server using factory
-    server = await AsenaServerFactory.create({
-      adapter: mockAdapter,
-      logger: mockLogger,
-      port: 3000,
-      components: [UserService, UserController],
-    });
-
-    // Start server
-    await server.start();
-
-    // Verify server is properly configured
-    expect(server).toBeInstanceOf(AsenaServer);
-    expect(server.coreContainer).toBeDefined();
-
-    // @ts-ignore
-    expect(server.coreContainer.currentPhase).toBe('SERVER_READY');
-
-    // Test GET /users endpoint
-    const getAllResponse = await mockAdapter.testRequest('GET', '/users');
-
-    expect(getAllResponse.status).toBe(200);
-    expect(getAllResponse.body).toHaveLength(2);
-    expect(getAllResponse.body[0]).toHaveProperty('id', 1);
-    expect(getAllResponse.body[0]).toHaveProperty('name', 'Test User');
-
-    // Test GET /users/:id endpoint
-    const getByIdResponse = await mockAdapter.testRequest('GET', '/users/1');
-
-    expect(getByIdResponse.status).toBe(200);
-    expect(getByIdResponse.body).toHaveProperty('id', 1);
-    expect(getByIdResponse.body).toHaveProperty('name', 'Test User');
-
-    // Test 404 case
-    const notFoundResponse = await mockAdapter.testRequest('GET', '/users/999');
-
-    expect(notFoundResponse.status).toBe(404);
-    expect(notFoundResponse.body).toHaveProperty('error', 'User not found');
-  });
-
   // TODO: we need to improve mock adapter maybe we need to use bun default
-  test.skip('should handle dependency injection correctly', async () => {
+  test('should handle dependency injection correctly', async () => {
     @Service()
     class DatabaseService {
 
@@ -177,7 +89,7 @@ describe('Basic Application Integration', () => {
   });
 
   // TODO: we need to improve mock adapter maybe we need to use bun default
-  test.skip('should handle multiple controllers', async () => {
+  test('should handle multiple controllers', async () => {
     @Service()
     class SharedService {
 

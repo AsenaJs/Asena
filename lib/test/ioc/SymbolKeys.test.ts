@@ -1,6 +1,6 @@
-import { describe, test, expect } from 'bun:test';
+import { describe, expect, test } from 'bun:test';
 import { ComponentConstants } from '../../ioc/constants';
-import { getTypedMetadata, defineTypedMetadata } from '../../utils/typedMetadata';
+import { defineTypedMetadata, getTypedMetadata } from '../../utils/typedMetadata';
 import { Service } from '../../server/decorators';
 
 describe('Symbol Keys Security', () => {
@@ -184,4 +184,3 @@ describe('Symbol Keys Type Safety', () => {
     expect(stringValue).toBe('StringName');
   });
 });
-

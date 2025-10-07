@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, jest, mock, test } from 'bun:test';
-import { AsenaWebSocketService, type Socket } from '../../../server/web/websocket';
 import type { AsenaWebSocketServer } from '../../../server/web/websocket';
-import { AsenaSocket } from '../../../server/web/websocket';
+import { AsenaSocket, AsenaWebSocketService, type Socket } from '../../../server/web/websocket';
 
 describe('WebSocket Tests', () => {
   let wsService: AsenaWebSocketService<any>;

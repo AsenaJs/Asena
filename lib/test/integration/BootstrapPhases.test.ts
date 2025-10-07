@@ -1,11 +1,10 @@
-import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
-import { AsenaServerFactory } from '../../server/AsenaServerFactory';
-import { AsenaServer } from '../../server/AsenaServer';
-import { Service, Controller, Get, Inject } from '../../server/decorators';
+import { beforeEach, describe, expect, test } from 'bun:test';
+import { AsenaServer, AsenaServerFactory, ICoreServiceNames } from '../../server';
+import { Controller, Get, Inject, Service } from '../../server/decorators';
 import type { AsenaContext } from '../../adapter';
-import { CoreContainer } from '../../ioc';
 import { CoreBootstrapPhase } from '../../ioc';
 import { createMockAdapter } from '../utils/createMockContext';
+import type { AsenaMiddlewareService } from '../../server/web/middleware';
 
 /**
  * @description Integration test for Bootstrap Phase Flow
@@ -90,15 +89,15 @@ describe('Bootstrap Phase Flow Integration', () => {
     const coreContainer = server.coreContainer;
 
     // Verify all core services are registered after bootstrap
-    expect(await coreContainer.resolve('Container')).toBeDefined();
-    expect(await coreContainer.resolve('ServerLogger')).toBe(mockLogger);
-    expect(await coreContainer.resolve('IocEngine')).toBeDefined();
-    expect(await coreContainer.resolve('AsenaAdapter')).toBe(mockAdapter);
-    expect(await coreContainer.resolve('PrepareMiddlewareService')).toBeDefined();
-    expect(await coreContainer.resolve('PrepareConfigService')).toBeDefined();
-    expect(await coreContainer.resolve('PrepareWebsocketService')).toBeDefined();
-    expect(await coreContainer.resolve('PrepareValidatorService')).toBeDefined();
-    expect(await coreContainer.resolve('PrepareStaticServeConfigService')).toBeDefined();
+    expect(await coreContainer.resolve(ICoreServiceNames.CONTAINER)).toBeDefined();
+    expect(await coreContainer.resolve(ICoreServiceNames.SERVER_LOGGER)).toBe(mockLogger);
+    expect(await coreContainer.resolve(ICoreServiceNames.IOC_ENGINE)).toBeDefined();
+    expect(await coreContainer.resolve(ICoreServiceNames.ASENA_ADAPTER)).toBe(mockAdapter);
+    expect(await coreContainer.resolve(ICoreServiceNames.PREPARE_MIDDLEWARE_SERVICE)).toBeDefined();
+    expect(await coreContainer.resolve(ICoreServiceNames.PREPARE_CONFIG_SERVICE)).toBeDefined();
+    expect(await coreContainer.resolve(ICoreServiceNames.PREPARE_WEBSOCKET_SERVICE)).toBeDefined();
+    expect(await coreContainer.resolve(ICoreServiceNames.PREPARE_VALIDATOR_SERVICE)).toBeDefined();
+    expect(await coreContainer.resolve(ICoreServiceNames.PREPARE_STATIC_SERVE_CONFIG_SERVICE)).toBeDefined();
   });
 
   test('should handle user components registration phase', async () => {
@@ -282,11 +281,11 @@ describe('Bootstrap Phase Flow Integration', () => {
   test('should handle phase transitions with WebSocket components', async () => {
     class TestWebSocket {
 
-      onOpen(ws: any) {
+      public onOpen(ws: any) {
         ws.send('connected');
       }
 
-      onMessage(ws: any, message: any) {
+      public onMessage(ws: any, message: any) {
         ws.send(`echo: ${message}`);
       }
     
@@ -295,7 +294,7 @@ describe('Bootstrap Phase Flow Integration', () => {
     @Service()
     class WebSocketService {
 
-      getData() {
+      public getData() {
         return 'websocket data';
       }
     
@@ -305,11 +304,11 @@ describe('Bootstrap Phase Flow Integration', () => {
     class ApiController {
 
       @Inject(WebSocketService)
-      webSocketService: WebSocketService;
+      public webSocketService: WebSocketService;
 
       @Get({ path: '/' })
-      getData(context: AsenaContext) {
-        return context.json(this.webSocketService.getData());
+      public getData(context: AsenaContext<any, any>) {
+        return context.send(this.webSocketService.getData());
       }
     
 }
@@ -331,9 +330,9 @@ describe('Bootstrap Phase Flow Integration', () => {
   });
 
   test('should handle phase transitions with middleware components', async () => {
-    class TestMiddleware {
+    class TestMiddleware implements AsenaMiddlewareService {
 
-      async handle(context: AsenaContext, next: () => Promise<void>) {
+      public async handle(_context: AsenaContext<any, any>, next: () => Promise<void>) {
         await next();
       }
     
@@ -342,7 +341,7 @@ describe('Bootstrap Phase Flow Integration', () => {
     @Service()
     class MiddlewareService {
 
-      getData() {
+      public getData() {
         return 'middleware data';
       }
     
@@ -352,11 +351,11 @@ describe('Bootstrap Phase Flow Integration', () => {
     class ApiController {
 
       @Inject(MiddlewareService)
-      middlewareService: MiddlewareService;
+      public middlewareService: MiddlewareService;
 
       @Get({ path: '/' })
-      getData(context: AsenaContext) {
-        return context.json(this.middlewareService.getData());
+      public getData(context: AsenaContext<any, any>) {
+        return context.send(this.middlewareService.getData());
       }
     
 }
@@ -424,7 +423,7 @@ describe('Bootstrap Phase Flow Integration', () => {
     ];
 
     // Verify all phases are defined and in correct order
-    expectedOrder.forEach((phase, index) => {
+    expectedOrder.forEach((phase, _index) => {
       expect(phase).toBeDefined();
       expect(typeof phase).toBe('string');
     });

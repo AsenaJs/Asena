@@ -1,6 +1,6 @@
 import { generateHandlerParams, genericHandler } from '../http.base';
 import { HttpMethod } from '../../types';
-import type {ControllerDecoratorParams} from "../../../../adapter";
+import type { ControllerDecoratorParams } from '../../../../adapter';
 
 /**
  * Decorator for handling HTTP DELETE requests.

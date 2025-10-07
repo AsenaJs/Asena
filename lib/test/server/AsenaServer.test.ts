@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
+import type { AsenaServer } from '../../server';
 import { AsenaServerFactory } from '../../server';
 import { Config, Controller, Service, WebSocket } from '../../server/decorators';
 import { ComponentType } from '../../ioc';
@@ -7,7 +8,6 @@ import { AsenaWebSocketService, type Socket } from '../../server/web/websocket';
 import { Get } from '../../server/web/decorators';
 import type { AsenaContext, AsenaServeOptions, WebsocketRouteParams } from '../../adapter';
 import type { AsenaConfig } from '../../server/config';
-import type { AsenaServer } from '../../server';
 
 @Service()
 class TestServerService {

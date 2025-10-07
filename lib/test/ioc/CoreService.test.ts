@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
-import { CORE_SERVICE, CoreService } from '../../ioc';
 import type { ICoreService } from '../../ioc';
+import { CORE_SERVICE, CoreService } from '../../ioc';
 import { getTypedMetadata } from '../../utils/typedMetadata';
 import { ComponentConstants } from '../../ioc/constants';
 import { Scope } from '../../ioc/component';

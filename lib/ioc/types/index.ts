@@ -8,3 +8,4 @@ export * from './InjectableComponent';
 export * from './ContainerService';
 export * from './ICoreService';
 export * from './CoreBootstrapPhase';
+export { ICoreServiceNames } from './ICoreServiceNamesType';

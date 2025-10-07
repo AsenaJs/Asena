@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, spyOn, test } from 'bun:test';
 import { Container } from '../../ioc';
 import { Component } from '../../server/decorators';
 import { Inject, PostConstruct, Strategy } from '../../ioc/component';
-import { ComponentType } from '../../ioc/types';
+import { ComponentType } from '../../ioc';
 import { ExportedServerService } from '../example-app-structure/database/ExportedServerService.test';
 
 @Component()
@@ -426,7 +426,7 @@ describe('Container', () => {
   test('registered instance should work with other services as dependency', async () => {
     class LoggerService {
 
-     public log(msg: string) {
+      public log(msg: string) {
         return `LOG: ${msg}`;
       }
     

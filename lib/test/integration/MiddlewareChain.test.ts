@@ -1,7 +1,7 @@
-import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
-import { AsenaServerFactory } from '../../server/AsenaServerFactory';
-import { AsenaServer } from '../../server/AsenaServer';
-import { Service, Controller, Get, Middleware, Inject } from '../../server/decorators';
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { AsenaServerFactory } from '../../server';
+import type { AsenaServer } from '../../server';
+import { Config, Controller, Get, Inject, Middleware, Service } from '../../server/decorators';
 import type { AsenaContext } from '../../adapter';
 import { AsenaMiddlewareService } from '../../server/web/middleware';
 import { createMockAdapter } from '../utils/createMockContext';
@@ -19,6 +19,7 @@ describe('Middleware Chain Integration', () => {
   beforeEach(async () => {
     // Create mock adapter and logger
     const mockSetup = createMockAdapter();
+
     mockAdapter = mockSetup.adapter;
     mockLogger = mockSetup.logger;
     executionOrder = [];
@@ -28,7 +29,7 @@ describe('Middleware Chain Integration', () => {
     // Clean up server if it exists
     if (server) {
       try {
-        await server.stop?.();
+        // await server.stop?.();
       } catch (error) {
         // Ignore cleanup errors
       }
@@ -39,45 +40,63 @@ describe('Middleware Chain Integration', () => {
     // Global middleware
     @Middleware()
     class GlobalMiddleware extends AsenaMiddlewareService {
-      async handle(context: AsenaContext, next: () => Promise<void>): Promise<void> {
+
+      public async handle(_context: AsenaContext<any, any>, next: () => Promise<void>): Promise<void> {
         executionOrder.push('global');
         await next();
       }
-    }
+    
+}
 
     // Controller middleware
     @Middleware()
     class ControllerMiddleware extends AsenaMiddlewareService {
-      async handle(context: AsenaContext, next: () => Promise<void>): Promise<void> {
+
+      public async handle(_context: AsenaContext<any, any>, next: () => Promise<void>): Promise<void> {
         executionOrder.push('controller');
         await next();
       }
-    }
+    
+}
 
     // Route middleware
     @Middleware()
     class RouteMiddleware extends AsenaMiddlewareService {
-      async handle(context: AsenaContext, next: () => Promise<void>): Promise<void> {
+
+      public async handle(_context: AsenaContext<any, any>, next: () => Promise<void>): Promise<void> {
         executionOrder.push('route');
         await next();
       }
-    }
+    
+}
+
+    // Config with global middlewares
+    @Config()
+    class AppConfig {
+
+      public globalMiddlewares() {
+        return [GlobalMiddleware];
+      }
+    
+}
 
     // Controller with middleware
     @Controller({ path: '/test', middlewares: [ControllerMiddleware] })
     class TestController {
+
       @Get({ path: '/', middlewares: [RouteMiddleware] })
-      test(context: AsenaContext) {
+      public test(context: AsenaContext<any, any>) {
         executionOrder.push('handler');
         return context.send('ok');
       }
-    }
+    
+}
 
     server = await AsenaServerFactory.create({
       adapter: mockAdapter,
       logger: mockLogger,
       port: 3000,
-      components: [GlobalMiddleware, ControllerMiddleware, RouteMiddleware, TestController]
+      components: [AppConfig, GlobalMiddleware, ControllerMiddleware, RouteMiddleware, TestController],
     });
 
     await server.start();
@@ -92,34 +111,49 @@ describe('Middleware Chain Integration', () => {
   test('should handle multiple global middlewares', async () => {
     @Middleware()
     class GlobalMiddleware1 extends AsenaMiddlewareService {
-      async handle(context: AsenaContext, next: () => Promise<void>): Promise<void> {
+
+      public async handle(_context: AsenaContext<any, any>, next: () => Promise<void>): Promise<void> {
         executionOrder.push('global1');
         await next();
       }
-    }
+    
+}
 
     @Middleware()
     class GlobalMiddleware2 extends AsenaMiddlewareService {
-      async handle(context: AsenaContext, next: () => Promise<void>): Promise<void> {
+
+      public async handle(_context: AsenaContext<any, any>, next: () => Promise<void>): Promise<void> {
         executionOrder.push('global2');
         await next();
       }
-    }
+    
+}
+
+    @Config()
+    class AppConfig {
+
+      public globalMiddlewares() {
+        return [GlobalMiddleware1, GlobalMiddleware2];
+      }
+    
+}
 
     @Controller('/test')
     class TestController {
+
       @Get({ path: '/' })
-      test(context: AsenaContext) {
+      public test(context: AsenaContext<any, any>) {
         executionOrder.push('handler');
         return context.send('ok');
       }
-    }
+    
+}
 
     server = await AsenaServerFactory.create({
       adapter: mockAdapter,
       logger: mockLogger,
       port: 3000,
-      components: [GlobalMiddleware1, GlobalMiddleware2, TestController]
+      components: [AppConfig, GlobalMiddleware1, GlobalMiddleware2, TestController],
     });
 
     await server.start();
@@ -132,34 +166,40 @@ describe('Middleware Chain Integration', () => {
   test('should handle multiple route middlewares', async () => {
     @Middleware()
     class RouteMiddleware1 extends AsenaMiddlewareService {
-      async handle(context: AsenaContext, next: () => Promise<void>): Promise<void> {
+
+      public async handle(_context: AsenaContext<any, any>, next: () => Promise<void>): Promise<void> {
         executionOrder.push('route1');
         await next();
       }
-    }
+    
+}
 
     @Middleware()
     class RouteMiddleware2 extends AsenaMiddlewareService {
-      async handle(context: AsenaContext, next: () => Promise<void>): Promise<void> {
+
+      public async handle(_context: AsenaContext<any, any>, next: () => Promise<void>): Promise<void> {
         executionOrder.push('route2');
         await next();
       }
-    }
+    
+}
 
     @Controller('/test')
     class TestController {
+
       @Get({ path: '/', middlewares: [RouteMiddleware1, RouteMiddleware2] })
-      test(context: AsenaContext) {
+      public test(context: AsenaContext<any, any>) {
         executionOrder.push('handler');
         return context.send('ok');
       }
-    }
+    
+}
 
     server = await AsenaServerFactory.create({
       adapter: mockAdapter,
       logger: mockLogger,
       port: 3000,
-      components: [RouteMiddleware1, RouteMiddleware2, TestController]
+      components: [RouteMiddleware1, RouteMiddleware2, TestController],
     });
 
     await server.start();
@@ -172,36 +212,51 @@ describe('Middleware Chain Integration', () => {
   test('should handle middleware with dependency injection', async () => {
     @Service()
     class LoggingService {
-      log(message: string): void {
+
+      public log(message: string): void {
         executionOrder.push(`log: ${message}`);
       }
-    }
+    
+}
 
     @Middleware()
     class LoggingMiddleware extends AsenaMiddlewareService {
-      @Inject(LoggingService)
-      loggingService: LoggingService;
 
-      async handle(context: AsenaContext, next: () => Promise<void>): Promise<void> {
+      @Inject(LoggingService)
+      public loggingService: LoggingService;
+
+      public async handle(_context: AsenaContext<any, any>, next: () => Promise<void>): Promise<void> {
         this.loggingService.log('middleware executed');
         await next();
       }
-    }
+    
+}
+
+    @Config()
+    class AppConfig {
+
+      public globalMiddlewares() {
+        return [LoggingMiddleware];
+      }
+    
+}
 
     @Controller('/test')
     class TestController {
+
       @Get({ path: '/' })
-      test(context: AsenaContext) {
+      public test(context: AsenaContext<any, any>) {
         executionOrder.push('handler');
         return context.send('ok');
       }
-    }
+    
+}
 
     server = await AsenaServerFactory.create({
       adapter: mockAdapter,
       logger: mockLogger,
       port: 3000,
-      components: [LoggingService, LoggingMiddleware, TestController]
+      components: [AppConfig, LoggingService, LoggingMiddleware, TestController],
     });
 
     await server.start();
@@ -215,7 +270,8 @@ describe('Middleware Chain Integration', () => {
   test('should handle middleware error handling', async () => {
     @Middleware()
     class ErrorMiddleware extends AsenaMiddlewareService {
-      async handle(context: AsenaContext, next: () => Promise<void>): Promise<void> {
+
+      public async handle(_context: AsenaContext<any, any>, next: () => Promise<void>): Promise<void> {
         executionOrder.push('error-middleware');
         try {
           await next();
@@ -224,22 +280,34 @@ describe('Middleware Chain Integration', () => {
           throw error;
         }
       }
-    }
+    
+}
+
+    @Config()
+    class AppConfig {
+
+      public globalMiddlewares() {
+        return [ErrorMiddleware];
+      }
+    
+}
 
     @Controller('/test')
     class TestController {
+
       @Get({ path: '/' })
-      test(context: AsenaContext) {
+      public test(_context: AsenaContext<any, any>) {
         executionOrder.push('handler');
         throw new Error('Test error');
       }
-    }
+    
+}
 
     server = await AsenaServerFactory.create({
       adapter: mockAdapter,
       logger: mockLogger,
       port: 3000,
-      components: [ErrorMiddleware, TestController]
+      components: [AppConfig, ErrorMiddleware, TestController],
     });
 
     await server.start();
@@ -256,97 +324,116 @@ describe('Middleware Chain Integration', () => {
   test('should handle middleware with async operations', async () => {
     @Middleware()
     class AsyncMiddleware extends AsenaMiddlewareService {
-      async handle(context: AsenaContext, next: () => Promise<void>): Promise<void> {
+
+      public async handle(_context: AsenaContext<any, any>, next: () => Promise<void>): Promise<void> {
         executionOrder.push('async-start');
-        
+
         // Simulate async operation
-        await new Promise(resolve => setTimeout(resolve, 10));
-        
+        await new Promise((resolve) => {
+          setTimeout(resolve, 10);
+        });
+
         executionOrder.push('async-middle');
         await next();
         executionOrder.push('async-end');
       }
-    }
+    
+}
+
+    @Config()
+    class AppConfig {
+
+      public globalMiddlewares() {
+        return [AsyncMiddleware];
+      }
+    
+}
 
     @Controller('/test')
     class TestController {
+
       @Get({ path: '/' })
-      async test(context: AsenaContext) {
+      public async test(context: AsenaContext<any, any>) {
         executionOrder.push('handler-start');
-        
+
         // Simulate async operation in handler
-        await new Promise(resolve => setTimeout(resolve, 5));
-        
+        await new Promise((resolve) => {
+          setTimeout(resolve, 5);
+        });
+
         executionOrder.push('handler-end');
         return context.send('ok');
       }
-    }
+    
+}
 
     server = await AsenaServerFactory.create({
       adapter: mockAdapter,
       logger: mockLogger,
       port: 3000,
-      components: [AsyncMiddleware, TestController]
+      components: [AppConfig, AsyncMiddleware, TestController],
     });
 
     await server.start();
 
     await mockAdapter.testRequest('GET', '/test');
 
-    expect(executionOrder).toEqual([
-      'async-start',
-      'async-middle',
-      'handler-start',
-      'handler-end',
-      'async-end'
-    ]);
+    expect(executionOrder).toEqual(['async-start', 'async-middle', 'handler-start', 'handler-end', 'async-end']);
   });
 
   test('should handle complex middleware chain', async () => {
     @Middleware()
     class AuthMiddleware extends AsenaMiddlewareService {
-      async handle(context: AsenaContext, next: () => Promise<void>): Promise<void> {
+
+      public async handle(_context: AsenaContext<any, any>, next: () => Promise<void>): Promise<void> {
         executionOrder.push('auth');
         await next();
       }
-    }
+    
+}
 
     @Middleware()
     class RateLimitMiddleware extends AsenaMiddlewareService {
-      async handle(context: AsenaContext, next: () => Promise<void>): Promise<void> {
+
+      public async handle(_context: AsenaContext<any, any>, next: () => Promise<void>): Promise<void> {
         executionOrder.push('rate-limit');
         await next();
       }
-    }
+    
+}
 
     @Middleware()
     class LoggingMiddleware extends AsenaMiddlewareService {
-      async handle(context: AsenaContext, next: () => Promise<void>): Promise<void> {
+
+      public async handle(_context: AsenaContext<any, any>, next: () => Promise<void>): Promise<void> {
         executionOrder.push('logging');
         await next();
       }
-    }
+    
+}
 
     @Controller({ path: '/api', middlewares: [AuthMiddleware] })
     class ApiController {
+
       @Get({ path: '/users', middlewares: [RateLimitMiddleware] })
-      getUsers(context: AsenaContext) {
+      public getUsers(context: AsenaContext<any, any>) {
         executionOrder.push('get-users');
-        return context.json({ users: [] });
+        return context.send({ users: [] });
       }
 
       @Get({ path: '/posts', middlewares: [LoggingMiddleware] })
-      getPosts(context: AsenaContext) {
+      public getPosts(context: AsenaContext<any, any>) {
         executionOrder.push('get-posts');
-        return context.json({ posts: [] });
+        return context.send({ posts: [] });
       }
-    }
+    
+}
 
     server = await AsenaServerFactory.create({
       adapter: mockAdapter,
       logger: mockLogger,
       port: 3000,
-      components: [AuthMiddleware, RateLimitMiddleware, LoggingMiddleware, ApiController]
+      components: [AuthMiddleware, RateLimitMiddleware, LoggingMiddleware, ApiController],
     });
 
     await server.start();

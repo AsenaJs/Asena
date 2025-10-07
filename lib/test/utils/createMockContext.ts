@@ -35,8 +35,8 @@ export const createMockContext = () =>
     // @ts-ignore
     getWebSocketValue: mock(<T>() => ({}) satisfies T),
 
-    html: mock((_data: string) => new Response()),
-    send: mock((_data: any, _status?: SendOptions | number) => new Response()),
+    html: mock((_data: string) => _data),
+    send: mock((_data: any, _status?: SendOptions | number) => _data),
     json: mock((_data: any) => _data),
     status: mock((_code: number) => ({ json: mock((_data: any) => _data) })),
     redirect: mock((_url: string) => {}),
@@ -50,12 +50,14 @@ export const createMockAdapter = () => {
     debug: mock((message: string) => console.debug(`[DEBUG] ${message}`)),
   };
 
-  // Store registered routes for testing
+  // Store registered routes and global middlewares for testing
   const registeredRoutes: Map<string, any> = new Map();
+  const globalMiddlewares: any[] = [];
+  const routeMiddlewares: Map<string, any[]> = new Map();
 
   const mockAdapter = {
     name: 'MockAdapter',
-    setPort: mock((port: number) => {}),
+    setPort: mock((_port: number) => {}),
     start: mock(async () => {}),
     registerRoute: mock(async (route: any) => {
       // Store route for testing
@@ -64,11 +66,20 @@ export const createMockAdapter = () => {
       registeredRoutes.set(key, route);
       return true;
     }),
-    use: mock(async (middleware: any, routePath: string) => {
-      // Mock middleware registration
+    use: mock(async (middleware: any, routePath?: string) => {
+      // If routePath is provided, it's a route-specific middleware
+      // Otherwise, it's a global middleware
+      if (routePath) {
+        const existing = routeMiddlewares.get(routePath) || [];
+
+        routeMiddlewares.set(routePath, [...existing, middleware]);
+      } else {
+        globalMiddlewares.push(middleware);
+      }
+
       return true;
     }),
-    registerWebsocketRoute: mock(async (websocketRoute: any) => {
+    registerWebsocketRoute: mock(async (_websocketRoute: any) => {
       // Mock WebSocket route registration
       return true;
     }),
@@ -126,23 +137,31 @@ export const createMockAdapter = () => {
         const mockContext = createMockContext();
 
         // Extract route parameters from path
-        const routeParams = mockAdapter.extractRouteParams(route.path, path);
 
-        mockContext.params = routeParams;
+
+        mockContext['params'] = mockAdapter.extractRouteParams(route.path, path);
+
+        // Find controller middlewares for this route
+        // Controller middlewares are registered with controller path (e.g., '/test' or '/api')
+        const controllerPath = route.path.split('/').slice(0, -1).join('/') || '/';
+        const controllerMws = routeMiddlewares.get(controllerPath) || [];
+
+        // Combine all middlewares: global + controller + route.middlewares
+        const allMiddlewares = [...globalMiddlewares, ...controllerMws, ...(route.middlewares || [])];
 
         // Execute middleware chain if present
-        if (route.middlewares && route.middlewares.length > 0) {
+        if (allMiddlewares.length > 0) {
           let middlewareIndex = 0;
           const next = async () => {
-            if (middlewareIndex < route.middlewares.length) {
-              const middleware = route.middlewares[middlewareIndex++];
+            if (middlewareIndex < allMiddlewares.length) {
+              const middleware = allMiddlewares[middlewareIndex++];
 
               await middleware.handle(mockContext, next);
             } else {
               // Execute handler
-              const result = await route.handler(mockContext);
 
-              return result;
+
+              return await route.handler(mockContext);
             }
           };
 
@@ -176,7 +195,7 @@ export const createMockAdapter = () => {
         headers: {},
       };
     }),
-    testWebSocket: mock(async (path: string) => {
+    testWebSocket: mock(async (_path: string) => {
       return {
         send: mock(async (message: string) => `echo: ${message}`),
         close: mock(async () => {}),

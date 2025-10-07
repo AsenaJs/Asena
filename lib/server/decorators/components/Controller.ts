@@ -1,10 +1,10 @@
-import { ComponentType, type ControllerParams } from '../../../ioc/types';
+import { ComponentType, type ControllerParams } from '../../../ioc';
 import { defineComponent } from '../../../ioc/component';
 import { ComponentConstants } from '../../../ioc/constants';
 import { defineMiddleware } from '../../web/helper';
 import { defineTypedMetadata } from '../../../utils/typedMetadata';
 
-import type {MiddlewareClass} from "../../web/middleware";
+import type { MiddlewareClass } from '../../web/middleware';
 
 /**
  * Decorator for defining a Controller component. String is used for defining the path.

@@ -1,4 +1,11 @@
-import type { InjectableComponent, Dependencies, IocConfig, Strategies, ICoreService } from './types';
+import {
+  type Dependencies,
+  type ICoreService,
+  ICoreServiceNames,
+  type InjectableComponent,
+  type IocConfig,
+  type Strategies,
+} from './types';
 import type { Container } from './Container';
 import { getAllFiles } from './helper/fileHelper';
 import * as path from 'node:path';
@@ -8,14 +15,15 @@ import * as process from 'node:process';
 import * as console from 'node:console';
 import { getStrategyClass } from './helper/iocHelper';
 import { getOwnTypedMetadata, getTypedMetadata } from '../utils/typedMetadata';
-import { Scope, Inject } from './component';
+import { Inject, Scope } from './component';
 import { CoreService } from './decorators';
+import { CircularDependencyError } from './CircularDependencyDetector';
 
 /**
  * @description IoC Engine - Manages component registration and dependency injection
  * Core service that handles automatic component discovery and registration
  */
-@CoreService('IocEngine')
+@CoreService(ICoreServiceNames.IOC_ENGINE)
 export class IocEngine implements ICoreService {
 
   public serviceName = 'IocEngine';
@@ -188,7 +196,7 @@ export class IocEngine implements ICoreService {
     if (visitedCount !== inDegree.size) {
       const cycle = this.findCycle(adjacencyList);
 
-      throw new Error(`Circular dependency detected: ${cycle.join(' -> ')}`);
+      throw new CircularDependencyError(`Circular dependency detected: ${cycle.join(' -> ')}`);
     }
 
     return sorted.reverse();

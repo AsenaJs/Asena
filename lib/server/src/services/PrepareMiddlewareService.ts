@@ -2,20 +2,19 @@ import type { AsenaMiddlewareService, MiddlewareClass } from '../../web/middlewa
 import type { BaseMiddleware } from '../../../adapter';
 import { getTypedMetadata } from '../../../utils/typedMetadata';
 import { ComponentConstants } from '../../../ioc/constants';
-import type { Container, ICoreService } from '../../../ioc';
-import { CoreService } from '../../../ioc';
+import { type Container, CoreService, type ICoreService, ICoreServiceNames } from '../../../ioc';
 import { Inject } from '../../../ioc/component';
 
 /**
  * @description Core service for preparing middleware instances
  * Handles middleware resolution and preparation for routing
  */
-@CoreService('PrepareMiddlewareService')
+@CoreService(ICoreServiceNames.PREPARE_MIDDLEWARE_SERVICE)
 export class PrepareMiddlewareService implements ICoreService {
 
   public serviceName = 'PrepareMiddlewareService';
 
-  @Inject('Container')
+  @Inject(ICoreServiceNames.CONTAINER)
   private container: Container;
 
   /**

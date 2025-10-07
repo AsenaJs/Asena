@@ -49,22 +49,22 @@ export const createMockAdapter = () => {
 
   const mockAdapter = {
     name: 'MockAdapter',
-    setPort: mock((port: number) => {}),
+    setPort: mock((_port: number) => {}),
     start: mock(async () => {}),
-    testRequest: mock(async (method: string, path: string) => {
+    testRequest: mock(async (_method: string, _path: string) => {
       return {
         status: 200,
         body: { message: 'mock response' },
-        headers: {}
+        headers: {},
       };
     }),
-    testWebSocket: mock(async (path: string) => {
+    testWebSocket: mock(async (_path: string) => {
       return {
         send: mock(async (message: string) => `echo: ${message}`),
         close: mock(async () => {}),
-        receive: mock(async () => 'connected')
+        receive: mock(async () => 'connected'),
       };
-    })
+    }),
   };
 
   return { adapter: mockAdapter, logger: mockLogger };

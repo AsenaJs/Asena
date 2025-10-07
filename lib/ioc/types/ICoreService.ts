@@ -7,4 +7,3 @@ export interface ICoreService {
   onInit?(): Promise<void> | void;
   onDestroy?(): Promise<void> | void;
 }
-

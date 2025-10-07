@@ -1,6 +1,6 @@
 import { Middleware } from '../../../server/decorators';
-import {AsenaMiddlewareService} from "../../../server/web/middleware";
-import type {AsenaContext} from "../../../adapter";
+import { AsenaMiddlewareService } from '../../../server/web/middleware';
+import type { AsenaContext } from '../../../adapter';
 
 @Middleware()
 export class ExportedTestMiddleware extends AsenaMiddlewareService {

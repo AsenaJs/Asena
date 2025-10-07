@@ -1,7 +1,6 @@
-import { describe, test, expect, beforeEach } from 'bun:test';
-import { AsenaServer } from '../../server';
-import { CoreContainer } from '../../ioc';
-import { CoreBootstrapPhase } from '../../ioc';
+import { beforeEach, describe, expect, test } from 'bun:test';
+import { AsenaServer, ICoreServiceNames } from '../../server';
+import { CoreBootstrapPhase, CoreContainer } from '../../ioc';
 import { createMockAdapter } from '../utils/createMockContext';
 import { Controller, Inject, Service } from '../../server/decorators';
 
@@ -30,13 +29,13 @@ describe('AsenaServer Core Service Integration', () => {
     await coreContainer.bootstrap(mockAdapter, mockLogger);
 
     // Register CoreContainer itself for AsenaServer injection
-    await coreContainer.container.registerInstance('CoreContainer', coreContainer);
+    await coreContainer.container.registerInstance(ICoreServiceNames.CORE_CONTAINER, coreContainer);
 
     // Register AsenaServer as core service
-    await coreContainer.container.register('AsenaServer', AsenaServer, true);
+    await coreContainer.container.register(ICoreServiceNames.ASENA_SERVER, AsenaServer, true);
 
     // Resolve AsenaServer
-    const server = await coreContainer.resolve<AsenaServer<any>>('AsenaServer');
+    const server = await coreContainer.resolve<AsenaServer<any>>(ICoreServiceNames.ASENA_SERVER);
 
     expect(server).toBeInstanceOf(AsenaServer);
     expect(server.serviceName).toBe('AsenaServer');
@@ -45,10 +44,10 @@ describe('AsenaServer Core Service Integration', () => {
 
   test('AsenaServer should have all dependencies injected', async () => {
     await coreContainer.bootstrap(mockAdapter, mockLogger);
-    await coreContainer.container.registerInstance('CoreContainer', coreContainer);
-    await coreContainer.container.register('AsenaServer', AsenaServer, true);
+    await coreContainer.container.registerInstance(ICoreServiceNames.CORE_CONTAINER, coreContainer);
+    await coreContainer.container.register(ICoreServiceNames.ASENA_SERVER, AsenaServer, true);
 
-    const server = await coreContainer.resolve<AsenaServer<any>>('AsenaServer');
+    const server = await coreContainer.resolve<AsenaServer<any>>(ICoreServiceNames.ASENA_SERVER);
 
     // Verify all field injections
     expect(server['_coreContainer']).toBe(coreContainer);
@@ -63,8 +62,8 @@ describe('AsenaServer Core Service Integration', () => {
 
   test('AsenaServer should be singleton', async () => {
     await coreContainer.bootstrap(mockAdapter, mockLogger);
-    await coreContainer.container.registerInstance('CoreContainer', coreContainer);
-    await coreContainer.container.register('AsenaServer', AsenaServer, true);
+    await coreContainer.container.registerInstance(ICoreServiceNames.CORE_CONTAINER, coreContainer);
+    await coreContainer.container.register(ICoreServiceNames.ASENA_SERVER, AsenaServer, true);
 
     // Resolve multiple times
     const server1 = await coreContainer.resolve<AsenaServer<any>>('AsenaServer');
@@ -75,10 +74,10 @@ describe('AsenaServer Core Service Integration', () => {
 
   test('AsenaServer should implement ICoreService', async () => {
     await coreContainer.bootstrap(mockAdapter, mockLogger);
-    await coreContainer.container.registerInstance('CoreContainer', coreContainer);
-    await coreContainer.container.register('AsenaServer', AsenaServer, true);
+    await coreContainer.container.registerInstance(ICoreServiceNames.CORE_CONTAINER, coreContainer);
+    await coreContainer.container.register(ICoreServiceNames.ASENA_SERVER, AsenaServer, true);
 
-    const server = await coreContainer.resolve<AsenaServer<any>>('AsenaServer');
+    const server = await coreContainer.resolve<AsenaServer<any>>(ICoreServiceNames.ASENA_SERVER);
 
     expect(server.serviceName).toBe('AsenaServer');
     expect(typeof server.onInit).toBe('function');
@@ -86,10 +85,10 @@ describe('AsenaServer Core Service Integration', () => {
 
   test('AsenaServer onInit should be called after injection', async () => {
     await coreContainer.bootstrap(mockAdapter, mockLogger);
-    await coreContainer.container.registerInstance('CoreContainer', coreContainer);
-    await coreContainer.container.register('AsenaServer', AsenaServer, true);
+    await coreContainer.container.registerInstance(ICoreServiceNames.CORE_CONTAINER, coreContainer);
+    await coreContainer.container.register(ICoreServiceNames.ASENA_SERVER, AsenaServer, true);
 
-    const server = await coreContainer.resolve<AsenaServer<any>>('AsenaServer');
+    const server = await coreContainer.resolve<AsenaServer<any>>(ICoreServiceNames.ASENA_SERVER);
 
     // onInit should be callable (lifecycle hook)
     expect(() => server.onInit()).not.toThrow();
@@ -119,16 +118,16 @@ describe('AsenaServer Core Service Integration', () => {
 }
 
     await coreContainer.bootstrap(mockAdapter, mockLogger);
-    await coreContainer.container.registerInstance('CoreContainer', coreContainer);
+    await coreContainer.container.registerInstance(ICoreServiceNames.CORE_CONTAINER, coreContainer);
 
     // Register user components
     await coreContainer.container.register('TestService', TestService, true);
     await coreContainer.container.register('TestController', TestController, true);
 
     // Register AsenaServer
-    await coreContainer.container.register('AsenaServer', AsenaServer, true);
+    await coreContainer.container.register(ICoreServiceNames.ASENA_SERVER, AsenaServer, true);
 
-    const server = await coreContainer.resolve<AsenaServer<any>>('AsenaServer');
+    const server = await coreContainer.resolve<AsenaServer<any>>(ICoreServiceNames.ASENA_SERVER);
 
     expect(server).toBeInstanceOf(AsenaServer);
     expect(server.coreContainer).toBe(coreContainer);
@@ -136,10 +135,10 @@ describe('AsenaServer Core Service Integration', () => {
 
   test('AsenaServer should handle port configuration', async () => {
     await coreContainer.bootstrap(mockAdapter, mockLogger);
-    await coreContainer.container.registerInstance('CoreContainer', coreContainer);
-    await coreContainer.container.register('AsenaServer', AsenaServer, true);
+    await coreContainer.container.registerInstance(ICoreServiceNames.CORE_CONTAINER, coreContainer);
+    await coreContainer.container.register(ICoreServiceNames.ASENA_SERVER, AsenaServer, true);
 
-    const server = await coreContainer.resolve<AsenaServer<any>>('AsenaServer');
+    const server = await coreContainer.resolve<AsenaServer<any>>(ICoreServiceNames.ASENA_SERVER);
 
     // Configure port
     server.port(8080);
@@ -149,10 +148,10 @@ describe('AsenaServer Core Service Integration', () => {
 
   test('AsenaServer should handle garbage collection configuration', async () => {
     await coreContainer.bootstrap(mockAdapter, mockLogger);
-    await coreContainer.container.registerInstance('CoreContainer', coreContainer);
-    await coreContainer.container.register('AsenaServer', AsenaServer, true);
+    await coreContainer.container.registerInstance(ICoreServiceNames.CORE_CONTAINER, coreContainer);
+    await coreContainer.container.register(ICoreServiceNames.ASENA_SERVER, AsenaServer, true);
 
-    const server = await coreContainer.resolve<AsenaServer<any>>('AsenaServer');
+    const server = await coreContainer.resolve<AsenaServer<any>>(ICoreServiceNames.ASENA_SERVER);
 
     // Configure GC
     (server as any)._gc = true;
@@ -162,10 +161,10 @@ describe('AsenaServer Core Service Integration', () => {
 
   test('AsenaServer should access CoreContainer phases', async () => {
     await coreContainer.bootstrap(mockAdapter, mockLogger);
-    await coreContainer.container.registerInstance('CoreContainer', coreContainer);
-    await coreContainer.container.register('AsenaServer', AsenaServer, true);
+    await coreContainer.container.registerInstance(ICoreServiceNames.CORE_CONTAINER, coreContainer);
+    await coreContainer.container.register(ICoreServiceNames.ASENA_SERVER, AsenaServer, true);
 
-    const server = await coreContainer.resolve<AsenaServer<any>>('AsenaServer');
+    const server = await coreContainer.resolve<AsenaServer<any>>(ICoreServiceNames.ASENA_SERVER);
 
     // Verify phase access
     expect(server.coreContainer.currentPhase).toBe(CoreBootstrapPhase.USER_COMPONENTS_SCAN);
@@ -209,16 +208,16 @@ describe('AsenaServer Core Service Integration', () => {
 }
 
     await coreContainer.bootstrap(mockAdapter, mockLogger);
-    await coreContainer.container.registerInstance('CoreContainer', coreContainer);
+    await coreContainer.container.registerInstance(ICoreServiceNames.CORE_CONTAINER, coreContainer);
 
     // Register services with dependencies
     await coreContainer.container.register('DatabaseService', DatabaseService, true);
     await coreContainer.container.register('UserService', UserService, true);
     await coreContainer.container.register('UserController', UserController, true);
 
-    await coreContainer.container.register('AsenaServer', AsenaServer, true);
+    await coreContainer.container.register(ICoreServiceNames.ASENA_SERVER, AsenaServer, true);
 
-    const server = await coreContainer.resolve<AsenaServer<any>>('AsenaServer');
+    const server = await coreContainer.resolve<AsenaServer<any>>(ICoreServiceNames.ASENA_SERVER);
 
     expect(server).toBeInstanceOf(AsenaServer);
     expect(server.coreContainer).toBe(coreContainer);
@@ -226,15 +225,15 @@ describe('AsenaServer Core Service Integration', () => {
 
   test('AsenaServer should handle multiple core services', async () => {
     await coreContainer.bootstrap(mockAdapter, mockLogger);
-    await coreContainer.container.registerInstance('CoreContainer', coreContainer);
-    await coreContainer.container.register('AsenaServer', AsenaServer, true);
+    await coreContainer.container.registerInstance(ICoreServiceNames.CORE_CONTAINER, coreContainer);
+    await coreContainer.container.register(ICoreServiceNames.ASENA_SERVER, AsenaServer, true);
 
-    const server = await coreContainer.resolve<AsenaServer<any>>('AsenaServer');
+    const server = await coreContainer.resolve<AsenaServer<any>>(ICoreServiceNames.ASENA_SERVER);
 
     // Verify all core services are accessible
-    const prepareMiddleware = await server.coreContainer.resolve('PrepareMiddlewareService');
-    const prepareConfig = await server.coreContainer.resolve('PrepareConfigService');
-    const iocEngine = await server.coreContainer.resolve('IocEngine');
+    const prepareMiddleware = await server.coreContainer.resolve(ICoreServiceNames.PREPARE_MIDDLEWARE_SERVICE);
+    const prepareConfig = await server.coreContainer.resolve(ICoreServiceNames.PREPARE_CONFIG_SERVICE);
+    const iocEngine = await server.coreContainer.resolve(ICoreServiceNames.IOC_ENGINE);
 
     expect(prepareMiddleware).toBeDefined();
     expect(prepareConfig).toBeDefined();
@@ -243,14 +242,16 @@ describe('AsenaServer Core Service Integration', () => {
 
   test('AsenaServer should maintain service references', async () => {
     await coreContainer.bootstrap(mockAdapter, mockLogger);
-    await coreContainer.container.registerInstance('CoreContainer', coreContainer);
-    await coreContainer.container.register('AsenaServer', AsenaServer, true);
+    await coreContainer.container.registerInstance(ICoreServiceNames.CORE_CONTAINER, coreContainer);
+    await coreContainer.container.register(ICoreServiceNames.ASENA_SERVER, AsenaServer, true);
 
-    const server = await coreContainer.resolve<AsenaServer<any>>('AsenaServer');
+    const server = await coreContainer.resolve<AsenaServer<any>>(ICoreServiceNames.ASENA_SERVER);
 
     // Verify service references are maintained
-    expect(server['prepareMiddleware']).toBe(await coreContainer.resolve('PrepareMiddlewareService'));
-    expect(server['prepareConfigService']).toBe(await coreContainer.resolve('PrepareConfigService'));
-    expect(server['prepareWebsocketService']).toBe(await coreContainer.resolve('PrepareWebsocketService'));
+    expect(server['prepareMiddleware']).toBe(await coreContainer.resolve(ICoreServiceNames.PREPARE_MIDDLEWARE_SERVICE));
+    expect(server['prepareConfigService']).toBe(await coreContainer.resolve(ICoreServiceNames.PREPARE_CONFIG_SERVICE));
+    expect(server['prepareWebsocketService']).toBe(
+      await coreContainer.resolve(ICoreServiceNames.PREPARE_WEBSOCKET_SERVICE),
+    );
   });
 });

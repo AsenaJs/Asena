@@ -1,6 +1,6 @@
 import type { AsenaContext, AsenaServeOptions } from '../../adapter';
 
-import type {MiddlewareClass} from "../web/middleware";
+import type { MiddlewareClass } from '../web/middleware';
 
 /**
  * Configuration interface for Asena framework

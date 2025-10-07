@@ -1,6 +1,12 @@
 import type { Class, StaticServeClass } from './types';
-import type { CoreContainer, ICoreService } from '../ioc';
-import { ComponentType, CoreBootstrapPhase, CoreService } from '../ioc';
+import {
+  ComponentType,
+  CoreBootstrapPhase,
+  type CoreContainer,
+  CoreService,
+  type ICoreService,
+  ICoreServiceNames,
+} from '../ioc';
 import type {
   ApiParams,
   AsenaAdapter,
@@ -20,42 +26,40 @@ import type { PrepareMiddlewareService } from './src/services/PrepareMiddlewareS
 import type { PrepareConfigService } from './src/services/PrepareConfigService';
 import type { PrepareWebsocketService } from './src/services/PrepareWebsocketService';
 import type { PrepareValidatorService } from './src/services/PrepareValidatorService';
-import type {
-  PrepareStaticServeConfigService
-} from './src/services/PrepareStaticServeConfigService';
+import type { PrepareStaticServeConfigService } from './src/services/PrepareStaticServeConfigService';
 import { Inject } from '../ioc/component';
 
 /**
  * @description AsenaServer - Main server class for Asena framework
  * Now a core service managed by IoC container with field injection
  */
-@CoreService('AsenaServer')
+@CoreService(ICoreServiceNames.ASENA_SERVER)
 export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreService {
 
   public serviceName = 'AsenaServer';
 
-  @Inject('CoreContainer')
+  @Inject(ICoreServiceNames.CORE_CONTAINER)
   private _coreContainer!: CoreContainer;
 
-  @Inject('AsenaAdapter')
+  @Inject(ICoreServiceNames.ASENA_ADAPTER)
   private _adapter!: A;
 
-  @Inject('ServerLogger')
+  @Inject(ICoreServiceNames.SERVER_LOGGER)
   private _logger!: ServerLogger;
 
-  @Inject('PrepareMiddlewareService')
+  @Inject(ICoreServiceNames.PREPARE_MIDDLEWARE_SERVICE)
   private prepareMiddleware!: PrepareMiddlewareService;
 
-  @Inject('PrepareConfigService')
+  @Inject(ICoreServiceNames.PREPARE_CONFIG_SERVICE)
   private prepareConfigService!: PrepareConfigService;
 
-  @Inject('PrepareWebsocketService')
+  @Inject(ICoreServiceNames.PREPARE_WEBSOCKET_SERVICE)
   private prepareWebsocketService!: PrepareWebsocketService;
 
-  @Inject('PrepareValidatorService')
+  @Inject(ICoreServiceNames.PREPARE_VALIDATOR_SERVICE)
   private prepareValidatorService!: PrepareValidatorService;
 
-  @Inject('PrepareStaticServeConfigService')
+  @Inject(ICoreServiceNames.PREPARE_STATIC_SERVE_CONFIG_SERVICE)
   private prepareStaticServeConfigService!: PrepareStaticServeConfigService;
 
   // Instance state

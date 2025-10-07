@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
 import { Component } from '../../ioc/component/decorators/Component';
 import type { InjectableComponent } from '../../ioc';
+import { Container, IocEngine } from '../../ioc';
 import { Inject, Scope } from '../../ioc/component';
-import { IocEngine, Container } from '../../ioc';
 import type { AsenaContext } from '../../adapter';
 import { createMockContext } from '../utils/createMockContext.test';
 import { ExportedTestService } from '../example-app-structure/service/ExportedTestService.test';

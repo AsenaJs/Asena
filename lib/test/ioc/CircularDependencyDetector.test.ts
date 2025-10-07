@@ -1,6 +1,5 @@
-import { describe, test, expect, beforeEach } from 'bun:test';
-import { CircularDependencyDetector, CircularDependencyError } from '../../ioc';
-import { Container } from '../../ioc';
+import { beforeEach, describe, expect, test } from 'bun:test';
+import { CircularDependencyDetector, CircularDependencyError, Container } from '../../ioc';
 import { Component } from '../../server/decorators';
 import { Inject } from '../../ioc/component';
 
@@ -209,8 +208,8 @@ describe('Container Integration - Circular Dependency Detection', () => {
       await container.register('ServiceB', ServiceB, false);
       await container.register('ServiceA', ServiceA, false);
 
-       expect(container.resolve('ServiceA')).rejects.toThrow(CircularDependencyError);
-       expect(container.resolve('ServiceA')).rejects.toThrow(/ServiceA -> ServiceB -> ServiceA/);
+      expect(container.resolve('ServiceA')).rejects.toThrow(CircularDependencyError);
+      expect(container.resolve('ServiceA')).rejects.toThrow(/ServiceA -> ServiceB -> ServiceA/);
     });
 
     test('should detect self-referencing dependency (A -> A)', async () => {
@@ -427,4 +426,3 @@ describe('Container Integration - Circular Dependency Detection', () => {
     });
   });
 });
-

@@ -2,20 +2,19 @@ import { getOwnTypedMetadata, getTypedMetadata } from '../../../utils/typedMetad
 import { ComponentConstants } from '../../../ioc/constants';
 import type { AsenaStaticServeService, StaticServeClass } from '../../web/middleware';
 import type { BaseStaticServeParams } from '../../../adapter';
-import type { Container, ICoreService } from '../../../ioc';
-import { CoreService } from '../../../ioc';
+import { type Container, CoreService, type ICoreService, ICoreServiceNames } from '../../../ioc';
 import { Inject } from '../../../ioc/component';
 
 /**
  * @description Core service for preparing static serve configuration
  * Handles static serve service resolution and configuration
  */
-@CoreService('PrepareStaticServeConfigService')
+@CoreService(ICoreServiceNames.PREPARE_STATIC_SERVE_CONFIG_SERVICE)
 export class PrepareStaticServeConfigService implements ICoreService {
 
   public serviceName = 'PrepareStaticServeConfigService';
 
-  @Inject('Container')
+  @Inject(ICoreServiceNames.CONTAINER)
   private container: Container;
 
   public async prepare(staticServeClass: StaticServeClass): Promise<BaseStaticServeParams> {

@@ -1,4 +1,5 @@
 import type { Server } from 'bun';
+
 // TODO: this section needs to rework
 /**
  * AsenaWebSocketServer class handles WebSocket server operations and message broadcasting

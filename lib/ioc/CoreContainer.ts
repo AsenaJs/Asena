@@ -2,7 +2,7 @@ import { Container } from './Container';
 import { IocEngine } from './IocEngine';
 import type { AsenaAdapter } from '../adapter';
 import type { ServerLogger } from '../logger';
-import { CoreBootstrapPhase } from './types';
+import { CoreBootstrapPhase, ICoreServiceNames } from './types';
 import { PrepareMiddlewareService } from '../server/src/services/PrepareMiddlewareService';
 import { PrepareConfigService } from '../server/src/services/PrepareConfigService';
 import { PrepareWebsocketService } from '../server/src/services/PrepareWebsocketService';
@@ -79,7 +79,7 @@ export class CoreContainer {
    * @returns {Promise<void>}
    */
   private async registerContainer(): Promise<void> {
-    await this._container.registerInstance('Container', this._container);
+    await this._container.registerInstance(ICoreServiceNames.CONTAINER, this._container);
     this._phase = CoreBootstrapPhase.LOGGER_INIT;
   }
 
@@ -89,16 +89,17 @@ export class CoreContainer {
    * @returns {Promise<void>}
    */
   private async registerLogger(logger: ServerLogger): Promise<void> {
-    await this._container.registerInstance('ServerLogger', logger);
+    await this._container.registerInstance(ICoreServiceNames.SERVER_LOGGER, logger);
     this._phase = CoreBootstrapPhase.IOC_ENGINE_INIT;
   }
 
   /**
-   * @description Phase 3: Register IocEngine   *  will inject Container automatically
+   * @description Phase 3: Register IocEngine
+   * IocEngine will inject Container automatically
    * @returns {Promise<void>}
    */
   private async registerIocEngine(): Promise<void> {
-    await this._container.register('IocEngine', IocEngine, true);
+    await this._container.register(ICoreServiceNames.IOC_ENGINE, IocEngine, true);
     this._phase = CoreBootstrapPhase.HTTP_ADAPTER_INIT;
   }
 
@@ -108,7 +109,7 @@ export class CoreContainer {
    * @returns {Promise<void>}
    */
   private async registerAdapters(adapter: AsenaAdapter<any, any>): Promise<void> {
-    await this._container.registerInstance('AsenaAdapter', adapter);
+    await this._container.registerInstance(ICoreServiceNames.ASENA_ADAPTER, adapter);
     this._phase = CoreBootstrapPhase.PREPARE_SERVICES_INIT;
   }
 
@@ -119,11 +120,11 @@ export class CoreContainer {
    */
   private async registerPrepareServices(): Promise<void> {
     const services = [
-      { name: 'PrepareMiddlewareService', Class: PrepareMiddlewareService },
-      { name: 'PrepareConfigService', Class: PrepareConfigService },
-      { name: 'PrepareWebsocketService', Class: PrepareWebsocketService },
-      { name: 'PrepareValidatorService', Class: PrepareValidatorService },
-      { name: 'PrepareStaticServeConfigService', Class: PrepareStaticServeConfigService },
+      { name: ICoreServiceNames.PREPARE_MIDDLEWARE_SERVICE, Class: PrepareMiddlewareService },
+      { name: ICoreServiceNames.PREPARE_CONFIG_SERVICE, Class: PrepareConfigService },
+      { name: ICoreServiceNames.PREPARE_WEBSOCKET_SERVICE, Class: PrepareWebsocketService },
+      { name: ICoreServiceNames.PREPARE_VALIDATOR_SERVICE, Class: PrepareValidatorService },
+      { name: ICoreServiceNames.PREPARE_STATIC_SERVE_CONFIG_SERVICE, Class: PrepareStaticServeConfigService },
     ];
 
     for (const service of services) {

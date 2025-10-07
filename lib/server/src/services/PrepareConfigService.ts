@@ -1,25 +1,23 @@
 import type { AsenaConfig } from '../../config';
-import type { Container, ICoreService } from '../../../ioc';
-import { ComponentType } from '../../../ioc';
+import { ComponentType, type Container, CoreService, type ICoreService, ICoreServiceNames } from '../../../ioc';
 import { getTypedMetadata } from '../../../utils/typedMetadata';
 import { ComponentConstants } from '../../../ioc/constants';
 import { type ServerLogger, yellow } from '../../../logger';
-import { CoreService } from '../../../ioc';
 import { Inject } from '../../../ioc/component';
 
 /**
  * @description Core service for preparing configuration
  * Handles config resolution and validation
  */
-@CoreService('PrepareConfigService')
+@CoreService(ICoreServiceNames.PREPARE_CONFIG_SERVICE)
 export class PrepareConfigService implements ICoreService {
 
   public serviceName = 'PrepareConfigService';
 
-  @Inject('Container')
+  @Inject(ICoreServiceNames.CONTAINER)
   private container: Container;
 
-  @Inject('ServerLogger')
+  @Inject(ICoreServiceNames.SERVER_LOGGER)
   private logger: ServerLogger;
 
   public async prepare(): Promise<AsenaConfig> {

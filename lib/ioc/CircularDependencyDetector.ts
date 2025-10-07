@@ -4,7 +4,7 @@
  */
 export class CircularDependencyError extends Error {
 
- public constructor(message: string) {
+  public constructor(message: string) {
     super(message);
     this.name = 'CircularDependencyError';
   }
@@ -30,9 +30,7 @@ export class CircularDependencyDetector {
       const stack = Array.from(this.resolutionStack);
       const chain = [...stack, serviceName].join(' -> ');
 
-      throw new CircularDependencyError(
-        `Circular dependency detected: ${chain}`
-      );
+      throw new CircularDependencyError(`Circular dependency detected: ${chain}`);
     }
   }
 
@@ -80,4 +78,3 @@ export class CircularDependencyDetector {
   }
 
 }
-
