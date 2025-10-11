@@ -1,2 +1,2 @@
 export { AsenaServerFactory, AsenaServer } from './lib/server';
-export { ICoreServiceNames } from './lib/ioc';
+export { ICoreServiceNames, ComponentConstants } from './lib/ioc';

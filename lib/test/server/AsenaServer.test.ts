@@ -211,6 +211,7 @@ describe('AsenaServer', () => {
       await server.coreContainer.container.resolve('TestWebSocket');
 
     const params: WebsocketRouteParams<any> = {
+      controllerName: 'TestWebSocket',
       path: 'ws',
       middlewares: [],
       websocketService: webSocketService as TestWebSocket,

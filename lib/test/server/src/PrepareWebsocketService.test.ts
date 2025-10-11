@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
 import { PrepareWebsocketService } from '../../../server/src/services/PrepareWebsocketService';
-import { ComponentType } from '../../../ioc/types';
+import { ComponentType } from '../../../ioc';
 import { WebSocket } from '../../../server/decorators';
 import { AsenaWebSocketService, type Socket } from '../../../server/web/websocket';
 
@@ -68,7 +68,6 @@ describe('PrepareWebsocketService', () => {
     const result = await service.prepare();
 
     expect(result).toBeUndefined();
-    expect(mockLogger.info).toHaveBeenCalledWith('No websockets found');
   });
 
   it('should throw error when duplicate websocket paths found', async () => {

@@ -101,9 +101,10 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
 
     // Phase 8: Server ready
     this._coreContainer.setPhase(CoreBootstrapPhase.SERVER_READY);
-    this._logger.info('Server started on port ' + this._port);
 
     await this._adapter.start();
+
+    this._logger.info('Server started on port ' + this._port);
 
     if (this._gc) {
       bun.gc(true);
@@ -137,10 +138,6 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
     await this.validateAndSetControllers();
 
     for (const controller of this.controllers) {
-      const name = getTypedMetadata<string>(ComponentConstants.NameKey, controller.constructor);
-
-      this._logger.info(`Controller: ${green(name)} found:`);
-
       const routes = getOwnTypedMetadata<Route>(ComponentConstants.RouteKey, controller.constructor) || {};
 
       const routePath: string = getOwnTypedMetadata<string>(ComponentConstants.PathKey, controller.constructor) || '';
@@ -160,10 +157,10 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
           handler: controller[name].bind(controller),
           staticServe: await this.prepareStaticServeConfig(params.staticServe),
           validator: validatorInstance,
+          controllerName: getTypedMetadata<string>(ComponentConstants.NameKey, controller.constructor),
+          controllerBasePath: routePath,
         });
       }
-
-      this._logger.info(`Controller: ${green(name)} successfully registered.`);
     }
   }
 
@@ -265,6 +262,7 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
         path: path,
         middlewares: middlewares,
         websocketService: websocket,
+        controllerName: getTypedMetadata<string>(ComponentConstants.NameKey, websocket.constructor),
       });
     }
   }

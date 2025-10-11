@@ -4,3 +4,4 @@ export * from './CoreContainer';
 export * from './CircularDependencyDetector';
 export * from './decorators';
 export * from './types';
+export * from './constants';

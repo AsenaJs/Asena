@@ -1,9 +1,8 @@
 import { getOwnTypedMetadata } from '../../../utils/typedMetadata';
-import { ComponentConstants } from '../../../ioc/constants';
+import { ComponentConstants } from '../../../ioc';
 import type { AsenaWebSocketService, WebSocketData } from '../../web/websocket';
 import type { Container, ICoreService } from '../../../ioc';
 import { ComponentType, CoreService, ICoreServiceNames } from '../../../ioc';
-import type { ServerLogger } from '../../../logger';
 import { Inject } from '../../../ioc/component';
 
 /**
@@ -18,14 +17,10 @@ export class PrepareWebsocketService implements ICoreService {
   @Inject(ICoreServiceNames.CONTAINER)
   private container: Container;
 
-  @Inject(ICoreServiceNames.SERVER_LOGGER)
-  private logger: ServerLogger;
-
   public async prepare(): Promise<AsenaWebSocketService<WebSocketData<any>>[]> {
     const webSockets = await this.container.resolveAll<AsenaWebSocketService<WebSocketData>>(ComponentType.WEBSOCKET);
 
     if (!webSockets?.length) {
-      this.logger.info('No websockets found');
       return;
     }
 
