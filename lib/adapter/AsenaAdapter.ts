@@ -3,6 +3,7 @@ import type { Server } from 'bun';
 import type { AsenaWebsocketAdapter } from './AsenaWebsocketAdapter';
 import type { ServerLogger } from '../logger';
 import type { AsenaContext } from './AsenaContext';
+import type { GlobalMiddlewareRouteConfig } from '../server/config';
 
 /**
  * Abstract class representing an adapter for the Asena framework.
@@ -54,10 +55,25 @@ export abstract class AsenaAdapter<C extends AsenaContext<any, any>, VS> {
 
   /**
    * Registers middleware to the application
+   *
    * @param middleware - Middleware implementation
-   * @param path - Optional path to apply the middleware to
+   * @param config - Optional route configuration for pattern matching
+   *
+   * @example
+   * ```typescript
+   * // Old API (still supported)
+   * adapter.use(middleware);
+   *
+   * // New API with pattern matching
+   * adapter.use(middleware, {
+   *   routes: {
+   *     include: ['/api/*'],
+   *     exclude: ['/api/health']
+   *   }
+   * });
+   * ```
    */
-  public abstract use(middleware: BaseMiddleware<C>, path?: string): Promise<void> | void;
+  public abstract use(middleware: BaseMiddleware<C>, config?: GlobalMiddlewareRouteConfig): Promise<void> | void;
 
   /**
    * Registers a new route with the application

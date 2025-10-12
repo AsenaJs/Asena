@@ -73,6 +73,10 @@
     "./container": {
       "import": "./dist/lib/ioc/Container.js",
       "types": "./dist/lib/ioc/Container.d.ts"
+    },
+    "./utils/patternMatcher": {
+      "import": "./dist/lib/utils/patternMatcher.js",
+      "types": "./dist/lib/utils/patternMatcher.d.ts"
     }
   },
   "description": "Asena is a spring like framework for building web applications built with bun",

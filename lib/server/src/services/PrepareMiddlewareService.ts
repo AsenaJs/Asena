@@ -1,7 +1,7 @@
 import type { AsenaMiddlewareService, MiddlewareClass } from '../../web/middleware';
 import type { BaseMiddleware } from '../../../adapter';
 import { getTypedMetadata } from '../../../utils/typedMetadata';
-import { ComponentConstants } from '../../../ioc/constants';
+import { ComponentConstants } from '../../../ioc';
 import { type Container, CoreService, type ICoreService, ICoreServiceNames } from '../../../ioc';
 import { Inject } from '../../../ioc/component';
 

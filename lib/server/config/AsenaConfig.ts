@@ -3,6 +3,55 @@ import type { AsenaContext, AsenaServeOptions } from '../../adapter';
 import type { MiddlewareClass } from '../web/middleware';
 
 /**
+ * Route configuration for global middleware
+ */
+export interface GlobalMiddlewareRouteConfig {
+  /**
+   * Paths to include. Supports glob patterns.
+   * Default: ['*'] (all routes)
+   *
+   * @example
+   * include: ['/api/*', '/admin/*']
+   * include: ['/users/:id', '/posts/:id']
+   */
+  include?: string[];
+
+  /**
+   * Paths to exclude. Supports glob patterns.
+   * Exclusions take precedence over inclusions.
+   * Default: []
+   *
+   * @example
+   * exclude: ['/health', '/metrics']
+   * exclude: ['/api/public/*']
+   */
+  exclude?: string[];
+}
+
+/**
+ * Global middleware configuration
+ */
+export interface GlobalMiddlewareConfig {
+  /**
+   * Middleware class to apply
+   */
+  middleware: MiddlewareClass;
+
+  /**
+   * Route configuration for this middleware
+   * If not specified, middleware applies to all routes
+   */
+  routes?: GlobalMiddlewareRouteConfig;
+}
+
+/**
+ * Union type for backward compatibility
+ * - MiddlewareClass: Apply to all routes (old behavior)
+ * - GlobalMiddlewareConfig: Apply with pattern matching (new behavior)
+ */
+export type GlobalMiddlewareEntry = MiddlewareClass | GlobalMiddlewareConfig;
+
+/**
  * Configuration interface for Asena framework
  * @template C - Extends AsenaContext type with generic parameters
  */
@@ -22,27 +71,56 @@ export interface AsenaConfig<C extends AsenaContext<any, any> = AsenaContext<any
   serveOptions?(): AsenaServeOptions;
 
   /**
-   * Global middleware configuration for applying middleware across all routes.
-   * Similar to Hono's global middleware usage:
-   * @example
-   * // Hono usage:
-   * const app = new Hono()
-   * app.use(middleware1)
-   * app.use(middleware2)
+   * Global middleware configuration for applying middleware across routes.
    *
-   * // Equivalent in Asena:
-   * class Config implements AsenaConfig {
-   *   globalMiddlewares() {
-   *     return [
-   *       MiddlewareService1,
-   *       MiddlewareService2
-   *     ]
-   *   }
+   * Supports two formats:
+   * 1. Simple: MiddlewareClass (applies to all routes)
+   * 2. Advanced: GlobalMiddlewareConfig (pattern-based filtering)
+   *
+   * @example
+   * ```typescript
+   * // Simple format (backward compatible)
+   * globalMiddlewares() {
+   *   return [LoggerMiddleware, CorsMiddleware];
    * }
    *
-   * @returns Array of middleware services to be applied globally
+   * // Advanced format with pattern matching
+   * globalMiddlewares() {
+   *   return [
+   *     // Apply to all routes
+   *     LoggerMiddleware,
+   *
+   *     // Apply only to /api/* and /admin/*
+   *     {
+   *       middleware: AuthMiddleware,
+   *       routes: {
+   *         include: ['/api/*', '/admin/*']
+   *       }
+   *     },
+   *
+   *     // Apply to all routes except /health
+   *     {
+   *       middleware: RateLimitMiddleware,
+   *       routes: {
+   *         exclude: ['/health', '/metrics']
+   *       }
+   *     },
+   *
+   *     // Advanced: include + exclude
+   *     {
+   *       middleware: AuditMiddleware,
+   *       routes: {
+   *         include: ['/api/*'],
+   *         exclude: ['/api/health']
+   *       }
+   *     }
+   *   ];
+   * }
+   * ```
+   *
+   * @returns Array of middleware configurations
    */
-  globalMiddlewares?(): Promise<MiddlewareClass[]> | MiddlewareClass[];
+  globalMiddlewares?(): Promise<GlobalMiddlewareEntry[]> | GlobalMiddlewareEntry[];
 }
 
 export type AsenaConfigFunctions = 'onError' | 'serveOptions' | 'globalMiddlewares';

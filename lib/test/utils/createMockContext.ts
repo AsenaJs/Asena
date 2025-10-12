@@ -1,5 +1,7 @@
 import { mock } from 'bun:test';
 import type { AsenaContext, CookieExtra, SendOptions } from '../../adapter';
+import type { GlobalMiddlewareRouteConfig } from '../../server/config';
+import { shouldApplyMiddleware } from '../../utils/patternMatcher';
 
 export const createMockContext = () =>
   ({
@@ -52,8 +54,7 @@ export const createMockAdapter = () => {
 
   // Store registered routes and global middlewares for testing
   const registeredRoutes: Map<string, any> = new Map();
-  const globalMiddlewares: any[] = [];
-  const routeMiddlewares: Map<string, any[]> = new Map();
+  const globalMiddlewares: Array<{ middleware: any; config?: GlobalMiddlewareRouteConfig }> = [];
 
   const mockAdapter = {
     name: 'MockAdapter',
@@ -66,17 +67,9 @@ export const createMockAdapter = () => {
       registeredRoutes.set(key, route);
       return true;
     }),
-    use: mock(async (middleware: any, routePath?: string) => {
-      // If routePath is provided, it's a route-specific middleware
-      // Otherwise, it's a global middleware
-      if (routePath) {
-        const existing = routeMiddlewares.get(routePath) || [];
-
-        routeMiddlewares.set(routePath, [...existing, middleware]);
-      } else {
-        globalMiddlewares.push(middleware);
-      }
-
+    use: mock(async (middleware: any, config?: GlobalMiddlewareRouteConfig) => {
+      // Store middleware with its pattern config
+      globalMiddlewares.push({ middleware, config });
       return true;
     }),
     registerWebsocketRoute: mock(async (_websocketRoute: any) => {
@@ -141,13 +134,13 @@ export const createMockAdapter = () => {
 
         mockContext['params'] = mockAdapter.extractRouteParams(route.path, path);
 
-        // Find controller middlewares for this route
-        // Controller middlewares are registered with controller path (e.g., '/test' or '/api')
-        const controllerPath = route.path.split('/').slice(0, -1).join('/') || '/';
-        const controllerMws = routeMiddlewares.get(controllerPath) || [];
+        // Filter global middlewares based on pattern matching
+        const applicableMiddlewares = globalMiddlewares
+          .filter(({ config }) => shouldApplyMiddleware(route.path, config))
+          .map(({ middleware }) => middleware);
 
-        // Combine all middlewares: global + controller + route.middlewares
-        const allMiddlewares = [...globalMiddlewares, ...controllerMws, ...(route.middlewares || [])];
+        // Combine all middlewares: applicable global + route.middlewares
+        const allMiddlewares = [...applicableMiddlewares, ...(route.middlewares || [])];
 
         // Execute middleware chain if present
         if (allMiddlewares.length > 0) {

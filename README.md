@@ -159,7 +159,19 @@ export class AuthMiddleware extends MiddlewareService {
 @Config()
 export class AppConfig {
   globalMiddlewares() {
-    return [AuthMiddleware];
+    return [
+      LoggerMiddleware,  // Apply to all routes
+
+      // Pattern-based
+      {
+        middleware: AuthMiddleware,
+        routes: { include: ['/api/*', '/admin/*'] }
+      },
+      {
+        middleware: RateLimitMiddleware,
+        routes: { exclude: ['/health', '/metrics'] }
+      }
+    ];
   }
 }
 
@@ -204,13 +216,13 @@ Full CLI documentation: [asena.sh/docs/cli](https://asena.sh/docs/cli/overview.h
 
 Built on Bun runtime for exceptional performance:
 
-| Framework      | Requests/sec  | Latency (avg) |
-|----------------|---------------| ------------- |
-| Hono           | 266476.83     | 1.49ms       |
-| **Asena + Ergenecore** | **259593.28** | 1.53ms       |
-| **Asena + Hono-adapter** | **233182.35** | **1.70ms**    |
-| NestJS (Bun)   | 100975.20        | 3.92ms       |
-| NestJS (Node)  | 88083.22        | 5.33ms       |
+| Framework                | Requests/sec          | Latency (avg) |
+|--------------------------|-----------------------|---------------|
+| **Asena + Ergenecore**   | **294962.61**         | **1.34ms**    |
+| Hono                     | 266476.83             | 1.49ms        |
+| **Asena + Hono-adapter** | **233182.35**         | **1.70ms**    |
+| NestJS (Bun)             | 100975.20             | 3.92ms        |
+| NestJS (Node)            | 88083.22              | 5.33ms        |
 
 > Benchmark: 12 threads, 400 connections, 120s duration, Hello World endpoint
 

@@ -28,6 +28,7 @@ import type { PrepareWebsocketService } from './src/services/PrepareWebsocketSer
 import type { PrepareValidatorService } from './src/services/PrepareValidatorService';
 import type { PrepareStaticServeConfigService } from './src/services/PrepareStaticServeConfigService';
 import { Inject } from '../ioc/component';
+import type { GlobalMiddlewareEntry, GlobalMiddlewareConfig } from './config/AsenaConfig';
 
 /**
  * @description AsenaServer - Main server class for Asena framework
@@ -209,8 +210,15 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
       return middlewares;
     }
 
+    // Register controller-level middlewares with pattern matching
+    // Convert routePath to pattern: /api → /api/*
+    const routePattern = routePath ? `${routePath}/*` : undefined;
+
     for (const middleware of middlewares) {
-      await this._adapter.use(middleware, routePath);
+      await this._adapter.use(
+        middleware,
+        routePattern ? { include: [routePattern] } : undefined
+      );
     }
   }
 
@@ -268,7 +276,28 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
   }
 
   /**
+   * @description Normalizes global middleware entry to config format
+   * Handles backward compatibility (MiddlewareClass → GlobalMiddlewareConfig)
+   *
+   * @param entry - Middleware entry (class or config object)
+   * @returns Normalized config object
+   */
+  private normalizeMiddlewareEntry(entry: GlobalMiddlewareEntry): GlobalMiddlewareConfig {
+    // If it's already a config object, return as-is
+    if (typeof entry === 'object' && 'middleware' in entry) {
+      return entry;
+    }
+
+    // If it's a class (old format), convert to config format
+    return {
+      middleware: entry as MiddlewareClass,
+      routes: undefined, // No route config = apply to all routes
+    };
+  }
+
+  /**
    * @description Prepare and apply configuration
+   * Updated to support pattern-based global middlewares
    * @returns {Promise<void>}
    */
   private async prepareConfigs(): Promise<void> {
@@ -286,13 +315,21 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
       await this._adapter.onError(configInstance.onError.bind(configInstance));
     }
 
+    // Pattern-based global middleware registration
     if (typeof configInstance.globalMiddlewares === 'function') {
-      const middlewares = await configInstance.globalMiddlewares();
+      const middlewareEntries = await configInstance.globalMiddlewares();
 
-      const preparedMiddlewares = await this.prepareMiddlewares(middlewares);
+      for (const entry of middlewareEntries) {
+        // Normalize entry to config format (handles backward compatibility)
+        const config = this.normalizeMiddlewareEntry(entry);
 
-      for (const middleware of preparedMiddlewares) {
-        await this._adapter.use(middleware);
+        // Prepare middleware instances
+        const preparedMiddlewares = await this.prepareMiddlewares([config.middleware]);
+
+        // Register with adapter (pass route config)
+        for (const middleware of preparedMiddlewares) {
+          await this._adapter.use(middleware, config.routes);
+        }
       }
     }
 
