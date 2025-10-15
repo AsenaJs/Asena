@@ -4,7 +4,9 @@ A high-performance, NestJS-like IoC web framework built on Bun runtime with full
 
 ## Documentation
 
-For detailed documentation, visit [asena.sh](https://asena.sh) (in progress). Check out [AsenaExample](https://github.com/LibirSoft/AsenaExample) for latest usage patterns.
+For detailed documentation, visit [asena.sh](https://asena.sh).
+
+Also check out [AsenaExample](https://github.com/LibirSoft/AsenaExample) for latest usage patterns.
 
 ## Key Features
 
