@@ -96,7 +96,7 @@ export abstract class AsenaAdapter<C extends AsenaContext<any, any>, VS> {
    * Initializes and starts the server
    * @returns Server instance
    */
-  public abstract start(): Promise<Server> | Server;
+  public abstract start(): Promise<Server<any>> | Server<any>;
 
   /**
    * Sets up global error handling

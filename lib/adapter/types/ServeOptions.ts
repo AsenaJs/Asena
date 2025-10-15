@@ -1,7 +1,7 @@
-import type { ServeOptions, TLSServeOptions, UnixServeOptions, UnixTLSServeOptions } from 'bun';
+import type { ServeOptions } from 'bun';
 import type { WSOptions } from '../../server/web/websocket';
 
-export type AsenaServerOptions = ServeOptions | TLSServeOptions | UnixServeOptions | UnixTLSServeOptions;
+export type AsenaServerOptions = ServeOptions;
 
 export interface AsenaServeOptions {
   serveOptions?: AsenaServerOptions;

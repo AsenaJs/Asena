@@ -1,4 +1,4 @@
-import { ComponentConstants } from '../../ioc/constants';
+import { ComponentConstants } from '../../ioc';
 import { defineTypedMetadata, getOwnTypedMetadata } from '../../utils/typedMetadata';
 
 /**

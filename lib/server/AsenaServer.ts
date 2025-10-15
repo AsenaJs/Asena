@@ -105,8 +105,6 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
 
     await this._adapter.start();
 
-    this._logger.info('Server started on port ' + this._port);
-
     if (this._gc) {
       bun.gc(true);
     }
@@ -215,10 +213,7 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
     const routePattern = routePath ? `${routePath}/*` : undefined;
 
     for (const middleware of middlewares) {
-      await this._adapter.use(
-        middleware,
-        routePattern ? { include: [routePattern] } : undefined
-      );
+      await this._adapter.use(middleware, routePattern ? { include: [routePattern] } : undefined);
     }
   }
 

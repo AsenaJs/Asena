@@ -28,7 +28,7 @@ export abstract class AsenaWebsocketAdapter {
    * WebSocket handler instance for managing connections
    * @private
    */
-  private _websocket: WebSocketHandler;
+  private _websocket: WebSocketHandler<any>;
 
   /**
    * Logger instance for WebSocket-related logging
@@ -79,14 +79,14 @@ export abstract class AsenaWebsocketAdapter {
   /**
    * Gets the WebSocket handler
    */
-  public get websocket(): WebSocketHandler {
+  public get websocket(): WebSocketHandler<any> {
     return this._websocket;
   }
 
   /**
    * Sets the WebSocket handler
    */
-  public set websocket(value: WebSocketHandler) {
+  public set websocket(value: WebSocketHandler<any>) {
     this._websocket = value;
   }
 
