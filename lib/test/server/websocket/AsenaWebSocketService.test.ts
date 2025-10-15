@@ -1,6 +1,6 @@
-import { describe, test, expect, mock, beforeEach } from 'bun:test';
-import { AsenaWebSocketService } from '../../../server/web/websocket';
+import { beforeEach, describe, expect, mock, test } from 'bun:test';
 import type { Socket } from '../../../server/web/websocket';
+import { AsenaWebSocketService } from '../../../server/web/websocket';
 
 describe('AsenaWebSocketService', () => {
   let service: AsenaWebSocketService<any>;
@@ -117,10 +117,14 @@ describe('AsenaWebSocketService', () => {
         cleanup: mock(() => {
           // Simulate actual cleanup behavior
           const topics = Array.from(service.rooms.keys());
+
           for (const topic of topics) {
             const room = service.rooms.get(topic);
+
             if (room) {
+              // eslint-disable-next-line max-nested-callbacks
               const filteredRoom = room.filter((s) => s.id !== tempSocket.id);
+
               if (filteredRoom.length === 0) {
                 service.rooms.delete(topic);
               } else if (filteredRoom.length !== room.length) {
@@ -136,6 +140,7 @@ describe('AsenaWebSocketService', () => {
 
       // Simulate joining a test room
       const testRoom = service.rooms.get('test-room') || [];
+
       testRoom.push(tempSocket);
       service.rooms.set('test-room', testRoom);
 

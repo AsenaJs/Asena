@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
 import { Component } from '../../ioc/component/decorators/Component';
-import type { InjectableComponent } from '../../ioc/types';
+import type { InjectableComponent } from '../../ioc';
+import { Container, IocEngine } from '../../ioc';
 import { Inject, Scope } from '../../ioc/component';
-import { IocEngine } from '../../ioc';
 import type { AsenaContext } from '../../adapter';
 import { createMockContext } from '../utils/createMockContext.test';
 import { ExportedTestService } from '../example-app-structure/service/ExportedTestService.test';
@@ -53,6 +53,8 @@ describe('IocEngine', () => {
 
   beforeEach(() => {
     iocEngine = new IocEngine();
+    // Manually inject container for testing (IocEngine is now a core service)
+    (iocEngine as any)['_container'] = new Container();
     mockContext = createMockContext();
   });
 
@@ -78,7 +80,9 @@ describe('IocEngine', () => {
   });
 
   test('should register components automatically', async () => {
-    iocEngine = new IocEngine({ sourceFolder: 'lib/test/example-app-structure', rootFile: '' });
+    iocEngine = new IocEngine();
+    (iocEngine as any)['_container'] = new Container();
+    iocEngine.setConfig({ sourceFolder: 'lib/test/example-app-structure', rootFile: '' });
     await iocEngine.searchAndRegister();
     console.log('here');
 

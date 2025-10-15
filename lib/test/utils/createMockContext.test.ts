@@ -38,3 +38,34 @@ export const createMockContext = () =>
     send: mock((_data: any, _status?: SendOptions | number) => new Response()),
     redirect: mock((_url: string) => {}),
   }) as unknown as AsenaContext<Request, Response>;
+
+export const createMockAdapter = () => {
+  const mockLogger = {
+    info: mock((message: string) => console.log(`[INFO] ${message}`)),
+    warn: mock((message: string) => console.warn(`[WARN] ${message}`)),
+    error: mock((message: string) => console.error(`[ERROR] ${message}`)),
+    debug: mock((message: string) => console.debug(`[DEBUG] ${message}`)),
+  };
+
+  const mockAdapter = {
+    name: 'MockAdapter',
+    setPort: mock((_port: number) => {}),
+    start: mock(async () => {}),
+    testRequest: mock(async (_method: string, _path: string) => {
+      return {
+        status: 200,
+        body: { message: 'mock response' },
+        headers: {},
+      };
+    }),
+    testWebSocket: mock(async (_path: string) => {
+      return {
+        send: mock(async (message: string) => `echo: ${message}`),
+        close: mock(async () => {}),
+        receive: mock(async () => 'connected'),
+      };
+    }),
+  };
+
+  return { adapter: mockAdapter, logger: mockLogger };
+};

@@ -107,6 +107,7 @@ export class AsenaSocket<T> implements ServerWebSocket<WebSocketData<T>> {
   public cleanup(): void {
     // Create a snapshot of topics to avoid modification during iteration
     const topics = Array.from(this._websocketService.rooms.keys());
+
     for (const topic of topics) {
       this.unsubscribe(topic);
     }

@@ -12,10 +12,13 @@ export interface RouteParams<C extends AsenaContext<any, any>, VS, E = any> {
   handler: AsenaHandler<C>;
   staticServe: BaseStaticServeParams<C, E>;
   validator: BaseValidator<VS>;
+  controllerName?: string;
+  controllerBasePath?: string;
 }
 
 export interface WebsocketRouteParams<C extends AsenaContext<any, any>> {
   path: string;
   middlewares: BaseMiddleware<C>[];
   websocketService: AsenaWebSocketService<any>;
+  controllerName?: string;
 }

@@ -1,7 +1,8 @@
-import { afterEach, beforeEach, describe, expect, mock, spyOn, test } from 'bun:test';
-import { AsenaServer } from '../../server';
+import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
+import type { AsenaServer } from '../../server';
+import { AsenaServerFactory } from '../../server';
 import { Config, Controller, Service, WebSocket } from '../../server/decorators';
-import { ComponentType } from '../../ioc/types';
+import { ComponentType } from '../../ioc';
 import { Inject, PostConstruct } from '../../ioc/component';
 import { AsenaWebSocketService, type Socket } from '../../server/web/websocket';
 import { Get } from '../../server/web/decorators';
@@ -77,6 +78,7 @@ describe('AsenaServer', () => {
 
     // Mock adapter
     mockAdapter = {
+      name: 'MockAdapter',
       options: {},
       setPort: mock(() => {}),
       start: mock(async () => {}),
@@ -94,25 +96,33 @@ describe('AsenaServer', () => {
         startWebsocket: mock(() => {}),
       },
     };
-
-    server = new AsenaServer(mockAdapter, console);
-    server.logger(mockLogger);
   });
 
   afterEach(() => {
     mock().mockClear();
   });
 
-  test('should initialize server with default configuration', () => {
+  test('should initialize server with factory', async () => {
+    server = await AsenaServerFactory.create({
+      adapter: mockAdapter,
+      logger: mockLogger,
+      port: 3000,
+      components: [],
+    });
+
     expect(server).toBeDefined();
+    expect(server.coreContainer).toBeDefined();
   });
 
   test('should set port correctly', async () => {
     const port = 3000;
 
-    server.port(port);
-
-    server.components([TestServerService, TestController, TestWebSocket]);
+    server = await AsenaServerFactory.create({
+      adapter: mockAdapter,
+      logger: mockLogger,
+      port,
+      components: [TestServerService, TestController, TestWebSocket],
+    });
 
     await server.start();
     expect(mockAdapter.setPort).toHaveBeenCalledWith(port);
@@ -121,35 +131,41 @@ describe('AsenaServer', () => {
   test('should register wsOptions correctly', async () => {
     const components = [TestServerService, TestController, TestWebSocket, TestConfig];
 
-    server.components(components);
+    server = await AsenaServerFactory.create({
+      adapter: mockAdapter,
+      logger: mockLogger,
+      port: 3000,
+      components,
+    });
+
     await server.start();
 
-    // @ts-ignore
-    const instace: TestConfig = await server._ioc.container.resolve<TestConfig>('TestConfig');
+    const instance: TestConfig | TestConfig[] = await server.coreContainer.container.resolve<TestConfig>('TestConfig');
 
-    expect(instace).toBeDefined();
-
+    expect(instance).toBeDefined();
     expect(mockAdapter.options).toBe(options);
   });
 
   test('should register components', async () => {
     const components = [TestServerService, TestController, TestWebSocket];
 
-    server.components(components);
+    server = await AsenaServerFactory.create({
+      adapter: mockAdapter,
+      logger: mockLogger,
+      port: 3000,
+      components,
+    });
+
     await server.start();
 
-    // @ts-ignore - private property access for testing
-    const ioc = server._ioc;
+    const container = server.coreContainer.container;
 
-    const services = await ioc.container.resolveAll<TestServerService>(ComponentType.SERVICE);
+    const services = await container.resolveAll<TestServerService>(ComponentType.SERVICE);
 
     expect(services).toHaveLength(1);
-
     expect((services[0] as TestServerService).testValue).toBe('Test Value');
-
-    expect(await ioc.container.resolveAll(ComponentType.CONTROLLER)).toHaveLength(1);
-
-    expect(await ioc.container.resolveAll(ComponentType.WEBSOCKET)).toHaveLength(1);
+    expect(await container.resolveAll(ComponentType.CONTROLLER)).toHaveLength(1);
+    expect(await container.resolveAll(ComponentType.WEBSOCKET)).toHaveLength(1);
 
     expect(mockLogger.info).toHaveBeenCalled();
     expect(mockAdapter.start).toHaveBeenCalled();
@@ -158,7 +174,13 @@ describe('AsenaServer', () => {
   test('should register controllers', async () => {
     const components = [TestServerService, TestController];
 
-    server.components(components);
+    server = await AsenaServerFactory.create({
+      adapter: mockAdapter,
+      logger: mockLogger,
+      port: 3000,
+      components,
+    });
+
     await server.start();
 
     expect(mockAdapter.registerRoute).toHaveBeenCalledWith(
@@ -176,15 +198,20 @@ describe('AsenaServer', () => {
   test('should register websockets', async () => {
     const components = [TestServerService, TestWebSocket];
 
-    server.components(components);
+    server = await AsenaServerFactory.create({
+      adapter: mockAdapter,
+      logger: mockLogger,
+      port: 3000,
+      components,
+    });
+
     await server.start();
 
-    // @ts-ignore - private property access for testing
-    const ioc = server._ioc;
-
-    const webSocketService: TestWebSocket[] | TestWebSocket = await ioc.container.resolve('TestWebSocket');
+    const webSocketService: TestWebSocket[] | TestWebSocket =
+      await server.coreContainer.container.resolve('TestWebSocket');
 
     const params: WebsocketRouteParams<any> = {
+      controllerName: 'TestWebSocket',
       path: 'ws',
       middlewares: [],
       websocketService: webSocketService as TestWebSocket,
@@ -194,34 +221,11 @@ describe('AsenaServer', () => {
   });
 
   test('should handle websocket registration', async () => {
-    const websocketService = new TestWebSocket();
-
-    mockPrepareServices(server);
-
-    // @ts-ignore
-    spyOn(server, 'prepareWebsocketService').mockImplementation(() => {
-      return {
-        prepare: mock().mockReturnValue(Array.of(websocketService)),
-      };
-    });
-
-    // Mock initialize method
-    // @ts-ignore - private property access for testing
-    server.initialize = mock(async () => {
-      // @ts-ignore
-      server._ioc = {
-        container: {
-          // @ts-ignore
-          resolveAll: mock((type: ComponentType) => {
-            if (type === ComponentType.WEBSOCKET) {
-              return [websocketService];
-            }
-
-            return [];
-          }),
-        },
-        searchAndRegister: mock(async () => {}),
-      };
+    server = await AsenaServerFactory.create({
+      adapter: mockAdapter,
+      logger: mockLogger,
+      port: 3000,
+      components: [TestWebSocket],
     });
 
     await server.start();
@@ -229,41 +233,24 @@ describe('AsenaServer', () => {
     expect(mockAdapter.registerWebsocketRoute).toHaveBeenCalled();
   });
 
-  test('should handle errors during initialization', async () => {
-    mockPrepareServices(server);
+  test('should handle errors during component resolution', async () => {
+    // Create a service that will throw during resolution
+    @Service()
+    class FailingService {
 
-    // @ts-ignore
-    server.initialize = mock(async () => {
-      // @ts-ignore
-      server._ioc = {
-        // @ts-ignore
+      public constructor() {
+        throw new Error('Test Error');
+      }
+    
+}
 
-        container: {
-          // @ts-ignore
-          resolveAll: mock(() => {
-            throw new Error('Test Error');
-          }),
-        },
-        searchAndRegister: mock(async () => {}),
-      };
-    });
-
-    expect(server.start()).rejects.toThrow('Test Error');
+    expect(
+      AsenaServerFactory.create({
+        adapter: mockAdapter,
+        logger: mockLogger,
+        port: 3000,
+        components: [FailingService],
+      }),
+    ).rejects.toThrow('Test Error');
   });
 });
-
-const mockPrepareServices = (server) => {
-  // @ts-ignore
-  spyOn(server, 'prepareConfigService').mockImplementation(() => {
-    return {
-      prepare: mock(),
-    };
-  });
-
-  // @ts-ignore
-  spyOn(server, 'prepareMiddleware').mockImplementation(() => {
-    return {
-      prepare: mock(),
-    };
-  });
-};

@@ -1,4 +1,4 @@
-import { type ComponentParams, ComponentType } from '../../../ioc/types';
+import { type ComponentParams, ComponentType } from '../../../ioc';
 import { defineComponent } from '../../../ioc/component';
 
 /**

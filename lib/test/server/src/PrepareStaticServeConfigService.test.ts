@@ -35,11 +35,9 @@ describe('PrepareStaticServeConfigService', () => {
       resolve: mock(() => mockStaticServe),
     };
 
-    const mockLogger = {
-      info: mock(() => {}),
-    };
-
-    service = new PrepareStaticServeConfigService(mockContainer as any, mockLogger as any);
+    service = new PrepareStaticServeConfigService();
+    // Manually inject dependencies for testing (field injection)
+    (service as any)['container'] = mockContainer;
   });
 
   afterEach(() => {

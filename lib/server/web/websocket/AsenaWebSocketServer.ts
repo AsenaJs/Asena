@@ -1,4 +1,5 @@
 import type { Server } from 'bun';
+
 // TODO: this section needs to rework
 /**
  * AsenaWebSocketServer class handles WebSocket server operations and message broadcasting
@@ -12,7 +13,7 @@ export class AsenaWebSocketServer {
    * The underlying Bun WebSocket server instance
    * @private
    */
-  private server: Server;
+  private server: Server<any>;
 
   /**
    * The topic identifier for this WebSocket server
@@ -27,7 +28,7 @@ export class AsenaWebSocketServer {
    * @param server - The Bun Server instance to use
    * @param topic - The topic identifier for this WebSocket server
    */
-  public constructor(server: Server, topic: string) {
+  public constructor(server: Server<any>, topic: string) {
     this.server = server;
     this.topic = topic;
   }

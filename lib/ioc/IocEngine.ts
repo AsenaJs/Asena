@@ -1,5 +1,12 @@
-import type { InjectableComponent, Dependencies, IocConfig, Strategies } from './types';
-import { Container } from './Container';
+import {
+  type Dependencies,
+  type ICoreService,
+  ICoreServiceNames,
+  type InjectableComponent,
+  type IocConfig,
+  type Strategies,
+} from './types';
+import type { Container } from './Container';
 import { getAllFiles } from './helper/fileHelper';
 import * as path from 'node:path';
 import type { Class } from '../server/types';
@@ -8,19 +15,32 @@ import * as process from 'node:process';
 import * as console from 'node:console';
 import { getStrategyClass } from './helper/iocHelper';
 import { getOwnTypedMetadata, getTypedMetadata } from '../utils/typedMetadata';
-import { Scope } from './component';
+import { Inject, Scope } from './component';
+import { CoreService } from './decorators';
+import { CircularDependencyError } from './CircularDependencyDetector';
 
-export class IocEngine {
+/**
+ * @description IoC Engine - Manages component registration and dependency injection
+ * Core service that handles automatic component discovery and registration
+ */
+@CoreService(ICoreServiceNames.IOC_ENGINE)
+export class IocEngine implements ICoreService {
 
-  private readonly _container: Container;
+  public serviceName = 'IocEngine';
+
+  @Inject('Container')
+  private _container: Container;
 
   private injectables: InjectableComponent[] = [];
 
-  private readonly config: IocConfig;
+  private config?: IocConfig;
 
-  public constructor(config?: IocConfig) {
-    this._container = new Container();
-
+  /**
+   * @description Set IoC configuration
+   * @param {IocConfig} config - IoC configuration object
+   * @returns {void}
+   */
+  public setConfig(config?: IocConfig): void {
     this.config = config;
   }
 
@@ -176,7 +196,7 @@ export class IocEngine {
     if (visitedCount !== inDegree.size) {
       const cycle = this.findCycle(adjacencyList);
 
-      throw new Error(`Circular dependency detected: ${cycle.join(' -> ')}`);
+      throw new CircularDependencyError(`Circular dependency detected: ${cycle.join(' -> ')}`);
     }
 
     return sorted.reverse();

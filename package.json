@@ -1,29 +1,30 @@
 {
   "name": "@asenajs/asena",
-  "version": "0.3.3",
+  "version": "0.4.0",
   "author": "LibirSoft",
   "repository": {
     "type": "git",
     "url": "https://github.com/AsenaJs/Asena.git"
   },
   "main": "dist/index.js",
+  "homepage": "https://asena.sh/",
   "dependencies": {
     "reflect-metadata": "^0.2.2"
   },
   "devDependencies": {
-    "@changesets/cli": "^2.29.3",
+    "@changesets/cli": "^2.29.7",
     "@types/bun": "latest",
     "@typescript-eslint/eslint-plugin": "^6.21.0",
     "eslint": "^8.57.1",
     "eslint-config-alloy": "^5.1.2",
-    "eslint-config-prettier": "^9.1.0",
+    "eslint-config-prettier": "^9.1.2",
     "eslint-plugin-alloy": "^1.2.1",
-    "eslint-plugin-import": "^2.31.0",
+    "eslint-plugin-import": "^2.32.0",
     "eslint-plugin-n": "^16.6.2",
-    "eslint-plugin-prettier": "^5.4.0",
+    "eslint-plugin-prettier": "^5.5.4",
     "eslint-plugin-promise": "^6.6.0",
-    "prettier": "^3.5.3",
-    "typescript": "^5.8.3"
+    "prettier": "^3.6.2",
+    "typescript": "^5.9.3"
   },
   "exports": {
     ".": {
@@ -73,6 +74,10 @@
     "./container": {
       "import": "./dist/lib/ioc/Container.js",
       "types": "./dist/lib/ioc/Container.d.ts"
+    },
+    "./utils/patternMatcher": {
+      "import": "./dist/lib/utils/patternMatcher.js",
+      "types": "./dist/lib/utils/patternMatcher.d.ts"
     }
   },
   "description": "Asena is a spring like framework for building web applications built with bun",
