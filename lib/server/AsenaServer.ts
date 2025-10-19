@@ -28,7 +28,7 @@ import type { PrepareWebsocketService } from './src/services/PrepareWebsocketSer
 import type { PrepareValidatorService } from './src/services/PrepareValidatorService';
 import type { PrepareStaticServeConfigService } from './src/services/PrepareStaticServeConfigService';
 import { Inject } from '../ioc/component';
-import type { GlobalMiddlewareEntry, GlobalMiddlewareConfig } from './config/AsenaConfig';
+import type { GlobalMiddlewareConfig, GlobalMiddlewareEntry } from './config/AsenaConfig';
 
 /**
  * @description AsenaServer - Main server class for Asena framework

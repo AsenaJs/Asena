@@ -1,7 +1,6 @@
-import { ComponentType, type ScheduleParams } from '../../../ioc';
+import { ComponentConstants, ComponentType, type ScheduleParams } from '../../../ioc';
 import { defineComponent } from '../../../ioc/component';
 import { type CronParsed, parseCron } from '../../../ioc/helper/cronParser';
-import { ComponentConstants } from '../../../ioc';
 import { defineTypedMetadata } from '../../../utils/typedMetadata';
 
 /**

@@ -8,6 +8,7 @@ import { PrepareConfigService } from '../server/src/services/PrepareConfigServic
 import { PrepareWebsocketService } from '../server/src/services/PrepareWebsocketService';
 import { PrepareValidatorService } from '../server/src/services/PrepareValidatorService';
 import { PrepareStaticServeConfigService } from '../server/src/services/PrepareStaticServeConfigService';
+import { Ulak } from '../server/messaging/Ulak';
 
 /**
  * @description CoreContainer manages framework-level services
@@ -114,12 +115,16 @@ export class CoreContainer {
   }
 
   /**
-   * @description Phase 5: Register all Prepare Services
+   * @description Phase 5: Register all Prepare Services and Internal Services
    * They will inject Container and Logger automatically
    * @returns {Promise<void>}
    */
   private async registerPrepareServices(): Promise<void> {
     const services = [
+      // Internal messaging system (must be registered before prepare services)
+      { name: ICoreServiceNames.__ULAK__, Class: Ulak },
+
+      // Prepare services
       { name: ICoreServiceNames.PREPARE_MIDDLEWARE_SERVICE, Class: PrepareMiddlewareService },
       { name: ICoreServiceNames.PREPARE_CONFIG_SERVICE, Class: PrepareConfigService },
       { name: ICoreServiceNames.PREPARE_WEBSOCKET_SERVICE, Class: PrepareWebsocketService },

@@ -1,11 +1,10 @@
 import type { Server } from 'bun';
 
-// TODO: this section needs to rework
 /**
  * AsenaWebSocketServer class handles WebSocket server operations and message broadcasting
  *
- * This class provides a wrapper around Bun's WebSocket Server implementation with additional
- * functionality for managing topics and message publishing.
+ * This class provides a thin wrapper around Bun's WebSocket Server implementation.
+ * All WebSocket services share a single instance of this wrapper for efficiency.
  */
 export class AsenaWebSocketServer {
 
@@ -16,21 +15,12 @@ export class AsenaWebSocketServer {
   private server: Server<any>;
 
   /**
-   * The topic identifier for this WebSocket server
-   * @private
-   * @readonly
-   */
-  private readonly topic: string;
-
-  /**
    * Creates a new instance of AsenaWebSocketServer
    *
    * @param server - The Bun Server instance to use
-   * @param topic - The topic identifier for this WebSocket server
    */
-  public constructor(server: Server<any>, topic: string) {
+  public constructor(server: Server<any>) {
     this.server = server;
-    this.topic = topic;
   }
 
   /**
@@ -61,15 +51,6 @@ export class AsenaWebSocketServer {
    */
   public in(nameSpace: string, data?: any) {
     this.to(nameSpace, data);
-  }
-
-  /**
-   * Gets the current number of WebSocket subscribers for this server's topic
-   *
-   * @returns The number of active WebSocket connections
-   */
-  public get websocketCount() {
-    return this.server.subscriberCount(this.topic);
   }
 
 }

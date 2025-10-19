@@ -10,6 +10,9 @@ export enum ICoreServiceNames {
   IOC_ENGINE = 'IocEngine',
   ASENA_ADAPTER = 'AsenaAdapter',
 
+  // Internal Messaging Services (Phase 5)
+  __ULAK__ = '__Ulak__',
+
   // Prepare Services (Phase 5)
   PREPARE_MIDDLEWARE_SERVICE = 'PrepareMiddlewareService',
   PREPARE_CONFIG_SERVICE = 'PrepareConfigService',

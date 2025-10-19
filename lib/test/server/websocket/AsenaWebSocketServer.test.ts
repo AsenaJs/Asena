@@ -9,10 +9,9 @@ describe('AsenaWebSocketServer', () => {
     // Create a mock Bun server with required methods
     mockBunServer = {
       publish: mock(() => {}),
-      subscriberCount: mock(() => 5),
     };
 
-    server = new AsenaWebSocketServer(mockBunServer, 'test-topic');
+    server = new AsenaWebSocketServer(mockBunServer);
   });
 
   describe('to() method', () => {
@@ -68,15 +67,6 @@ describe('AsenaWebSocketServer', () => {
       server.in('test-namespace', data);
 
       expect(mockBunServer.publish).toHaveBeenCalledWith('test-namespace', JSON.stringify(data));
-    });
-  });
-
-  describe('websocketCount getter', () => {
-    test('returns correct subscriber count', () => {
-      const count = server.websocketCount;
-
-      expect(mockBunServer.subscriberCount).toHaveBeenCalledWith('test-topic');
-      expect(count).toBe(5);
     });
   });
 });

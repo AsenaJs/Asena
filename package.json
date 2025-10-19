@@ -75,6 +75,10 @@
       "import": "./dist/lib/ioc/Container.js",
       "types": "./dist/lib/ioc/Container.d.ts"
     },
+    "./messaging": {
+      "import": "./dist/lib/server/messaging/index.js",
+      "types": "./dist/lib/server/messaging/index.d.ts"
+    },
     "./utils/patternMatcher": {
       "import": "./dist/lib/utils/patternMatcher.js",
       "types": "./dist/lib/utils/patternMatcher.d.ts"
@@ -100,7 +104,9 @@
   ],
   "license": "MIT",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "bun test",
+    "test:watch": "bun test --watch",
+    "test:coverage": "bun test --coverage",
     "build": "bun run clean && tsc",
     "clean": "rm -rf dist",
     "pre-release": "bun update && bun run build"
