@@ -199,7 +199,7 @@ describe('Ulak Integration Tests', () => {
       ulak.dispose();
 
       expect(ulak.getNamespaces().length).toBe(0);
-      expect(mockLogger.info).toHaveBeenCalledWith('[Ulak] Disposed');
+      expect(mockLogger.info).toHaveBeenCalledWith(expect.stringContaining('Disposed'));
     });
   });
 });

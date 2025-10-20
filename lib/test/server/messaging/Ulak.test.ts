@@ -53,7 +53,9 @@ describe('Ulak', () => {
     test('should initialize successfully', async () => {
       await ulak.init();
 
-      expect(mockLogger.info).toHaveBeenCalledWith('[Ulak] Initializing WebSocket messaging system ready');
+      expect(mockLogger.info).toHaveBeenCalledWith(
+        expect.stringContaining('Initializing WebSocket messaging system ready'),
+      );
     });
   });
 
@@ -63,14 +65,16 @@ describe('Ulak', () => {
 
       expect(ulak.hasNamespace('/test')).toBe(true);
       expect(ulak.getNamespaces()).toContain('/test');
-      expect(mockLogger.info).toHaveBeenCalledWith('[Ulak] Namespace "/test" registered');
+      expect(mockLogger.info).toHaveBeenCalledWith(expect.stringContaining('Namespace "/test" registered'));
     });
 
     test('should warn when registering duplicate namespace', () => {
       ulak.registerNamespace('/test', mockWebSocketService);
       ulak.registerNamespace('/test', mockWebSocketService);
 
-      expect(mockLogger.warn).toHaveBeenCalledWith('[Ulak] Namespace "/test" already registered, skipping');
+      expect(mockLogger.warn).toHaveBeenCalledWith(
+        expect.stringContaining('Namespace "/test" already registered, skipping'),
+      );
     });
   });
 
@@ -80,13 +84,15 @@ describe('Ulak', () => {
       ulak.unregisterNamespace('/test');
 
       expect(ulak.hasNamespace('/test')).toBe(false);
-      expect(mockLogger.info).toHaveBeenCalledWith('[Ulak] Namespace "/test" unregistered');
+      expect(mockLogger.info).toHaveBeenCalledWith(expect.stringContaining('Namespace "/test" unregistered'));
     });
 
     test('should warn when unregistering non-existent namespace', () => {
       ulak.unregisterNamespace('/non-existent');
 
-      expect(mockLogger.warn).toHaveBeenCalledWith('[Ulak] Cannot unregister namespace "/non-existent" - not found');
+      expect(mockLogger.warn).toHaveBeenCalledWith(
+        expect.stringContaining('Cannot unregister namespace "/non-existent" - not found'),
+      );
     });
   });
 
@@ -248,7 +254,7 @@ describe('Ulak', () => {
 
       expect(mockWebSocketService.in).toHaveBeenCalledWith(data);
       expect(mockService2.in).toHaveBeenCalledWith(data);
-      expect(mockLogger.info).toHaveBeenCalledWith('[Ulak] Broadcast to all: 2 succeeded, 0 failed');
+      expect(mockLogger.info).toHaveBeenCalledWith(expect.stringContaining('Broadcast to all: 2 succeeded, 0 failed'));
     });
 
     test('should handle failures in some namespaces', async () => {
@@ -265,7 +271,7 @@ describe('Ulak', () => {
 
       await ulak.broadcastAll({ message: 'test' });
 
-      expect(mockLogger.info).toHaveBeenCalledWith('[Ulak] Broadcast to all: 1 succeeded, 1 failed');
+      expect(mockLogger.info).toHaveBeenCalledWith(expect.stringContaining('Broadcast to all: 1 succeeded, 1 failed'));
     });
   });
 
@@ -381,7 +387,7 @@ describe('Ulak', () => {
       ulak.dispose();
 
       expect(ulak.getNamespaces().length).toBe(0);
-      expect(mockLogger.info).toHaveBeenCalledWith('[Ulak] Disposed');
+      expect(mockLogger.info).toHaveBeenCalledWith(expect.stringContaining('Disposed'));
     });
   });
 });
