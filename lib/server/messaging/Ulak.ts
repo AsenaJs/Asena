@@ -2,7 +2,7 @@ import type { AsenaWebSocketService } from '../web/websocket';
 import { CoreService, type ICoreService, ICoreServiceNames } from '../../ioc';
 import { type BulkOperation, type BulkResult, UlakError, UlakErrorCode } from './types';
 import { Inject, PostConstruct } from '../../ioc/component';
-import type { ServerLogger } from '../../logger';
+import { blue, type ServerLogger } from '../../logger';
 
 /**
  * Central WebSocket message broker for Asena.js
@@ -47,7 +47,7 @@ export class Ulak implements ICoreService {
    */
   @PostConstruct()
   public async init(): Promise<void> {
-    this.logger.info('[Ulak] Initializing WebSocket messaging system ready');
+    this.logger.info(`${blue('[Ulak]')} Initializing WebSocket messaging system ready`);
   }
 
   /**
@@ -59,12 +59,12 @@ export class Ulak implements ICoreService {
    */
   public registerNamespace(path: string, service: AsenaWebSocketService<any>): void {
     if (this.namespaces.has(path)) {
-      this.logger.warn(`[Ulak] Namespace "${path}" already registered, skipping`);
+      this.logger.warn(`${blue('[Ulak]')} Namespace "${path}" already registered, skipping`);
       return;
     }
 
     this.namespaces.set(path, service);
-    this.logger.info(`[Ulak] Namespace "${path}" registered`);
+    this.logger.info(`${blue('[Ulak]')} Namespace "${path}" registered`);
   }
 
   /**
@@ -75,12 +75,12 @@ export class Ulak implements ICoreService {
    */
   public unregisterNamespace(path: string): void {
     if (!this.namespaces.has(path)) {
-      this.logger.warn(`[Ulak] Cannot unregister namespace "${path}" - not found`);
+      this.logger.warn(`${blue('[Ulak]')} Cannot unregister namespace "${path}" - not found`);
       return;
     }
 
     this.namespaces.delete(path);
-    this.logger.info(`[Ulak] Namespace "${path}" unregistered`);
+    this.logger.info(`${blue('[Ulak]')} Namespace "${path}" unregistered`);
   }
 
   /**
@@ -114,7 +114,7 @@ export class Ulak implements ICoreService {
       // Use service's in() method to broadcast to all clients
       service.in(data);
     } catch (error) {
-      this.logger.error(`[Ulak] Broadcast failed for namespace "${namespace}"`, error);
+      this.logger.error(`${blue('[Ulak]')} Broadcast failed for namespace "${namespace}"`, error);
 
       // If already a UlakError (e.g., NAMESPACE_NOT_FOUND), rethrow as-is
       if (error instanceof UlakError) {
@@ -145,7 +145,7 @@ export class Ulak implements ICoreService {
       // Use service's to() method to send to specific room
       service.to(room, data);
     } catch (error) {
-      this.logger.error(`[Ulak] Send to room "${room}" failed in namespace "${namespace}"`, error);
+      this.logger.error(`${blue('[Ulak]')} Send to room "${room}" failed in namespace "${namespace}"`, error);
 
       // If already a UlakError (e.g., NAMESPACE_NOT_FOUND), rethrow as-is
       if (error instanceof UlakError) {
@@ -187,7 +187,7 @@ export class Ulak implements ICoreService {
       // Send data to socket
       socket.send(typeof data === 'string' ? data : JSON.stringify(data));
     } catch (error) {
-      this.logger.error(`[Ulak] Send to socket "${socketId}" failed in namespace "${namespace}"`, error);
+      this.logger.error(`${blue('[Ulak]')} Send to socket "${socketId}" failed in namespace "${namespace}"`, error);
 
       if (error instanceof UlakError) {
         throw error;
@@ -216,7 +216,9 @@ export class Ulak implements ICoreService {
     const failures = results.filter((r) => r.status === 'rejected');
 
     if (failures.length > 0) {
-      this.logger.warn(`[Ulak] Batch send failed for ${failures.length}/${rooms.length} rooms in "${namespace}"`);
+      this.logger.warn(
+        `${blue('[Ulak]')} Batch send failed for ${failures.length}/${rooms.length} rooms in "${namespace}"`,
+      );
     }
   }
 
@@ -232,7 +234,7 @@ export class Ulak implements ICoreService {
     const succeeded = results.filter((r) => r.status === 'fulfilled').length;
     const failed = results.filter((r) => r.status === 'rejected').length;
 
-    this.logger.info(`[Ulak] Broadcast to all: ${succeeded} succeeded, ${failed} failed`);
+    this.logger.info(`${blue('[Ulak]')} Broadcast to all: ${succeeded} succeeded, ${failed} failed`);
   }
 
   /**
@@ -271,7 +273,7 @@ export class Ulak implements ICoreService {
     const succeeded = results.filter((r) => r.status === 'fulfilled').length;
     const failed = results.filter((r) => r.status === 'rejected').length;
 
-    this.logger.info(`[Ulak] Bulk send: ${succeeded}/${operations.length} succeeded, ${failed} failed`);
+    this.logger.info(`${blue('[Ulak]')} Bulk send: ${succeeded}/${operations.length} succeeded, ${failed} failed`);
 
     return {
       total: operations.length,
@@ -324,7 +326,7 @@ export class Ulak implements ICoreService {
       this.unregisterNamespace(namespace);
     }
 
-    this.logger.info('[Ulak] Disposed');
+    this.logger.info(`${blue('[Ulak]')} Disposed`);
   }
 
   /**
