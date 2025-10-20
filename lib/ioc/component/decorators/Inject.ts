@@ -31,7 +31,7 @@ import { defineTypedMetadata, getOwnTypedMetadata, getTypedMetadata } from '../.
  * ```
  */
 export const Inject = (
-  Injection: Class | string | readonly [string, (injectedClass: any) => any],
+  Injection: Class | string | readonly [string | Class, (injectedClass: any) => any],
   expression?: (injectedClass: any) => any,
 ): PropertyDecorator => {
   return (target: object, propertyKey: string): void => {
@@ -42,7 +42,9 @@ export const Inject = (
     if (Array.isArray(Injection) && Injection.length === 2) {
       const [name, tupleExpression] = Injection;
 
-      dependencyName = name;
+      // Check Name type, it can be a Class or String
+      dependencyName = typeof name === 'string' ? name : getTypedMetadata<string>(ComponentConstants.NameKey, name);
+
       resolvedExpression = tupleExpression;
     } else if (typeof Injection === 'string') {
       dependencyName = Injection;
