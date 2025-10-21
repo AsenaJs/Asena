@@ -35,6 +35,15 @@ export class AsenaServerFactory {
   ): Promise<AsenaServer<A>> {
     const { adapter, logger, port, components, gc } = options;
 
+    logger.info(`
+    ___    _____  ______ _   __ ___ 
+   /   |  / ___/ / ____// | / //   |
+  / /| |  \\__ \\ / __/  /  |/ // /| |
+ / ___ | ___/ // /___ / /|  // ___ |
+/_/  |_|/____//_____//_/ |_//_/  |_|  
+------------------------------------------------------------
+    `);
+
     // Read config file
     const config = await readConfigFile();
 
