@@ -1,7 +1,7 @@
 import type { AsenaWebSocketService } from '../web/websocket';
 import { CoreService, type ICoreService, ICoreServiceNames } from '../../ioc';
 import { type BulkOperation, type BulkResult, UlakError, UlakErrorCode } from './types';
-import { Inject, PostConstruct } from '../../ioc/component';
+import { Inject } from '../../ioc/component';
 import { blue, type ServerLogger } from '../../logger';
 
 /**
@@ -45,7 +45,6 @@ export class Ulak implements ICoreService {
    * Initialize Ulak messaging system
    * Called after dependency injection is complete
    */
-  @PostConstruct()
   public async init(): Promise<void> {
     this.logger.info(`${blue('[Ulak]')} Initializing WebSocket messaging system ready`);
   }
