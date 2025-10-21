@@ -1,6 +1,5 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
-import { AsenaServerFactory } from '../../server';
-import { AsenaServer } from '../../server';
+import { AsenaServer, AsenaServerFactory } from '../../server';
 import { Controller, Get, Inject, Service } from '../../server/decorators';
 import type { AsenaContext } from '../../adapter';
 import { CircularDependencyError } from '../../ioc';

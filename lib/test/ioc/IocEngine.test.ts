@@ -84,7 +84,6 @@ describe('IocEngine', () => {
     (iocEngine as any)['_container'] = new Container();
     iocEngine.setConfig({ sourceFolder: 'lib/test/example-app-structure', rootFile: '' });
     await iocEngine.searchAndRegister();
-    console.log('here');
 
     const testService = await iocEngine.container.resolve<ExportedTestService>('ExportedTestService');
 
