@@ -20,15 +20,15 @@ import * as path from 'node:path';
 import type { MiddlewareClass, ValidatorClass } from './web/middleware';
 import { ComponentConstants } from '../ioc/constants';
 import * as bun from 'bun';
-import { green, type ServerLogger, yellow } from '../logger';
+import { blue, green, type ServerLogger, yellow } from '../logger';
 import { getOwnTypedMetadata, getTypedMetadata } from '../utils/typedMetadata';
 import type { PrepareMiddlewareService } from './src/services/PrepareMiddlewareService';
 import type { PrepareConfigService } from './src/services/PrepareConfigService';
 import type { PrepareWebsocketService } from './src/services/PrepareWebsocketService';
 import type { PrepareValidatorService } from './src/services/PrepareValidatorService';
 import type { PrepareStaticServeConfigService } from './src/services/PrepareStaticServeConfigService';
-import { Inject } from '../ioc/component';
-import type { GlobalMiddlewareEntry, GlobalMiddlewareConfig } from './config/AsenaConfig';
+import { Inject, PostConstruct } from '../ioc/component';
+import type { GlobalMiddlewareConfig, GlobalMiddlewareEntry } from './config/AsenaConfig';
 
 /**
  * @description AsenaServer - Main server class for Asena framework
@@ -74,14 +74,9 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
    * @description Lifecycle hook - called after dependencies are injected
    * @returns {void}
    */
+  @PostConstruct()
   public onInit(): void {
-    this._logger.info(`
-    ___    _____  ______ _   __ ___ 
-   /   |  / ___/ / ____// | / //   |
-  / /| |  \\__ \\ / __/  /  |/ // /| |
- / ___ | ___/ // /___ / /|  // ___ |
-/_/  |_|/____//_____//_/ |_//_/  |_|  
-    `);
+    this._logger.info(`${blue('[AsenaServer]')} is initialized`);
   }
 
   /**

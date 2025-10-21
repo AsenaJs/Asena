@@ -3,6 +3,7 @@ import type { ComponentType, ContainerService, Dependencies, Expressions, Strate
 import { ComponentConstants } from './constants';
 import { getOwnTypedMetadata, getTypedMetadata } from '../utils/typedMetadata';
 import { CircularDependencyDetector } from './CircularDependencyDetector';
+import { CORE_SERVICE } from './decorators/CoreService';
 
 export class Container {
 
@@ -259,15 +260,36 @@ export class Container {
     }
   }
 
+  /**
+   * @description Checks if a class is a framework class (CoreService)
+   * Framework classes can traverse the prototype chain even if they contain native code patterns
+   * @param {any} cls - The class to check
+   * @returns {boolean} True if the class is a framework class
+   */
+  private isFrameworkClass(cls: any): boolean {
+    if (!cls || cls === Object.prototype) {
+      return false;
+    }
+
+    // Check if class is marked as a CoreService
+    const isCoreService = getTypedMetadata<boolean>(CORE_SERVICE, cls);
+
+    return Boolean(isCoreService);
+  }
+
   private getPrototypeChain(Class: any): any[] {
     const chain: any[] = [];
     let currentClass = Class;
 
-    while (
-      currentClass &&
-      currentClass !== Object.prototype &&
-      (currentClass.name === 'IocEngine' || !currentClass.toString().includes('[native code]'))
-    ) {
+    while (currentClass && currentClass !== Object.prototype) {
+      const classSource = currentClass.toString();
+      const isNativeCode = classSource.includes('[native code]');
+
+      // Stop at native code unless it's a framework class
+      if (isNativeCode && !this.isFrameworkClass(currentClass)) {
+        break;
+      }
+
       chain.push(currentClass);
       currentClass = Object.getPrototypeOf(currentClass);
     }

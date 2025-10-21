@@ -35,6 +35,7 @@ describe('PrepareWebsocketService', () => {
   let service: PrepareWebsocketService;
   let mockContainer: any;
   let mockLogger: any;
+  let mockUlak: any;
   let mockWebSocket1: TestWebSocket;
   let mockWebSocket2: TestWebSocket2;
   let mockWebSocketDuplicate: TestWebSocket3;
@@ -52,10 +53,16 @@ describe('PrepareWebsocketService', () => {
       resolveAll: mock(() => []),
     };
 
+    // Mock Ulak messaging system
+    mockUlak = {
+      registerNamespace: mock(() => {}),
+    };
+
     service = new PrepareWebsocketService();
     // Manually inject dependencies for testing (field injection)
     (service as any)['container'] = mockContainer;
     (service as any)['logger'] = mockLogger;
+    (service as any)['ulak'] = mockUlak;
   });
 
   afterEach(() => {
@@ -86,6 +93,11 @@ describe('PrepareWebsocketService', () => {
     expect(result[1]).toBe(mockWebSocket2);
     expect(mockWebSocket1.namespace).toBe('ws1');
     expect(mockWebSocket2.namespace).toBe('ws2');
+
+    // Verify Ulak registration
+    expect(mockUlak.registerNamespace).toHaveBeenCalledTimes(2);
+    expect(mockUlak.registerNamespace).toHaveBeenCalledWith('/ws1', mockWebSocket1);
+    expect(mockUlak.registerNamespace).toHaveBeenCalledWith('/ws2', mockWebSocket2);
   });
 
   it('should resolve websockets from container with correct type', async () => {
@@ -103,5 +115,8 @@ describe('PrepareWebsocketService', () => {
     expect(result).toHaveLength(2);
     expect(result[0]).toBe(mockWebSocket1);
     expect(result[1]).toBe(mockWebSocket2);
+
+    // Verify Ulak registration for flattened arrays
+    expect(mockUlak.registerNamespace).toHaveBeenCalledTimes(2);
   });
 });

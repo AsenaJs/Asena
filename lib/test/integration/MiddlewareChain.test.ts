@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { AsenaServerFactory } from '../../server';
 import type { AsenaServer } from '../../server';
+import { AsenaServerFactory } from '../../server';
 import { Config, Controller, Get, Inject, Middleware, Service } from '../../server/decorators';
 import type { AsenaContext } from '../../adapter';
 import { AsenaMiddlewareService } from '../../server/web/middleware';

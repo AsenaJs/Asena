@@ -1,5 +1,31 @@
 # @asenajs/asena
 
+## 0.5.0
+
+### Minor Changes
+
+- # Ulak WebSocket Messaging System
+
+  Add centralized WebSocket message broker (Ulak) that eliminates circular dependencies in WebSocket communication.
+
+  **Features:**
+  - Namespace-based routing for WebSocket messages
+  - Type-safe messaging with full TypeScript support
+  - Bulk operations for efficient multi-namespace broadcasting
+  - Comprehensive error handling with UlakError
+  - Pattern matching for exact and wildcard namespaces
+
+  **Breaking Changes:**
+  - `AsenaWebSocketServer` constructor no longer accepts `topic` parameter
+  - `AsenaWebSocketServer.websocketCount` getter removed
+  - Custom adapter implementations need to update their constructor calls
+
+  **Bug Fixes:**
+  - Fix IocEngine empty dependency error in non-minified codebases
+
+  **Enhanced Features:**
+  - @Inject decorator now supports tuple injection pattern for advanced DI scenarios
+
 ## 0.4.0
 
 ### Minor Changes

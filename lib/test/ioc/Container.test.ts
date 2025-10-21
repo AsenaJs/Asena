@@ -1,8 +1,7 @@
 import { beforeEach, describe, expect, spyOn, test } from 'bun:test';
-import { Container } from '../../ioc';
+import { ComponentType, Container } from '../../ioc';
 import { Component } from '../../server/decorators';
 import { Inject, PostConstruct, Strategy } from '../../ioc/component';
-import { ComponentType } from '../../ioc';
 import { ExportedServerService } from '../example-app-structure/database/ExportedServerService.test';
 
 @Component()

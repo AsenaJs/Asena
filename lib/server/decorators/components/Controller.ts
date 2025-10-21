@@ -1,6 +1,5 @@
-import { ComponentType, type ControllerParams } from '../../../ioc';
+import { ComponentConstants, ComponentType, type ControllerParams } from '../../../ioc';
 import { defineComponent } from '../../../ioc/component';
-import { ComponentConstants } from '../../../ioc';
 import { defineMiddleware } from '../../web/helper';
 import { defineTypedMetadata } from '../../../utils/typedMetadata';
 

@@ -1,7 +1,6 @@
 import type { MiddlewareParams } from '../../../ioc/types/decorators/MiddlewareParams';
 import { defineComponent } from '../../../ioc/component';
-import { ComponentType } from '../../../ioc';
-import { ComponentConstants } from '../../../ioc';
+import { ComponentConstants, ComponentType } from '../../../ioc';
 import { defineTypedMetadata } from '../../../utils/typedMetadata';
 import { VALIDATOR_METHODS } from '../../../adapter';
 
