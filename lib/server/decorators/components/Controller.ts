@@ -16,17 +16,13 @@ export const Controller = (params?: ControllerParams | string): ClassDecorator =
     typeof params === 'string' ? { path: params, name: undefined } : params || { path: '', name: undefined };
 
   return defineComponent(ComponentType.CONTROLLER, _params, (target) => {
-    defineTypedMetadata<string>(
-      ComponentConstants.PathKey,
-      (_params as ControllerParams).path.replace(/^\/+/, '/') || '/',
-      target,
-    );
+    defineTypedMetadata<string>(ComponentConstants.PathKey, _params.path.replace(/^\/+/, '/') || '/', target);
 
-    defineMiddleware(target, (_params as ControllerParams).middlewares || []);
+    defineMiddleware(target, _params.middlewares || []);
 
     defineTypedMetadata<MiddlewareClass[]>(
       ComponentConstants.MiddlewaresKey,
-      (_params as ControllerParams).middlewares || ([] as MiddlewareClass[]),
+      _params.middlewares || ([] as MiddlewareClass[]),
       target,
     );
   });

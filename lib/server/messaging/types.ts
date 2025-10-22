@@ -17,7 +17,6 @@ export enum UlakErrorCode {
  * Provides structured error information with error codes
  */
 export class UlakError extends Error {
-
   public readonly code: UlakErrorCode;
 
   public readonly namespace?: string;
@@ -36,7 +35,6 @@ export class UlakError extends Error {
       Error.captureStackTrace(this, UlakError);
     }
   }
-
 }
 
 /**

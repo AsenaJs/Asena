@@ -11,7 +11,7 @@ import { defineTypedMetadata, getOwnTypedMetadata, getTypedMetadata } from '../.
  * @returns {PropertyDecorator} - The property decorator function.
  */
 export const Strategy = (Injection: Class | string, expression?: (injectedClass) => any): PropertyDecorator => {
-  return (target: Object, propertyKey: string) => {
+  return (target: object, propertyKey: string) => {
     const strategies: Strategies =
       getOwnTypedMetadata<Strategies>(ComponentConstants.StrategyKey, target.constructor) || {};
 

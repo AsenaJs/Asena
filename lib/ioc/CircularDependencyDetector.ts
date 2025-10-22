@@ -3,12 +3,10 @@
  * Provides detailed information about the circular dependency chain
  */
 export class CircularDependencyError extends Error {
-
   public constructor(message: string) {
     super(message);
     this.name = 'CircularDependencyError';
   }
-
 }
 
 /**
@@ -16,7 +14,6 @@ export class CircularDependencyError extends Error {
  * Tracks the resolution stack and detects cycles during dependency injection
  */
 export class CircularDependencyDetector {
-
   private resolutionStack: Set<string> = new Set();
 
   /**
@@ -76,5 +73,4 @@ export class CircularDependencyDetector {
   public isEmpty(): boolean {
     return this.resolutionStack.size === 0;
   }
-
 }

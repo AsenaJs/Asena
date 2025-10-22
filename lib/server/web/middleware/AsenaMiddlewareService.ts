@@ -7,7 +7,6 @@ import type { Class } from '../../types';
  * @template C - The context type, extending AsenaContext.
  */
 export abstract class AsenaMiddlewareService<C extends AsenaContext<any, any> = any> {
-
   /**
    * Handles the middleware logic.
    *
@@ -16,7 +15,6 @@ export abstract class AsenaMiddlewareService<C extends AsenaContext<any, any> = 
    * @returns {Promise<void> | any} A promise that resolves when the middleware is complete, or any other value.
    */
   public abstract handle(context: C, next: AsenaNextHandler): Promise<void> | any;
-
 }
 
 export type MiddlewareClass<C extends AsenaContext<any, any> = AsenaContext<any, any>> = Class<

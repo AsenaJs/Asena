@@ -11,7 +11,6 @@ import type { Ulak } from '../../messaging';
  */
 @CoreService(ICoreServiceNames.PREPARE_WEBSOCKET_SERVICE)
 export class PrepareWebsocketService implements ICoreService {
-
   public serviceName = 'PrepareWebsocketService';
 
   @Inject(ICoreServiceNames.CONTAINER)
@@ -52,5 +51,4 @@ export class PrepareWebsocketService implements ICoreService {
 
     return preparedWebsockets;
   }
-
 }

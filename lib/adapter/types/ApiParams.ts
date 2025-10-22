@@ -48,7 +48,6 @@ export interface ApiParams<C extends AsenaContext<any, any> = any, SH = unknown>
 export type ControllerHandler<C extends AsenaContext<any, any> = any> = (
   c: C,
   ...args: any[]
-  // eslint-disable-next-line @typescript-eslint/no-invalid-void-type
 ) => void | Promise<void> | Promise<Response> | Response;
 
 /**

@@ -11,7 +11,6 @@ import { Inject } from '../../../ioc/component';
  */
 @CoreService(ICoreServiceNames.PREPARE_VALIDATOR_SERVICE)
 export class PrepareValidatorService implements ICoreService {
-
   public serviceName = 'PrepareValidatorService';
 
   @Inject(ICoreServiceNames.CONTAINER)
@@ -47,5 +46,4 @@ export class PrepareValidatorService implements ICoreService {
 
     return baseValidatorMiddleware;
   }
-
 }

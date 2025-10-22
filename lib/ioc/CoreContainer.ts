@@ -15,7 +15,6 @@ import { Ulak } from '../server/messaging/Ulak';
  * Handles the bootstrap sequence for core services and user components
  */
 export class CoreContainer {
-
   private readonly _container: Container;
 
   private _initialized = false;
@@ -162,5 +161,4 @@ export class CoreContainer {
   public get isInitialized(): boolean {
     return this._initialized;
   }
-
 }

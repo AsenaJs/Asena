@@ -7,7 +7,6 @@ import type { Socket } from './AsenaSocket';
  * @template T - The type of data expected in the WebSocket object.
  */
 export class AsenaWebSocketService<T> {
-
   /**
    * The WebSocket server instance.
    */
@@ -49,7 +48,7 @@ export class AsenaWebSocketService<T> {
       throw new Error('Namespace must be a string');
     }
 
-    let _nameSpace = nameSpace ? `${this.namespace}.${nameSpace}` : this.namespace;
+    const _nameSpace = nameSpace ? `${this.namespace}.${nameSpace}` : this.namespace;
 
     this.server.to(_nameSpace, data);
   }
@@ -166,5 +165,4 @@ export class AsenaWebSocketService<T> {
   public set rooms(value: Map<string, Socket<T>[]>) {
     this._rooms = value;
   }
-
 }

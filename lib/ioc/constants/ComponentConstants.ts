@@ -3,7 +3,6 @@
  * All keys are Symbols to prevent naming collisions and external manipulation.
  */
 export class ComponentConstants {
-
   // Component metadata keys - Symbol based for uniqueness
   public static readonly NameKey = Symbol('component:name');
 
@@ -57,5 +56,4 @@ export class ComponentConstants {
 
   // Static Serve specific
   public static readonly StaticServeRootKey = Symbol('staticServe:root');
-
 }
