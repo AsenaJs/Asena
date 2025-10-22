@@ -14,13 +14,13 @@
   "devDependencies": {
     "@changesets/cli": "^2.29.7",
     "@types/bun": "latest",
-    "@typescript-eslint/eslint-plugin": "^8",
-    "@typescript-eslint/parser": "^8",
-    "eslint": "^9",
+    "@typescript-eslint/eslint-plugin": "^8.46.2",
+    "@typescript-eslint/parser": "^8.46.2",
+    "eslint": "^9.38.0",
     "eslint-config-prettier": "^9.1.2",
     "prettier": "^3.6.2",
     "typescript": "^5.9.3",
-    "typescript-eslint": "^8"
+    "typescript-eslint": "^8.46.2"
   },
   "exports": {
     ".": {
@@ -102,6 +102,7 @@
   "scripts": {
     "test": "bun test",
     "test:watch": "bun test --watch",
+    "test:fail": "bun test --only-failures",
     "test:coverage": "bun test --coverage",
     "build": "bun run clean && tsc",
     "clean": "rm -rf dist",
