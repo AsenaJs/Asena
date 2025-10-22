@@ -7,7 +7,6 @@ import type { Server } from 'bun';
  * All WebSocket services share a single instance of this wrapper for efficiency.
  */
 export class AsenaWebSocketServer {
-
   /**
    * The underlying Bun WebSocket server instance
    * @private
@@ -52,5 +51,4 @@ export class AsenaWebSocketServer {
   public in(nameSpace: string, data?: any) {
     this.to(nameSpace, data);
   }
-
 }

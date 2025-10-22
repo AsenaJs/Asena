@@ -10,7 +10,6 @@ import type { ServerLogger } from '../logger';
  * @template A - Type of the Adapter object
  */
 export abstract class AsenaWebsocketAdapter {
-
   public readonly name: string;
 
   /**
@@ -103,5 +102,4 @@ export abstract class AsenaWebsocketAdapter {
   public set logger(value: ServerLogger) {
     this._logger = value;
   }
-
 }

@@ -25,7 +25,6 @@ import { CircularDependencyError } from './CircularDependencyDetector';
  */
 @CoreService(ICoreServiceNames.IOC_ENGINE)
 export class IocEngine implements ICoreService {
-
   public serviceName = 'IocEngine';
 
   @Inject('Container')
@@ -170,7 +169,7 @@ export class IocEngine implements ICoreService {
     let visitedCount = 0;
 
     while (queue.length > 0) {
-      const currentNode = queue.shift()!;
+      const currentNode = queue.shift();
 
       visitedCount++;
 
@@ -183,7 +182,7 @@ export class IocEngine implements ICoreService {
       const neighbors = adjacencyList.get(currentNode) || [];
 
       for (const neighbor of neighbors) {
-        const newDegree = inDegree.get(neighbor)! - 1;
+        const newDegree = inDegree.get(neighbor) - 1;
 
         inDegree.set(neighbor, newDegree);
 
@@ -202,7 +201,6 @@ export class IocEngine implements ICoreService {
     return sorted.reverse();
   }
 
-  // eslint-disable-next-line max-params
   private initializeGraph(
     classes: Class[],
     injectables: InjectableComponent[],
@@ -274,11 +272,11 @@ export class IocEngine implements ICoreService {
     try {
       const directDependencies = Object.values(
         getOwnTypedMetadata<Dependencies>(ComponentConstants.DependencyKey, component) || {},
-      ) as string[];
+      );
 
       const softDependencies = Object.values(
         getOwnTypedMetadata<Dependencies>(ComponentConstants.SoftDependencyKey, component) || {},
-      ) as string[];
+      );
 
       const parentClass = Object.getPrototypeOf(component);
 
@@ -286,7 +284,7 @@ export class IocEngine implements ICoreService {
         parentClass &&
         parentClass !== Object.prototype &&
         // circular detection
-        // eslint-disable-next-line no-useless-concat
+
         parentClass.toString() !== 'function () {\n' + '    [native code]\n' + '}'
       ) {
         const parentDependencies = this.getDependencies(parentClass);
@@ -331,5 +329,4 @@ export class IocEngine implements ICoreService {
   public get container(): Container {
     return this._container;
   }
-
 }

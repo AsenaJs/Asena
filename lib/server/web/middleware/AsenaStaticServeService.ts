@@ -1,5 +1,5 @@
 import type { AsenaContext } from '../../../adapter';
-import type { ComponentParams } from '../../../ioc/types';
+import type { ComponentParams } from '../../../ioc';
 import type { Class } from '../../types';
 
 /**
@@ -10,7 +10,6 @@ import type { Class } from '../../types';
  * @template E - Type for additional configuration options
  */
 export abstract class AsenaStaticServeService<C extends AsenaContext<any, any>, E = any> {
-
   /**
    * Additional configuration options specific to the implementation
    * @protected
@@ -48,7 +47,6 @@ export abstract class AsenaStaticServeService<C extends AsenaContext<any, any>, 
    * @abstract
    */
   public abstract onNotFound?(path: string, c: C): void | Promise<void>;
-
 }
 
 /**

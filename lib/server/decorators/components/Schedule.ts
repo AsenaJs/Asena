@@ -11,7 +11,7 @@ import { defineTypedMetadata } from '../../../utils/typedMetadata';
  */
 export const Schedule = (params: ScheduleParams): ClassDecorator => {
   return defineComponent(ComponentType.SCHEDULE, params, (target) => {
-    const cronParsed = parseCron((params as ScheduleParams).cron);
+    const cronParsed = parseCron(params.cron);
 
     defineTypedMetadata<CronParsed>(ComponentConstants.CronKey, cronParsed, target);
   });

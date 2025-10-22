@@ -1,10 +1,10 @@
-import { ComponentConstants } from '../../../ioc/constants';
+import { ComponentConstants } from '../../../ioc';
 import { defineMiddleware } from '../helper';
 import { defineTypedMetadata, getOwnTypedMetadata } from '../../../utils/typedMetadata';
 import type { ApiParams, ControllerDecoratorParams, ControllerHandler, Route } from '../../../adapter';
 
 export function genericHandler({ method, path, description, middlewares, staticServe, validator }: ApiParams) {
-  return function (route: Object, propertyKey: string, _descriptor: TypedPropertyDescriptor<ControllerHandler>) {
+  return function (route: object, propertyKey: string, _descriptor: TypedPropertyDescriptor<ControllerHandler>) {
     const routes = getOwnTypedMetadata<Route>(ComponentConstants.RouteKey, route.constructor) || {};
 
     if (!routes[propertyKey]) {

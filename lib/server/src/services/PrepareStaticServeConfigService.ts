@@ -1,8 +1,7 @@
 import { getOwnTypedMetadata, getTypedMetadata } from '../../../utils/typedMetadata';
-import { ComponentConstants } from '../../../ioc/constants';
 import type { AsenaStaticServeService, StaticServeClass } from '../../web/middleware';
 import type { BaseStaticServeParams } from '../../../adapter';
-import { type Container, CoreService, type ICoreService, ICoreServiceNames } from '../../../ioc';
+import { ComponentConstants, type Container, CoreService, type ICoreService, ICoreServiceNames } from '../../../ioc';
 import { Inject } from '../../../ioc/component';
 
 /**
@@ -11,7 +10,6 @@ import { Inject } from '../../../ioc/component';
  */
 @CoreService(ICoreServiceNames.PREPARE_STATIC_SERVE_CONFIG_SERVICE)
 export class PrepareStaticServeConfigService implements ICoreService {
-
   public serviceName = 'PrepareStaticServeConfigService';
 
   @Inject(ICoreServiceNames.CONTAINER)
@@ -51,7 +49,8 @@ export class PrepareStaticServeConfigService implements ICoreService {
     }
 
     if (staticServeServiceInstance.rewriteRequestPath) {
-      baseStaticServeParams.rewriteRequestPath = staticServeServiceInstance.rewriteRequestPath;
+      baseStaticServeParams.rewriteRequestPath =
+        staticServeServiceInstance.rewriteRequestPath.bind(staticServeServiceInstance);
     }
 
     if (staticServeServiceInstance.onFound) {
@@ -70,5 +69,4 @@ export class PrepareStaticServeConfigService implements ICoreService {
 
     return baseStaticServeParams;
   }
-
 }

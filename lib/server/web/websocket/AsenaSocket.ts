@@ -3,7 +3,6 @@ import type { WebSocketData } from './types';
 import type { AsenaWebSocketService } from './AsenaWebSocketService';
 
 export class AsenaSocket<T> implements ServerWebSocket<WebSocketData<T>> {
-
   private ws: ServerWebSocket<WebSocketData<T>>;
 
   private _remoteAddress: string;
@@ -172,7 +171,6 @@ export class AsenaSocket<T> implements ServerWebSocket<WebSocketData<T>> {
   private createTopic(topic: string): string {
     return `${this.namespace}.${topic}`;
   }
-
 }
 
 export type Socket<T = any> = AsenaSocket<T>;
