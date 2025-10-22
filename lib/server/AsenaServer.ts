@@ -36,7 +36,6 @@ import type { GlobalMiddlewareConfig, GlobalMiddlewareEntry } from './config/Ase
  */
 @CoreService(ICoreServiceNames.ASENA_SERVER)
 export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreService {
-
   public serviceName = 'AsenaServer';
 
   @Inject(ICoreServiceNames.CORE_CONTAINER)
@@ -280,7 +279,7 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
 
     // If it's a class (old format), convert to config format
     return {
-      middleware: entry as MiddlewareClass,
+      middleware: entry,
       routes: undefined, // No route config = apply to all routes
     };
   }
@@ -327,5 +326,4 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
 
     this._logger.info(`Config ${yellow(name)} applied`);
   }
-
 }

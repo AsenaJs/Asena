@@ -11,7 +11,6 @@ import { Inject } from '../../../ioc/component';
  */
 @CoreService(ICoreServiceNames.PREPARE_CONFIG_SERVICE)
 export class PrepareConfigService implements ICoreService {
-
   public serviceName = 'PrepareConfigService';
 
   @Inject(ICoreServiceNames.CONTAINER)
@@ -49,5 +48,4 @@ export class PrepareConfigService implements ICoreService {
 
     return configInstance;
   }
-
 }

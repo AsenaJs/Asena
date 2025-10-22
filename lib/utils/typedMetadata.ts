@@ -8,7 +8,6 @@ export const getOwnTypedMetadata = <T>(key: string | symbol, target: any): T | u
   return getOwnMetadata(key, target);
 };
 
-// eslint-disable-next-line max-params
 export const defineTypedMetadata = <T>(key: string | symbol, value: T, target: any, sym?: string | symbol): void => {
   if (sym === undefined) {
     defineMetadata(key, value, target);

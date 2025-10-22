@@ -13,7 +13,6 @@ import type { GlobalMiddlewareRouteConfig } from '../server/config';
  * @template VS - Type for the validator schema
  */
 export abstract class AsenaAdapter<C extends AsenaContext<any, any>, VS> {
-
   /**
    * The name identifier of the adapter
    */
@@ -115,5 +114,4 @@ export abstract class AsenaAdapter<C extends AsenaContext<any, any>, VS> {
    * @returns A promise that resolves when the options are set, or void.
    */
   public abstract serveOptions(options: () => Promise<AsenaServeOptions> | AsenaServeOptions): Promise<void> | void;
-
 }

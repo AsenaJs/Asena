@@ -24,7 +24,6 @@ export interface AsenaServerOptions<A extends AsenaAdapter<any, any>> {
  * Handles IoC bootstrap and dependency injection
  */
 export class AsenaServerFactory {
-
   /**
    * @description Create and configure AsenaServer instance
    * @param {AsenaServerOptions<A>} options - Server configuration options
@@ -97,5 +96,4 @@ export class AsenaServerFactory {
 
     return server;
   }
-
 }

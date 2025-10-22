@@ -10,7 +10,6 @@ import { Inject } from '../../../ioc/component';
  */
 @CoreService(ICoreServiceNames.PREPARE_MIDDLEWARE_SERVICE)
 export class PrepareMiddlewareService implements ICoreService {
-
   public serviceName = 'PrepareMiddlewareService';
 
   @Inject(ICoreServiceNames.CONTAINER)
@@ -49,5 +48,4 @@ export class PrepareMiddlewareService implements ICoreService {
 
     return preparedMiddlewares;
   }
-
 }

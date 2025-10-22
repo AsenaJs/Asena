@@ -1,0 +1,24 @@
+# Dependencies
+node_modules/
+.changeset/
+.claude/
+.cursor/
+.github/
+.idea/
+
+# Build output
+dist/
+
+# Logs
+*.log
+
+# Coverage
+coverage/
+
+# Lock files
+bun.lockb
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+*.md

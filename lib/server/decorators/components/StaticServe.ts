@@ -21,7 +21,7 @@ import { ComponentType } from '../../../ioc/types';
  */
 export const StaticServe = (name?: string | StaticServeParams): ClassDecorator => {
   return defineComponent(ComponentType.MIDDLEWARE, name, (target) => {
-    if (typeof name !== 'string' && name !== null && name.root) {
+    if (typeof name !== 'string' && name?.root) {
       defineTypedMetadata<string>(ComponentConstants.StaticServeRootKey, name.root, target);
     }
   });

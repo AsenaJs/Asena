@@ -3,10 +3,9 @@ import type { ComponentType, ContainerService, Dependencies, Expressions, Strate
 import { ComponentConstants } from './constants';
 import { getOwnTypedMetadata, getTypedMetadata } from '../utils/typedMetadata';
 import { CircularDependencyDetector } from './CircularDependencyDetector';
-import { CORE_SERVICE } from './decorators/CoreService';
+import { CORE_SERVICE } from './decorators';
 
 export class Container {
-
   private _services: { [key: string]: ContainerService | ContainerService[] } = {};
 
   private circularDetector = new CircularDependencyDetector();
@@ -210,7 +209,7 @@ export class Container {
 
         Object.defineProperty(newInstance, propertyKey, {
           get() {
-            return expression && expression[propertyKey] ? strategy.map((s) => expression[propertyKey](s)) : strategy;
+            return expression?.[propertyKey] ? strategy.map((s) => expression[propertyKey](s)) : strategy;
           },
           enumerable: true,
           configurable: true,
@@ -232,7 +231,7 @@ export class Container {
       for (const [k, name] of Object.entries(deps)) {
         property = Object.getOwnPropertyDescriptor(newInstance, k);
 
-        if (property && property.value !== undefined) continue;
+        if (property?.value !== undefined) continue;
 
         const instance: Class | Class[] = await this.resolve<Class>(name);
 
@@ -251,7 +250,7 @@ export class Container {
 
         Object.defineProperty(newInstance, k, {
           get: () => {
-            return expression && expression[k] ? expression[k](instance) : instance;
+            return expression?.[k] ? expression[k](instance) : instance;
           },
           enumerable: true,
           configurable: true,
@@ -304,5 +303,4 @@ export class Container {
   public set services(value: { [p: string]: ContainerService | ContainerService[] }) {
     this._services = value;
   }
-
 }

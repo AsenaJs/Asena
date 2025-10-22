@@ -1,4 +1,4 @@
-import { type ComponentParams, ComponentType, type Dependencies, type ServiceParams, type Strategies } from '../types';
+import { type ComponentParams, ComponentType, type Dependencies, type Strategies } from '../types';
 import { ComponentConstants } from '../constants';
 import { defineTypedMetadata, getOwnTypedMetadata } from '../../utils/typedMetadata';
 import { Scope } from './Scope';
@@ -33,11 +33,8 @@ export const defineComponent = <T extends ComponentParams>(
   };
 };
 
-const paramsGenerator = (
-  params: ComponentParams | string,
-  componentType: ComponentType,
-): ComponentParams | ServiceParams => {
-  const defaultParam: ComponentParams | ServiceParams = { name: undefined, scope: undefined };
+const paramsGenerator = (params: ComponentParams | string, componentType: ComponentType): ComponentParams => {
+  const defaultParam: ComponentParams = { name: undefined, scope: undefined };
 
   if (
     typeof params === 'string' &&

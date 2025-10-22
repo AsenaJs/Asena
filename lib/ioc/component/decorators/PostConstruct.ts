@@ -7,7 +7,7 @@ import { defineTypedMetadata, getOwnTypedMetadata } from '../../../utils/typedMe
  * @returns {PropertyDecorator} The property decorator function.
  */
 export const PostConstruct = (): PropertyDecorator => {
-  return (target: Object, propertyKey: string): void => {
+  return (target: object, propertyKey: string): void => {
     const postConstructs: string[] =
       getOwnTypedMetadata<string[]>(ComponentConstants.PostConstructKey, target.constructor) || [];
 

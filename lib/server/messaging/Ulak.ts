@@ -27,7 +27,6 @@ import { blue, type ServerLogger } from '../../logger';
  */
 @CoreService(ICoreServiceNames.__ULAK__)
 export class Ulak implements ICoreService {
-
   public readonly serviceName: string = 'Ulak';
 
   /**
@@ -344,7 +343,6 @@ export class Ulak implements ICoreService {
 
     return service;
   }
-
 }
 
 /**
@@ -403,7 +401,6 @@ export namespace Ulak {
  * Internal implementation of scoped namespace
  */
 class UlakNameSpace<T extends string> implements Ulak.NameSpace<T> {
-
   public constructor(
     public readonly path: T,
     private readonly ulak: Ulak,
@@ -428,7 +425,6 @@ class UlakNameSpace<T extends string> implements Ulak.NameSpace<T> {
   public getSocketCount(): number {
     return this.ulak.getSocketCount(this.path);
   }
-
 }
 
 /**
