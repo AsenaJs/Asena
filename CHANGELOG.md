@@ -1,6 +1,10 @@
 # @asenajs/asena
 
-## 0.6.0
+## 0.6.0-beta.0
+
+> ⚠️ **BETA RELEASE** - This is a pre-release version for adapter developers to test and integrate changes. Not recommended for production use.
+
+### What's New in Beta
 
 ### Minor Changes
 
