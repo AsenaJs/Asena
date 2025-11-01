@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
-import { AsenaServer, ICoreServiceNames } from '../../lib/server';
-import { CoreBootstrapPhase, CoreContainer } from '../../lib/ioc';
+import { AsenaServer } from '../../lib/server';
+import { CoreBootstrapPhase, CoreContainer, ICoreServiceNames } from '../../lib/ioc';
 import { createMockAdapter } from '../utils/createMockContext';
 import { Controller, Inject, Service } from '../../lib/server/decorators';
 

@@ -56,4 +56,9 @@ export class ComponentConstants {
 
   // Static Serve specific
   public static readonly StaticServeRootKey = Symbol('staticServe:root');
+
+  // Event specific
+  public static readonly EventHandlersKey = Symbol('event:handlers');
+
+  public static readonly EventPrefixKey = Symbol('event:prefix');
 }

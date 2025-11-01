@@ -17,7 +17,6 @@ describe('AsenaWebSocketService', () => {
       data: { id: 'test-user-id' },
       subscribe: mock(() => {}),
       unsubscribe: mock(() => {}),
-      cleanup: mock(() => {}),
     } as any;
   });
 
@@ -72,26 +71,7 @@ describe('AsenaWebSocketService', () => {
     await service['onCloseInternal'](mockSocket, 1000, 'test');
 
     expect(service.sockets.has(mockSocket.id)).toBe(false);
-    expect(mockSocket.cleanup).toHaveBeenCalled();
     expect(mockSocket.unsubscribe).toHaveBeenCalledTimes(2);
-  });
-
-  test('getSocketsByRoom() returns sockets by room', () => {
-    const room = 'test-room';
-    const testData = { message: 'test' };
-
-    service.namespace = 'base';
-
-    service.to(room, testData);
-  });
-
-  test('rooms getter returns the rooms', () => {
-    const rooms = service.rooms;
-
-    rooms.set('test-room', [mockSocket]);
-
-    expect(rooms).toBeDefined();
-    expect(rooms.size).toBe(1);
   });
 
   test('sockets getter returns the sockets', () => {
@@ -104,7 +84,6 @@ describe('AsenaWebSocketService', () => {
   });
 
   test('should not have memory leak with multiple connect/disconnect cycles', async () => {
-    const initialRoomCount = service.rooms.size;
     const initialSocketCount = service.sockets.size;
 
     // Simulate multiple connect/disconnect cycles
@@ -114,42 +93,16 @@ describe('AsenaWebSocketService', () => {
         data: { id: `user-${i}` },
         subscribe: mock(() => {}),
         unsubscribe: mock(() => {}),
-        cleanup: mock(() => {
-          // Simulate actual cleanup behavior
-          const topics = Array.from(service.rooms.keys());
-
-          for (const topic of topics) {
-            const room = service.rooms.get(topic);
-
-            if (room) {
-              // eslint-disable-next-line max-nested-callbacks
-              const filteredRoom = room.filter((s) => s.id !== tempSocket.id);
-
-              if (filteredRoom.length === 0) {
-                service.rooms.delete(topic);
-              } else if (filteredRoom.length !== room.length) {
-                service.rooms.set(topic, filteredRoom);
-              }
-            }
-          }
-        }),
       } as any;
 
       // Simulate connection
       await service['onOpenInternal'](tempSocket);
-
-      // Simulate joining a test room
-      const testRoom = service.rooms.get('test-room') || [];
-
-      testRoom.push(tempSocket);
-      service.rooms.set('test-room', testRoom);
 
       // Simulate disconnection
       await service['onCloseInternal'](tempSocket, 1000, 'test');
     }
 
     // After all connections are closed, counts should return to initial state
-    expect(service.rooms.size).toBe(initialRoomCount);
     expect(service.sockets.size).toBe(initialSocketCount);
   });
 

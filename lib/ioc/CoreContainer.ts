@@ -8,7 +8,10 @@ import { PrepareConfigService } from '../server/src/services/PrepareConfigServic
 import { PrepareWebsocketService } from '../server/src/services/PrepareWebsocketService';
 import { PrepareValidatorService } from '../server/src/services/PrepareValidatorService';
 import { PrepareStaticServeConfigService } from '../server/src/services/PrepareStaticServeConfigService';
+import { PrepareEventService } from '../server/src/services/PrepareEventService';
 import { Ulak } from '../server/messaging/Ulak';
+import { EventDispatchService } from '../server/event/EventDispatchService';
+import { EventEmitter } from '../server/event/EventEmitter';
 
 /**
  * @description CoreContainer manages framework-level services
@@ -123,12 +126,17 @@ export class CoreContainer {
       // Internal messaging system (must be registered before prepare services)
       { name: ICoreServiceNames.__ULAK__, Class: Ulak },
 
+      // Event system (must be registered before PrepareEventService)
+      { name: ICoreServiceNames.EVENT_DISPATCH_SERVICE, Class: EventDispatchService },
+      { name: ICoreServiceNames.EVENT_EMITTER, Class: EventEmitter },
+
       // Prepare services
       { name: ICoreServiceNames.PREPARE_MIDDLEWARE_SERVICE, Class: PrepareMiddlewareService },
       { name: ICoreServiceNames.PREPARE_CONFIG_SERVICE, Class: PrepareConfigService },
       { name: ICoreServiceNames.PREPARE_WEBSOCKET_SERVICE, Class: PrepareWebsocketService },
       { name: ICoreServiceNames.PREPARE_VALIDATOR_SERVICE, Class: PrepareValidatorService },
       { name: ICoreServiceNames.PREPARE_STATIC_SERVE_CONFIG_SERVICE, Class: PrepareStaticServeConfigService },
+      { name: ICoreServiceNames.PREPARE_EVENT_SERVICE, Class: PrepareEventService },
     ];
 
     for (const service of services) {

@@ -1,13 +1,15 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
 import type { AsenaServer } from '../../lib/server';
 import { AsenaServerFactory } from '../../lib/server';
-import { Config, Controller, Service, WebSocket } from '../../lib/server/decorators';
+import { Config, Controller, EventService, Service, WebSocket } from '../../lib/server/decorators';
 import { ComponentType } from '../../lib/ioc';
 import { Inject, PostConstruct } from '../../lib/ioc/component';
 import { AsenaWebSocketService, type Socket } from '../../lib/server/web/websocket';
 import { Get } from '../../lib/server/web/decorators';
 import type { AsenaContext, AsenaServeOptions, WebsocketRouteParams } from '../../lib/adapter';
 import type { AsenaConfig } from '../../lib/server/config';
+import { emitter, On } from '../../lib/server/event';
+import type { EventEmitter } from '../../lib/server/event';
 
 @Service()
 class TestServerService {
@@ -242,5 +244,46 @@ describe('AsenaServer', () => {
         components: [FailingService],
       }),
     ).rejects.toThrow('Test Error');
+  });
+
+  test('should call prepareEventService.prepare() during start', async () => {
+    let eventHandlerCalled = false;
+
+    @EventService({ prefix: 'test' })
+    class TestEventService {
+      @On('event')
+      handleTestEvent() {
+        eventHandlerCalled = true;
+      }
+    }
+
+    @Service()
+    class TestEmitterService {
+      @Inject(emitter())
+      private eventEmitter!: EventEmitter;
+
+      public emitTestEvent() {
+        this.eventEmitter.emit('test.event');
+      }
+    }
+
+    server = await AsenaServerFactory.create({
+      adapter: mockAdapter,
+      logger: mockLogger,
+      port: 3000,
+      components: [TestEventService, TestEmitterService],
+    });
+
+    await server.start();
+
+    // Verify event system is registered
+    const emitterService = await server.coreContainer.container.resolve<TestEmitterService>('TestEmitterService');
+    expect(emitterService).toBeDefined();
+
+    // Emit event
+    emitterService.emitTestEvent();
+
+    // Verify handler was called (meaning prepareEventService.prepare() ran)
+    expect(eventHandlerCalled).toBe(true);
   });
 });
