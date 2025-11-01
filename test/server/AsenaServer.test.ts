@@ -277,7 +277,9 @@ describe('AsenaServer', () => {
     await server.start();
 
     // Verify event system is registered
-    const emitterService = await server.coreContainer.container.resolve<TestEmitterService>('TestEmitterService');
+    const emitterService: TestEmitterService = <TestEmitterService>(
+      await server.coreContainer.container.resolve<TestEmitterService>('TestEmitterService')
+    );
     expect(emitterService).toBeDefined();
 
     // Emit event
@@ -285,5 +287,97 @@ describe('AsenaServer', () => {
 
     // Verify handler was called (meaning prepareEventService.prepare() ran)
     expect(eventHandlerCalled).toBe(true);
+  });
+
+  test('should correctly join route paths with forward slashes (Windows compatibility)', async () => {
+    @Controller('/api/v1')
+    class PathTestController {
+      @Get('/users')
+      public async getUsers(context: AsenaContext<any, any>) {
+        return context.send('users');
+      }
+
+      @Get('/posts/detail')
+      public async getPosts(context: AsenaContext<any, any>) {
+        return context.send('posts');
+      }
+    }
+
+    server = await AsenaServerFactory.create({
+      adapter: mockAdapter,
+      logger: mockLogger,
+      port: 3000,
+      components: [PathTestController],
+    });
+
+    await server.start();
+
+    // Verify that paths are joined correctly with forward slashes only
+    expect(mockAdapter.registerRoute).toHaveBeenCalledWith(
+      expect.objectContaining({
+        path: '/api/v1/users',
+        method: 'get',
+      }),
+    );
+
+    expect(mockAdapter.registerRoute).toHaveBeenCalledWith(
+      expect.objectContaining({
+        path: '/api/v1/posts/detail',
+        method: 'get',
+      }),
+    );
+
+    // Ensure no backslashes exist in registered paths (Windows compatibility)
+    const calls = mockAdapter.registerRoute.mock.calls;
+    for (const call of calls) {
+      const registeredPath = call[0].path;
+      expect(registeredPath).not.toContain('\\');
+      expect(registeredPath).toMatch(/^\/[a-z0-9\-_/]*$/i);
+    }
+  });
+
+  test('should handle edge cases in route path joining', async () => {
+    @Controller('/api/')
+    class EdgeCaseController {
+      @Get('/test')
+      public async test1(context: AsenaContext<any, any>) {
+        return context.send('test1');
+      }
+
+      @Get('test2')
+      public async test2(context: AsenaContext<any, any>) {
+        return context.send('test2');
+      }
+
+      @Get('/')
+      public async root(context: AsenaContext<any, any>) {
+        return context.send('root');
+      }
+    }
+
+    server = await AsenaServerFactory.create({
+      adapter: mockAdapter,
+      logger: mockLogger,
+      port: 3000,
+      components: [EdgeCaseController],
+    });
+
+    await server.start();
+
+    const calls = mockAdapter.registerRoute.mock.calls;
+
+    // Check for proper path normalization
+    for (const call of calls) {
+      const registeredPath = call[0].path;
+
+      // No backslashes
+      expect(registeredPath).not.toContain('\\');
+
+      // No double slashes (except in protocol which we don't have)
+      expect(registeredPath).not.toMatch(/\/\//);
+
+      // Should start with /
+      expect(registeredPath).toMatch(/^\//);
+    }
   });
 });

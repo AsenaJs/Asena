@@ -143,7 +143,7 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
       await this.prepareTopMiddlewares({ controller, routePath });
 
       for (const [name, params] of Object.entries(routes)) {
-        const lastPath = path.join(`${routePath}/`, params.path);
+        const lastPath = path.join(`${routePath}/`, params.path).replace(/\\/g, '/');
 
         const middlewares = await this.prepareRouteMiddleware(params);
         const validatorInstance = await this.prepareValidator(params.validator);
