@@ -18,11 +18,6 @@ export class AsenaWebSocketService<T> {
   private _sockets: Map<string, Socket<T>> = new Map<string, Socket<T>>();
 
   /**
-   * A map to store the rooms.
-   */
-  private _rooms: Map<string, Socket<T>[]> = new Map<string, Socket<T>[]>();
-
-  /**
    * The namespace for the WebSocket connection.
    */
   private _namespace: string;
@@ -51,16 +46,6 @@ export class AsenaWebSocketService<T> {
     const _nameSpace = nameSpace ? `${this.namespace}.${nameSpace}` : this.namespace;
 
     this.server.to(_nameSpace, data);
-  }
-
-  /**
-   * Retrieves the sockets associated with a specific room.
-   *
-   * @param {string} room - The name of the room.
-   * @returns {Socket<T>[]} - An array of sockets in the specified room.
-   */
-  public getSocketsByRoom(room: string): Socket<T>[] {
-    return this.rooms.get(room);
   }
 
   /**
@@ -129,8 +114,6 @@ export class AsenaWebSocketService<T> {
   }
 
   protected async onCloseInternal(ws: Socket<T>, _code: number, _reason: string): Promise<void> {
-    ws.cleanup();
-
     ws.unsubscribe(`__`);
 
     ws.unsubscribe(`${ws.data.id}`);
@@ -156,13 +139,5 @@ export class AsenaWebSocketService<T> {
 
   public set namespace(value: string) {
     this._namespace = value;
-  }
-
-  public get rooms(): Map<string, Socket<T>[]> {
-    return this._rooms;
-  }
-
-  public set rooms(value: Map<string, Socket<T>[]>) {
-    this._rooms = value;
   }
 }

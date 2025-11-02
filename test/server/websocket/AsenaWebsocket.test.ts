@@ -46,7 +46,6 @@ describe('WebSocket Tests', () => {
       const mockWs = {
         id: 'test-socket-id',
         data: { id: 'test-socket-id' },
-        cleanup: jest.fn(),
         subscribe: jest.fn(),
         unsubscribe: jest.fn(),
       } as unknown as AsenaSocket<any>;
@@ -57,7 +56,6 @@ describe('WebSocket Tests', () => {
       await wsService.onCloseInternal(mockWs, 1000, 'test close');
 
       expect(wsService.sockets.has('test-socket-id')).toBe(false);
-      expect(mockWs.cleanup).toHaveBeenCalled();
       expect(mockWs.unsubscribe).toHaveBeenCalledTimes(2);
     });
   });
@@ -81,70 +79,53 @@ describe('WebSocket Tests', () => {
   });
 
   describe('Room Tests', () => {
-    it('should allow socket to join a room', () => {
+    it('should allow socket to subscribe to a topic', () => {
       const mockWs = new AsenaSocket(
         {
           subscribe: jest.fn(),
           unsubscribe: jest.fn(),
           data: { id: 'test-socket-id' },
         } as any,
-        wsService,
+        'test-namespace',
       );
 
       mockWs.subscribe('test-room');
 
-      const roomSockets = wsService.getSocketsByRoom('test-room');
-
-      const rooms = wsService.rooms;
-
-      expect(rooms.has('test-room')).toBe(true);
-
-      expect(roomSockets).toContain(mockWs);
+      expect(mockWs['ws'].subscribe).toHaveBeenCalledWith('test-namespace.test-room');
     });
 
-    it('should allow socket to leave a room', () => {
+    it('should allow socket to unsubscribe from a topic', () => {
       const mockWs = new AsenaSocket(
         {
           subscribe: jest.fn(),
           unsubscribe: jest.fn(),
           data: { id: 'test-socket-id' },
         } as any,
-        wsService,
+        'test-namespace',
       );
 
       mockWs.subscribe('test-room');
       mockWs.unsubscribe('test-room');
 
-      const roomSockets = wsService.getSocketsByRoom('test-room');
-
-      expect(roomSockets).toBeUndefined();
+      expect(mockWs['ws'].unsubscribe).toHaveBeenCalledWith('test-namespace.test-room');
     });
 
-    it('should remove socket from all rooms, if socket disconnects', async () => {
+    it('should track sockets in service on disconnect', async () => {
       const mockWs = new AsenaSocket(
         {
           subscribe: jest.fn(),
           unsubscribe: jest.fn(),
           data: { id: 'test-socket-id' },
         } as any,
-        wsService,
+        'test-namespace',
       );
 
-      wsService.rooms.set('test-room-hidden', [mockWs]);
-
-      mockWs.subscribe('test-room');
+      wsService.sockets.set(mockWs.id, mockWs);
 
       // @ts-ignore
       await wsService.onCloseInternal(mockWs, 1000, 'test close');
 
-      const roomSockets = wsService.getSocketsByRoom('test-room');
-      const hiddenRoomSockets = wsService.getSocketsByRoom('test-room-hidden');
-
-      expect(wsService.rooms.size).toBe(0);
       expect(wsService.sockets.size).toBe(0);
-
-      expect(roomSockets).toBeUndefined();
-      expect(hiddenRoomSockets).toBeUndefined();
     });
   });
 
@@ -162,7 +143,7 @@ describe('WebSocket Tests', () => {
           unsubscribe: jest.fn(),
           data: { id: 'test-socket-id' },
         } as any,
-        wsService,
+        'test-namespace',
       );
     });
 
@@ -211,7 +192,7 @@ describe('WebSocket Tests', () => {
           unsubscribe: jest.fn(),
           data: { id: 'test-socket-id' },
         } as any,
-        wsService,
+        'test-namespace',
       );
 
       global.spy = {
@@ -219,13 +200,10 @@ describe('WebSocket Tests', () => {
         close: mock(() => 1),
         // eslint-disable-next-line max-nested-callbacks
         terminate: mock(() => 1),
-        // eslint-disable-next-line max-nested-callbacks
-        cleanup: mock(() => 1),
       };
 
       mockWs['ws'].close = global.spy.close;
       mockWs['ws'].terminate = global.spy.terminate;
-      mockWs.cleanup = global.spy.cleanup;
     });
 
     it('should call ws close with code and reason', () => {
@@ -235,21 +213,18 @@ describe('WebSocket Tests', () => {
       mockWs.close(code, reason);
 
       expect(global.spy.close).toHaveBeenCalledWith(code, reason);
-      expect(global.spy.cleanup).toHaveBeenCalled();
     });
 
     it('should call ws close without parameters', () => {
       mockWs.close();
 
       expect(global.spy.close).toHaveBeenCalledWith(undefined, undefined);
-      expect(global.spy.cleanup).toHaveBeenCalled();
     });
 
     it('should call ws end (terminate)', () => {
       mockWs.terminate();
 
       expect(global.spy.terminate).toHaveBeenCalled();
-      expect(global.spy.cleanup).toHaveBeenCalled();
     });
   });
 
@@ -263,7 +238,7 @@ describe('WebSocket Tests', () => {
           pong: jest.fn(),
           data: { id: 'test-socket-id' },
         } as any,
-        wsService,
+        'test-namespace',
       );
     });
 

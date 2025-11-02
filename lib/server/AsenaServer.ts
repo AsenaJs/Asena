@@ -29,6 +29,7 @@ import type { PrepareValidatorService } from './src/services/PrepareValidatorSer
 import type { PrepareStaticServeConfigService } from './src/services/PrepareStaticServeConfigService';
 import { Inject, PostConstruct } from '../ioc/component';
 import type { GlobalMiddlewareConfig, GlobalMiddlewareEntry } from './config/AsenaConfig';
+import type { PrepareEventService } from './src/services/PrepareEventService';
 
 /**
  * @description AsenaServer - Main server class for Asena framework
@@ -62,6 +63,9 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
   @Inject(ICoreServiceNames.PREPARE_STATIC_SERVE_CONFIG_SERVICE)
   private prepareStaticServeConfigService!: PrepareStaticServeConfigService;
 
+  @Inject(ICoreServiceNames.PREPARE_EVENT_SERVICE)
+  private prepareEventService: PrepareEventService;
+
   // Instance state
   private _port!: number;
 
@@ -91,6 +95,7 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
     // Phase 7: Application setup
     this._coreContainer.setPhase(CoreBootstrapPhase.APPLICATION_SETUP);
     await this.prepareConfigs();
+    await this.prepareEventService.prepare();
     await this.initializeControllers();
     await this.prepareWebSocket();
 
@@ -138,7 +143,7 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
       await this.prepareTopMiddlewares({ controller, routePath });
 
       for (const [name, params] of Object.entries(routes)) {
-        const lastPath = path.join(`${routePath}/`, params.path);
+        const lastPath = path.join(`${routePath}/`, params.path).replace(/\\/g, '/');
 
         const middlewares = await this.prepareRouteMiddleware(params);
         const validatorInstance = await this.prepareValidator(params.validator);

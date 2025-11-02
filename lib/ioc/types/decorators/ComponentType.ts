@@ -6,4 +6,5 @@ export enum ComponentType {
   MIDDLEWARE = 'MIDDLEWARE',
   WEBSOCKET = 'WEBSOCKET',
   CONFIG = 'CONFIG',
+  EVENT = 'EVENT',
 }
