@@ -5,3 +5,4 @@ export * from './Schedule';
 export * from './Service';
 export * from './WebSocket';
 export * from './StaticServe';
+export * from './EventService';

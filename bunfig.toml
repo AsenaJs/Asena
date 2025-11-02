@@ -4,6 +4,10 @@ coverage = true
 
 coverageSkipTestFiles = true
 
+coveragePathIgnorePatterns = [
+    "test/utils/*.ts",
+]
+
 
 
 [test.reporter]

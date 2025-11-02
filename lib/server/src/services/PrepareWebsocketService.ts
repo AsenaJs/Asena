@@ -1,7 +1,7 @@
 import type { Container, ICoreService } from '../../../ioc';
 import { ComponentConstants, ComponentType, CoreService, ICoreServiceNames } from '../../../ioc';
 import { Inject } from '../../../ioc/component';
-import { getOwnTypedMetadata } from '../../../utils/typedMetadata';
+import { getOwnTypedMetadata } from '../../../utils';
 import type { Ulak } from '../../messaging';
 import type { AsenaWebSocketService, WebSocketData } from '../../web/websocket';
 
@@ -19,7 +19,7 @@ export class PrepareWebsocketService implements ICoreService {
   @Inject(ICoreServiceNames.__ULAK__)
   private ulak: Ulak;
 
-  public async prepare(): Promise<AsenaWebSocketService<WebSocketData<any>>[]> {
+  public async prepare(): Promise<AsenaWebSocketService<WebSocketData>[]> {
     const webSockets = await this.container.resolveAll<AsenaWebSocketService<WebSocketData>>(ComponentType.WEBSOCKET);
 
     if (!webSockets?.length) {
@@ -30,7 +30,7 @@ export class PrepareWebsocketService implements ICoreService {
     const flatWebSockets = webSockets.flat();
     const registeredPaths = new Set<string>();
 
-    const preparedWebsockets: AsenaWebSocketService<WebSocketData<any>>[] = [];
+    const preparedWebsockets: AsenaWebSocketService<WebSocketData>[] = [];
 
     for (const webSocket of flatWebSockets) {
       const path = getOwnTypedMetadata<string>(ComponentConstants.PathKey, webSocket.constructor);
@@ -43,7 +43,7 @@ export class PrepareWebsocketService implements ICoreService {
       webSocket.namespace = path;
 
       // Register with Ulak messaging system
-      // Note: WebSocket decorator removes leading '/', but Ulak uses it for consistency
+      // Note: WebSocket decorator removes leading '/', but Ulak uses it for consistency. Deep note: This shit goes insane, I need to fix this soon.
       this.ulak.registerNamespace(`/${path}`, webSocket);
 
       preparedWebsockets.push(webSocket);
