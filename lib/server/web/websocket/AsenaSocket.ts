@@ -17,6 +17,8 @@ import type { WebSocketData } from './types';
  * ```
  */
 export class AsenaSocket<T> implements ServerWebSocket<WebSocketData<T>> {
+
+  readonly subscriptions: string[];
   /**
    * The underlying Bun ServerWebSocket instance.
    * @private
@@ -73,6 +75,7 @@ export class AsenaSocket<T> implements ServerWebSocket<WebSocketData<T>> {
     this._binaryType = ws.binaryType;
     this._readyState = ws.readyState;
     this._namespace = namespace;
+    this.subscriptions = ws.subscriptions;
   }
 
   /**
