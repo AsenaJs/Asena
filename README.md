@@ -1,218 +1,44 @@
+<p width="%100" align="center">
+  <img src="https://avatars.githubusercontent.com/u/179836938?s=200&v=4" width="150" align="center"/>
+</p>
+
 # Asena
 
-A high-performance, NestJS-like IoC web framework built on Bun runtime with full dependency injection support.
+[![Version](https://img.shields.io/badge/version-0.6.1-blue.svg)](https://asena.sh)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
+[![Bun Version](https://img.shields.io/badge/Bun-1.3.2%2B-blueviolet)](https://bun.sh)
+
+A high-performance IoC web framework for Bun runtime, bringing Spring Boot's automatic component discovery and field-based dependency injection to TypeScript.
+
+## Philosophy
+
+`Spring Boot` and `Quarkus` have established proven patterns for enterprise application development, but developers transitioning to TypeScript often find themselves reimplementing familiar concepts or adapting to unfamiliar architectures. `AsenaJS` addresses this gap by bringing automatic component discovery, field-based dependency injection to the `Bun` ecosystem.
+
+The framework eliminates boilerplate through automatic scanning of decorator-annotated classes, removing the need for explicit module declarations or manual wiring. Components marked with `@Controller`, `@Service`, or `@Repository` (via asena-drizzle package) are discovered and registered automatically, allowing developers to focus on business logic rather than configuration. This approach, combined with Bun's native performance characteristics, delivers both the familiar developer experience of Spring Boot and the speed expected from modern JavaScript runtimes.
+
+`AsenaJS` is designed to make developers familiar with `Spring Boot` and `Quarkus` feel at home in the TypeScript ecosystem. As the framework evolves, we remain committed to this philosophy—bringing more proven patterns from the Java world while maintaining the performance advantages that `Bun` provides and flexiblity of Typescript.
 
 ## Documentation
 
-For detailed documentation, visit [asena.sh](https://asena.sh).
+📚 **Full documentation:** [asena.sh](https://asena.sh)
 
-Also check out [AsenaExample](https://github.com/LibirSoft/AsenaExample) for latest usage patterns.
+For complete guides, API reference, and advanced topics, visit our documentation site.
 
-## Key Features
-
-- **Full IoC Container**: Field-based dependency injection for all components
-- **Decorator-based**: TypeScript decorators for routing and DI (similar to NestJS)
-- **High Performance**: Built on Bun runtime for optimal speed
-- **WebSocket Support**: Native WebSocket handling
-- **Flexible Middleware**: Multi-level middleware system (global, controller, route)
-- **Adapter System**: Pluggable HTTP adapters (Hono default)
-- **Type-Safe**: Full TypeScript support with strict mode
-- **Zero Config**: Minimal setup required
+**Example Project:** [AsenaExample](https://github.com/LibirSoft/AsenaExample) - See latest usage patterns and best practices.
 
 ## Quick Start
 
-### Using CLI (Recommended)
-
 ```bash
-bun add -D @asenajs/asena-cli
-asena create my-project
+# Create new project
+bun add -g @asenajs/asena-cli
+asena create my-project --adapter=hono --logger --eslint --prettier
 cd my-project
+
+# Start development
 asena dev start
 ```
 
-### Manual Setup
-
-Install dependencies:
-
-```bash
-bun add @asenajs/asena @asenajs/hono-adapter @asenajs/asena-logger
-bun add -D @asenajs/asena-cli
-```
-
-Configure TypeScript (`tsconfig.json`):
-
-```json
-{
-  "compilerOptions": {
-    "target": "ESNext",
-    "module": "ESNext",
-    "moduleResolution": "bundler",
-    "experimentalDecorators": true,
-    "emitDecoratorMetadata": true,
-    "strict": true,
-    "skipLibCheck": true
-  }
-}
-```
-
-Initialize config:
-
-```bash
-asena init
-```
-
-Create your server (`src/index.ts`):
-
-```typescript
-import { AsenaServerFactory } from '@asenajs/asena';
-import { createHonoAdapter } from '@asenajs/hono-adapter';
-import { logger } from './logger';
-
-const [adapter, asenaLogger] = createHonoAdapter(logger);
-
-const server = await AsenaServerFactory.create({
-  adapter,
-  logger: asenaLogger,
-  port: 3000
-});
-
-await server.start();
-```
-
-Create a controller (`src/controllers/HelloController.ts`):
-
-```typescript
-import { Controller } from '@asenajs/asena/server';
-import { Get } from '@asenajs/asena/web';
-import type { Context } from '@asenajs/hono-adapter';
-
-@Controller('/hello')
-export class HelloController {
-  @Get('/world')
-  async getHello(context: Context) {
-    return context.send('Hello World');
-  }
-}
-```
-
-## Core Concepts
-
-### Controllers
-
-Handle HTTP requests with decorators:
-
-```typescript
-@Controller('/users')
-export class UserController {
-  @Get('/:id')
-  async getUser(context: Context) {
-    const id = context.req.param('id');
-    return context.json({ id, name: 'John' });
-  }
-
-  @Post('/')
-  async createUser(context: Context) {
-    const body = await context.req.json();
-    return context.json({ success: true });
-  }
-}
-```
-
-### Services
-
-Business logic with dependency injection:
-
-```typescript
-@Service()
-export class UserService {
-  async findUser(id: string) {
-    // Your business logic
-    return { id, name: 'John' };
-  }
-}
-
-@Controller('/users')
-export class UserController {
-  @Inject(UserService)
-  private userService: UserService;
-
-  @Get('/:id')
-  async getUser(context: Context) {
-    const user = await this.userService.findUser(context.req.param('id'));
-    return context.json(user);
-  }
-}
-```
-
-### Middleware
-
-Multi-level middleware support:
-
-```typescript
-@Middleware()
-export class AuthMiddleware extends MiddlewareService {
-  async handle(context: Context, next: Function) {
-    // Check authentication
-    await next();
-  }
-}
-
-// Global middleware via Config
-@Config()
-export class AppConfig {
-  globalMiddlewares() {
-    return [
-      LoggerMiddleware,  // Apply to all routes
-
-      // Pattern-based
-      {
-        middleware: AuthMiddleware,
-        routes: { include: ['/api/*', '/admin/*'] }
-      },
-      {
-        middleware: RateLimitMiddleware,
-        routes: { exclude: ['/health', '/metrics'] }
-      }
-    ];
-  }
-}
-
-// Controller-level
-@Controller({ path: '/admin', middlewares: [AuthMiddleware] })
-export class AdminController { }
-
-// Route-level
-@Get({ path: '/users', middlewares: [AuthMiddleware] })
-async getUsers(context: Context) { }
-```
-
-### WebSocket
-
-Built-in WebSocket support:
-
-```typescript
-@WebSocket('/chat')
-export class ChatSocket extends AsenaWebSocketService {
-  onOpen(ws: Socket) {
-    ws.send('Welcome!');
-  }
-
-  onMessage(ws: Socket, message: string) {
-    ws.send(`Echo: ${message}`);
-  }
-}
-```
-
-## CLI Commands
-
-```bash
-asena create          # Create new project
-asena init            # Initialize config
-asena dev start       # Development mode
-asena build           # Production build
-```
-
-Full CLI documentation: [asena.sh/docs/cli](https://asena.sh/docs/cli/overview.html)
+Visit [asena.sh/docs/get-started](https://asena.sh/docs/get-started) for detailed setup instructions.
 
 ## Performance
 
@@ -220,27 +46,17 @@ Built on Bun runtime for exceptional performance:
 
 | Framework                | Requests/sec          | Latency (avg) |
 |--------------------------|-----------------------|---------------|
-| **Asena + Ergenecore**   | **294962.61**         | **1.34ms**    |
-| Hono                     | 266476.83             | 1.49ms        |
-| **Asena + Hono-adapter** | **233182.35**         | **1.70ms**    |
-| NestJS (Bun)             | 100975.20             | 3.92ms        |
-| NestJS (Node)            | 88083.22              | 5.33ms        |
+| **Asena + Ergenecore**   | **294,962.61**        | **1.34ms**    |
+| Hono                     | 266,476.83            | 1.49ms        |
+| **Asena + Hono-adapter** | **233,182.35**        | **1.70ms**    |
+| NestJS (Bun)             | 100,975.20            | 3.92ms        |
+| NestJS (Node)            | 88,083.22             | 5.33ms        |
 
 > Benchmark: 12 threads, 400 connections, 120s duration, Hello World endpoint
 
-## Architecture
-
-```
-lib/
-├── ioc/           # IoC container & dependency injection
-├── server/        # Core server & routing
-├── adapter/       # HTTP adapter abstraction
-└── utils/         # Utilities & helpers
-```
-
 ## Contributing
 
-Contributions welcome! Submit a Pull Request on [GitHub](https://github.com/AsenaJs/Asena).
+Contributions are welcome! Submit a Pull Request on [GitHub](https://github.com/AsenaJs/Asena).
 
 ## License
 
