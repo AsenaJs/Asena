@@ -1,5 +1,14 @@
 # @asenajs/asena
 
+## 0.6.1
+
+### Patch Changes
+
+- Add WebSocket subscriptions support for Bun 1.3.2
+  - Exposed `subscriptions` property in `AsenaSocket` class to support Bun's native ServerWebSocket subscriptions feature
+  - Upgraded to Bun 1.3.2 to utilize new WebSocket subscription capabilities
+  - Maintained zero-dependency philosophy by leveraging Bun's native WebSocket implementation
+
 ## 0.6.0
 
 ### Minor Changes
