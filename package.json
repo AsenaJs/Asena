@@ -1,6 +1,6 @@
 {
   "name": "@asenajs/asena",
-  "version": "0.6.1",
+  "version": "0.6.2",
   "author": "LibirSoft",
   "repository": {
     "type": "git",
@@ -86,6 +86,10 @@
     "./utlis": {
       "import": "./dist/lib/utils/index.js",
       "types": "./dist/lib/utils/index.d.ts"
+    },
+    "./test": {
+      "import": "./dist/lib/test/index.js",
+      "types": "./dist/lib/test/index.d.ts"
     }
   },
   "description": "Asena is a spring like framework for building web applications built with bun",
