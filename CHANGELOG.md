@@ -1,5 +1,11 @@
 # @asenajs/asena
 
+## 0.6.2
+
+### Patch Changes
+
+- Added testing utilities with `mockComponent` and `mockComponentAsync` functions for automated dependency mocking in component tests.
+
 ## 0.6.1
 
 ### Patch Changes

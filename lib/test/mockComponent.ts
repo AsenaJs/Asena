@@ -128,7 +128,7 @@ export async function mockComponentAsync<T extends object>(
   const result = mockComponent(ComponentClass, options);
 
   if (result instanceof Promise) {
-    return await result;
+    return result;
   }
 
   return result;
