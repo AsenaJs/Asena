@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
 import { PrepareConfigService } from '../../../lib/server/src/services/PrepareConfigService';
-import { ComponentType } from '../../../lib/ioc/types';
+import { ComponentType } from '../../../lib/ioc';
 import type { AsenaConfig } from '../../../lib/server/config';
 import { Config } from '../../../lib/server/decorators';
 import { yellow } from '../../../lib/logger';
