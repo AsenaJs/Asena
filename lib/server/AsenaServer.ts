@@ -143,21 +143,40 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
       await this.prepareTopMiddlewares({ controller, routePath });
 
       for (const [name, params] of Object.entries(routes)) {
-        const lastPath = path.join(`${routePath}/`, params.path).replace(/\\/g, '/');
+        let cleanPath = path.join(routePath, params.path).replace(/\\/g, '/');
+        if (cleanPath !== '/' && cleanPath.endsWith('/')) {
+          cleanPath = cleanPath.slice(0, -1);
+        }
 
         const middlewares = await this.prepareRouteMiddleware(params);
         const validatorInstance = await this.prepareValidator(params.validator);
+        const staticServeConfig = await this.prepareStaticServeConfig(params.staticServe);
 
         await this._adapter.registerRoute({
           method: params.method,
-          path: lastPath,
+          path: cleanPath,
           middlewares: middlewares,
           handler: controller[name].bind(controller),
-          staticServe: await this.prepareStaticServeConfig(params.staticServe),
+          staticServe: staticServeConfig,
           validator: validatorInstance,
           controllerName: getTypedMetadata<string>(ComponentConstants.NameKey, controller.constructor),
           controllerBasePath: routePath,
         });
+
+        // register another route with '/'
+        // example; /users and /users/
+        if (cleanPath !== '/') {
+          await this._adapter.registerRoute({
+            method: params.method,
+            path: cleanPath + '/',
+            middlewares: middlewares,
+            handler: controller[name].bind(controller),
+            staticServe: staticServeConfig,
+            validator: validatorInstance,
+            controllerName: getTypedMetadata<string>(ComponentConstants.NameKey, controller.constructor),
+            controllerBasePath: routePath,
+          });
+        }
       }
     }
   }
