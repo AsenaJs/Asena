@@ -144,6 +144,88 @@ class ChildWithOverridePostConstruct extends ParentWithPostConstruct {
   }
 }
 
+// Additional test classes for comprehensive async PostConstruct testing
+@Component()
+class GrandChildWithAsyncPostConstruct extends ChildWithAsyncPostConstruct {
+  // async initialize inherited through 2 levels
+}
+
+@Component()
+class MultipleAsyncPostConstruct {
+  public step1Complete = false;
+
+  public step2Complete = false;
+
+  public step3Complete = false;
+
+  @PostConstruct()
+  public async initStep1() {
+    await new Promise((resolve) => {
+      setTimeout(resolve, 50);
+    });
+    this.step1Complete = true;
+  }
+
+  @PostConstruct()
+  public async initStep2() {
+    await new Promise((resolve) => {
+      setTimeout(resolve, 50);
+    });
+    this.step2Complete = true;
+  }
+
+  @PostConstruct()
+  public async initStep3() {
+    await new Promise((resolve) => {
+      setTimeout(resolve, 50);
+    });
+    this.step3Complete = true;
+  }
+}
+
+@Component()
+class MixedSyncAsyncPostConstruct {
+  public syncComplete = false;
+
+  public asyncComplete = false;
+
+  public executionOrder: string[] = [];
+
+  @PostConstruct()
+  public syncInit() {
+    this.syncComplete = true;
+    this.executionOrder.push('sync');
+  }
+
+  @PostConstruct()
+  public async asyncInit() {
+    await new Promise((resolve) => {
+      setTimeout(resolve, 100);
+    });
+    this.asyncComplete = true;
+    this.executionOrder.push('async');
+  }
+}
+
+@Component()
+class AsyncPostConstructWithDependency {
+  public isInitialized = false;
+
+  public dependencyValue = '';
+
+  @Inject(TestClass)
+  private testClass!: TestClass;
+
+  @PostConstruct()
+  public async init() {
+    await new Promise((resolve) => {
+      setTimeout(resolve, 50);
+    });
+    this.dependencyValue = this.testClass.testMethod();
+    this.isInitialized = true;
+  }
+}
+
 describe('Container', () => {
   let container: Container;
 
@@ -301,12 +383,20 @@ describe('Container', () => {
   });
 
   test('should properly await async PostConstruct for inherited async methods', async () => {
+    const startTime = Date.now();
+
     await container.register('ChildWithAsyncPostConstruct', ChildWithAsyncPostConstruct, true);
 
     const instance = (await container.resolve('ChildWithAsyncPostConstruct')) as ChildWithAsyncPostConstruct;
 
     expect(instance).toBeInstanceOf(ChildWithAsyncPostConstruct);
     expect(instance.isReady).toBe(true);
+    expect(instance.initTime).toBeGreaterThan(0);
+
+    // Verify that async PostConstruct was actually awaited (at least 95ms delay, with some tolerance)
+    const elapsedTime = Date.now() - startTime;
+
+    expect(elapsedTime).toBeGreaterThanOrEqual(95);
   });
 
   test('should execute overridden PostConstruct correctly', async () => {
@@ -420,5 +510,116 @@ describe('Container', () => {
 
     expect(userService.logger).toBe(logger);
     expect(userService.getUser()).toBe('LOG: Getting user');
+  });
+
+  // Comprehensive async PostConstruct tests
+  test('should properly await async PostConstruct through multiple inheritance levels', async () => {
+    const startTime = Date.now();
+
+    await container.register('GrandChildWithAsyncPostConstruct', GrandChildWithAsyncPostConstruct, true);
+
+    const instance = (await container.resolve(
+      'GrandChildWithAsyncPostConstruct',
+    )) as GrandChildWithAsyncPostConstruct;
+
+    expect(instance).toBeInstanceOf(GrandChildWithAsyncPostConstruct);
+    expect(instance.isReady).toBe(true);
+    expect(instance.initTime).toBeGreaterThan(0);
+
+    // Verify async PostConstruct was awaited through 2 inheritance levels
+    const elapsedTime = Date.now() - startTime;
+
+    expect(elapsedTime).toBeGreaterThanOrEqual(100);
+  });
+
+  test('should properly await multiple async PostConstruct methods', async () => {
+    const startTime = Date.now();
+
+    await container.register('MultipleAsyncPostConstruct', MultipleAsyncPostConstruct, true);
+
+    const instance = (await container.resolve('MultipleAsyncPostConstruct')) as MultipleAsyncPostConstruct;
+
+    expect(instance).toBeInstanceOf(MultipleAsyncPostConstruct);
+    expect(instance.step1Complete).toBe(true);
+    expect(instance.step2Complete).toBe(true);
+    expect(instance.step3Complete).toBe(true);
+
+    // All three PostConstruct methods should have been awaited (3 * 50ms = 150ms minimum)
+    const elapsedTime = Date.now() - startTime;
+
+    expect(elapsedTime).toBeGreaterThanOrEqual(150);
+  });
+
+  test('should properly handle mixed sync and async PostConstruct methods', async () => {
+    await container.register('MixedSyncAsyncPostConstruct', MixedSyncAsyncPostConstruct, true);
+
+    const instance = (await container.resolve('MixedSyncAsyncPostConstruct')) as MixedSyncAsyncPostConstruct;
+
+    expect(instance).toBeInstanceOf(MixedSyncAsyncPostConstruct);
+    expect(instance.syncComplete).toBe(true);
+    expect(instance.asyncComplete).toBe(true);
+
+    // Both sync and async PostConstruct should execute
+    expect(instance.executionOrder).toContain('sync');
+    expect(instance.executionOrder).toContain('async');
+    expect(instance.executionOrder.length).toBe(2);
+  });
+
+  test('should inject dependencies before async PostConstruct execution', async () => {
+    await container.register('AsyncPostConstructWithDependency', AsyncPostConstructWithDependency, true);
+
+    const instance = (await container.resolve('AsyncPostConstructWithDependency')) as AsyncPostConstructWithDependency;
+
+    expect(instance).toBeInstanceOf(AsyncPostConstructWithDependency);
+    expect(instance.isInitialized).toBe(true);
+    // Dependency should have been injected before PostConstruct
+    expect(instance.dependencyValue).toBe('test');
+  });
+
+  test('should handle sequential resolution of multiple prototype instances with async PostConstruct', async () => {
+    await container.register('BaseWithAsyncPostConstruct', BaseWithAsyncPostConstruct, false); // prototype
+
+    // Resolve multiple instances sequentially
+    const instance1 = (await container.resolve('BaseWithAsyncPostConstruct')) as BaseWithAsyncPostConstruct;
+    const instance2 = (await container.resolve('BaseWithAsyncPostConstruct')) as BaseWithAsyncPostConstruct;
+    const instance3 = (await container.resolve('BaseWithAsyncPostConstruct')) as BaseWithAsyncPostConstruct;
+
+    // All instances should be properly initialized
+    expect(instance1.isReady).toBe(true);
+    expect(instance2.isReady).toBe(true);
+    expect(instance3.isReady).toBe(true);
+
+    // They should be different instances
+    expect(instance1).not.toBe(instance2);
+    expect(instance2).not.toBe(instance3);
+    expect(instance1).not.toBe(instance3);
+
+    // Each should have their own initTime
+    expect(instance1.initTime).toBeGreaterThan(0);
+    expect(instance2.initTime).toBeGreaterThan(0);
+    expect(instance3.initTime).toBeGreaterThan(0);
+
+    // Later instances should have equal or later initTime
+    expect(instance2.initTime).toBeGreaterThanOrEqual(instance1.initTime);
+    expect(instance3.initTime).toBeGreaterThanOrEqual(instance2.initTime);
+  });
+
+  test('should handle async PostConstruct in prototype scope correctly', async () => {
+    await container.register('ChildWithAsyncPostConstruct', ChildWithAsyncPostConstruct, false); // prototype
+
+    const instance1 = (await container.resolve('ChildWithAsyncPostConstruct')) as ChildWithAsyncPostConstruct;
+    const instance2 = (await container.resolve('ChildWithAsyncPostConstruct')) as ChildWithAsyncPostConstruct;
+
+    // Both instances should be fully initialized
+    expect(instance1.isReady).toBe(true);
+    expect(instance2.isReady).toBe(true);
+
+    // They should be different instances
+    expect(instance1).not.toBe(instance2);
+
+    // Each should have their own initTime
+    expect(instance1.initTime).toBeGreaterThan(0);
+    expect(instance2.initTime).toBeGreaterThan(0);
+    expect(instance2.initTime).toBeGreaterThanOrEqual(instance1.initTime);
   });
 });

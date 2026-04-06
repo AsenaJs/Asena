@@ -134,7 +134,7 @@ describe('mockComponent', () => {
 
   describe('options.injections', () => {
     test('should only mock specified fields', () => {
-      const {  mocks } = mockComponent(AuthService, {
+      const { mocks } = mockComponent(AuthService, {
         injections: ['userService'],
       });
 
@@ -173,7 +173,7 @@ describe('mockComponent', () => {
         login: async () => ({ token: 'custom-token', userId: '1' }),
       };
 
-      const {  mocks } = mockComponent(AuthService, {
+      const { mocks } = mockComponent(AuthService, {
         overrides: {
           loginService: customMock,
         },
@@ -263,7 +263,7 @@ describe('mockComponent', () => {
 
       let hookCalled = false;
 
-      const {  mocks } = mockComponent(AuthService, {
+      const { mocks } = mockComponent(AuthService, {
         injections: ['userService', 'loginService'],
         overrides: {
           loginService: customLoginMock,
@@ -277,6 +277,43 @@ describe('mockComponent', () => {
       expect(hookCalled).toBe(true);
       expect(mocks['loginService']).toBe(customLoginMock);
       expect(mocks['userService']).toBeDefined();
+    });
+
+    test('should mock both inherited and own dependencies', () => {
+      @Component()
+      class LoggerService {
+        log(_message: string) {
+          return 'logged';
+        }
+      }
+
+      @Component()
+      class DatabaseService {
+        query(_sql: string) {
+          return 'result';
+        }
+      }
+
+      @Component()
+      class BaseService {
+        @Inject(LoggerService)
+        protected logger!: LoggerService;
+      }
+
+      @Component()
+      class UserService extends BaseService {
+        @Inject(DatabaseService)
+        // @ts-ignore
+        private database!: DatabaseService;
+      }
+
+      const { instance, mocks } = mockComponent(UserService);
+
+      // Both inherited and own dependencies should be mocked
+      expect(mocks['logger']).toBeDefined();
+      expect(mocks['database']).toBeDefined();
+      expect((instance as any).logger).toBe(mocks['logger']);
+      expect((instance as any).database).toBe(mocks['database']);
     });
   });
 });

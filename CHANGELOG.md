@@ -1,5 +1,14 @@
 # @asenajs/asena
 
+## 0.6.3
+
+### Patch Changes
+
+- Improve type safety and documentation for server configuration
+  - Add type-safe AsenaServerOptions excluding framework-managed properties (fetch, routes, websocket, error)
+  - Add comprehensive Config.md documentation with Bun serve and WebSocket configuration examples
+  - Improve async PostConstruct tests with 6 additional test cases for inheritance scenarios
+
 ## 0.6.2
 
 ### Patch Changes
