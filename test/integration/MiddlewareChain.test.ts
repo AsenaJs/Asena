@@ -1,7 +1,9 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import type { AsenaServer } from '../../lib/server';
 import { AsenaServerFactory } from '../../lib/server';
-import { Config, Controller, Get, Inject, Middleware, Service } from '../../lib/server/decorators';
+import { Config, Controller, Middleware, Service } from '../../lib/server/decorators';
+import { Get } from '../../lib/server/web/decorators';
+import { Inject } from '../../lib/ioc/component';
 import type { AsenaContext } from '../../lib/adapter';
 import { AsenaMiddlewareService } from '../../lib/server/web/middleware';
 import { createMockAdapter } from '../utils/createMockContext';

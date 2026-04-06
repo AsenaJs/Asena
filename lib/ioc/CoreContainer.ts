@@ -9,9 +9,12 @@ import { PrepareWebsocketService } from '../server/src/services/PrepareWebsocket
 import { PrepareValidatorService } from '../server/src/services/PrepareValidatorService';
 import { PrepareStaticServeConfigService } from '../server/src/services/PrepareStaticServeConfigService';
 import { PrepareEventService } from '../server/src/services/PrepareEventService';
-import { Ulak } from '../server/messaging/Ulak';
-import { EventDispatchService } from '../server/event/EventDispatchService';
-import { EventEmitter } from '../server/event/EventEmitter';
+import { PrepareScheduleService } from '../server/src/services/PrepareScheduleService';
+import { PrepareFrontendControllerService } from '../server/src/services/PrepareFrontendControllerService';
+import { Ulak } from '../server/messaging';
+import { EventDispatchService } from '../server/event';
+import { EventEmitter } from '../server/event';
+import { CronRunner } from '../server/schedule';
 
 /**
  * @description CoreContainer manages framework-level services
@@ -137,6 +140,11 @@ export class CoreContainer {
       { name: ICoreServiceNames.PREPARE_VALIDATOR_SERVICE, Class: PrepareValidatorService },
       { name: ICoreServiceNames.PREPARE_STATIC_SERVE_CONFIG_SERVICE, Class: PrepareStaticServeConfigService },
       { name: ICoreServiceNames.PREPARE_EVENT_SERVICE, Class: PrepareEventService },
+      { name: ICoreServiceNames.PREPARE_FRONTEND_CONTROLLER_SERVICE, Class: PrepareFrontendControllerService },
+
+      // Schedule system (CronRunner must be registered before PrepareScheduleService)
+      { name: ICoreServiceNames.CRON_RUNNER, Class: CronRunner },
+      { name: ICoreServiceNames.PREPARE_SCHEDULE_SERVICE, Class: PrepareScheduleService },
     ];
 
     for (const service of services) {

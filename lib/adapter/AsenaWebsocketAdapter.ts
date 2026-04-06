@@ -1,5 +1,5 @@
-import type { AsenaWebSocketService, WSOptions } from '../server/web/websocket';
-import type { WebSocketHandler } from 'bun';
+import type { AsenaWebSocketService, WebSocketTransport, WSOptions, WebSocketData } from '../server/web/websocket';
+import type { ServerWebSocket, WebSocketHandler } from 'bun';
 import type { WebSocketRegistry } from './types';
 import type { ServerLogger } from '../logger';
 
@@ -34,6 +34,13 @@ export abstract class AsenaWebsocketAdapter {
    * @private
    */
   private _logger: ServerLogger = console;
+
+  /**
+   * Optional WebSocket transport for cross-pod messaging.
+   * When set, publish operations are routed through this transport.
+   * @protected
+   */
+  protected _transport?: WebSocketTransport;
 
   /**
    * Initializes a new WebSocket adapter instance
@@ -101,5 +108,82 @@ export abstract class AsenaWebsocketAdapter {
    */
   public set logger(value: ServerLogger) {
     this._logger = value;
+  }
+
+  /**
+   * Gets the WebSocket transport
+   */
+  public get transport(): WebSocketTransport | undefined {
+    return this._transport;
+  }
+
+  /**
+   * Sets the WebSocket transport for cross-pod messaging
+   */
+  public set transport(value: WebSocketTransport | undefined) {
+    this._transport = value;
+  }
+
+  // ── Heartbeat Infrastructure ──────────────────────────────────────────
+
+  /**
+   * Map of connection ID to heartbeat interval timer.
+   * Used when sendPingStrategy is 'adapter'.
+   */
+  protected heartbeatIntervals: Map<string, Timer> = new Map();
+
+  /**
+   * Starts a periodic heartbeat (ping) for a WebSocket connection.
+   * Call from the adapter's open handler when using 'adapter' strategy.
+   *
+   * @param ws - The WebSocket connection
+   * @param intervalMs - Heartbeat interval in milliseconds (default: 30000)
+   */
+  protected startHeartbeat(ws: ServerWebSocket<WebSocketData>, intervalMs = 30000): void {
+    const interval = setInterval(() => {
+      if (ws.readyState === WebSocket.OPEN) {
+        try {
+          ws.ping();
+        } catch (error) {
+          this.logger.error(`Heartbeat ping failed for connection ${ws.data.id}:`, error);
+          this.stopHeartbeat(ws.data.id);
+
+          if (ws.readyState === WebSocket.OPEN) {
+            ws.close(1011, 'Heartbeat failed');
+          }
+        }
+      } else {
+        this.stopHeartbeat(ws.data.id);
+      }
+    }, intervalMs);
+
+    this.heartbeatIntervals.set(ws.data.id, interval);
+  }
+
+  /**
+   * Stops the heartbeat for a single connection.
+   * Call from the adapter's close handler.
+   *
+   * @param connectionId - The connection ID
+   */
+  protected stopHeartbeat(connectionId: string): void {
+    const interval = this.heartbeatIntervals.get(connectionId);
+
+    if (interval) {
+      clearInterval(interval);
+      this.heartbeatIntervals.delete(connectionId);
+    }
+  }
+
+  /**
+   * Clears all active heartbeat intervals.
+   * Call during adapter shutdown.
+   */
+  protected clearAllHeartbeats(): void {
+    for (const interval of this.heartbeatIntervals.values()) {
+      clearInterval(interval);
+    }
+
+    this.heartbeatIntervals.clear();
   }
 }

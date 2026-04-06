@@ -1,5 +1,6 @@
 import type { ServerWebSocket, ServerWebSocketSendStatus, WebSocketReadyState } from 'bun';
 import type { WebSocketData } from './types';
+import type { WebSocketTransport } from './WebSocketTransport';
 
 /**
  * Wrapper class for Bun's ServerWebSocket that provides Asena-specific WebSocket functionality.
@@ -16,7 +17,7 @@ import type { WebSocketData } from './types';
  * socket.unsubscribe('chat-room');
  * ```
  */
-export class AsenaSocket<T> implements ServerWebSocket<WebSocketData<T>> {
+export class AsenaSocket<T> {
 
   readonly subscriptions: string[];
   /**
@@ -62,12 +63,20 @@ export class AsenaSocket<T> implements ServerWebSocket<WebSocketData<T>> {
   private _namespace: string;
 
   /**
+   * Optional transport layer for cross-pod message publishing.
+   * When set, publish operations go through the transport instead of direct ws.publish().
+   * @private
+   */
+  private _transport?: WebSocketTransport;
+
+  /**
    * Creates a new AsenaSocket instance wrapping a Bun ServerWebSocket.
    *
    * @param ws - The native Bun ServerWebSocket instance to wrap
    * @param namespace - The namespace this socket belongs to
+   * @param transport - Optional WebSocket transport for cross-pod publishing
    */
-  public constructor(ws: ServerWebSocket<WebSocketData<T>>, namespace: string) {
+  public constructor(ws: ServerWebSocket<WebSocketData<T>>, namespace: string, transport?: WebSocketTransport) {
     this.ws = ws;
     this._data = ws.data;
     this._id = ws.data.id;
@@ -75,6 +84,7 @@ export class AsenaSocket<T> implements ServerWebSocket<WebSocketData<T>> {
     this._binaryType = ws.binaryType;
     this._readyState = ws.readyState;
     this._namespace = namespace;
+    this._transport = transport;
     this.subscriptions = ws.subscriptions;
   }
 
@@ -154,22 +164,24 @@ export class AsenaSocket<T> implements ServerWebSocket<WebSocketData<T>> {
    * Publishes data to all clients subscribed to the specified topic.
    * The topic is automatically prefixed with the namespace.
    *
+   * When a transport is configured, messages are routed through the transport
+   * layer for cross-pod delivery. Otherwise, uses Bun's native ws.publish().
+   *
    * @param topic - The topic name to publish to (will be prefixed with namespace)
    * @param data - The data to publish (string, ArrayBuffer, TypedArray, or DataView)
    * @param compress - Whether to compress the data (default: false)
-   * @returns The send status indicating success or failure
    *
    * @example
    * ```typescript
    * socket.publish('chat-room', 'Hello everyone!');
    * ```
    */
-  public publish(
-    topic: string,
-    data: string | ArrayBufferLike | DataView,
-    compress?: boolean,
-  ): ServerWebSocketSendStatus {
-    return this.ws.publish(this.createTopic(topic), data, compress);
+  public publish(topic: string, data: string | ArrayBufferLike | DataView, compress?: boolean): void {
+    if (this._transport) {
+      this._transport.publish(this.createTopic(topic), data as string | ArrayBuffer | ArrayBufferView);
+    } else {
+      this.ws.publish(this.createTopic(topic), data, compress);
+    }
   }
 
   /**
@@ -179,10 +191,13 @@ export class AsenaSocket<T> implements ServerWebSocket<WebSocketData<T>> {
    * @param topic - The topic name to publish to (will be prefixed with namespace)
    * @param data - The text string to publish
    * @param compress - Whether to compress the data (default: false)
-   * @returns The send status indicating success or failure
    */
-  public publishText(topic: string, data: string, compress?: boolean): ServerWebSocketSendStatus {
-    return this.ws.publishText(this.createTopic(topic), data, compress);
+  public publishText(topic: string, data: string, compress?: boolean): void {
+    if (this._transport) {
+      this._transport.publish(this.createTopic(topic), data);
+    } else {
+      this.ws.publishText(this.createTopic(topic), data, compress);
+    }
   }
 
   /**
@@ -192,10 +207,13 @@ export class AsenaSocket<T> implements ServerWebSocket<WebSocketData<T>> {
    * @param topic - The topic name to publish to (will be prefixed with namespace)
    * @param data - The binary data to publish (ArrayBuffer, TypedArray, or DataView)
    * @param compress - Whether to compress the data (default: false)
-   * @returns The send status indicating success or failure
    */
-  public publishBinary(topic: string, data: ArrayBufferLike | DataView, compress?: boolean): ServerWebSocketSendStatus {
-    return this.ws.publishBinary(this.createTopic(topic), data, compress);
+  public publishBinary(topic: string, data: ArrayBufferLike | DataView, compress?: boolean): void {
+    if (this._transport) {
+      this._transport.publish(this.createTopic(topic), data as ArrayBuffer | ArrayBufferView);
+    } else {
+      this.ws.publishBinary(this.createTopic(topic), data, compress);
+    }
   }
 
   /**

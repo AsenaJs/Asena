@@ -171,19 +171,18 @@ export class Ulak implements ICoreService {
     try {
       const service = this.getNamespaceService(namespace);
 
-      // Get socket from service's socket map
+      // Try direct send first (fastest path - local socket)
       const socket = service.sockets.get(socketId);
 
-      if (!socket) {
-        throw new UlakError(
-          `Socket "${socketId}" not found in namespace "${namespace}"`,
-          UlakErrorCode.SOCKET_NOT_FOUND,
-          namespace,
-        );
+      if (socket) {
+        socket.send(typeof data === 'string' ? data : JSON.stringify(data));
+        return;
       }
 
-      // Send data to socket
-      socket.send(typeof data === 'string' ? data : JSON.stringify(data));
+      // Cross-pod fallback: publish to the socket's ID topic
+      // Each socket auto-subscribes to its own ID in onOpenInternal(),
+      // so the transport will deliver the message to the correct pod
+      service.to(socketId, data);
     } catch (error) {
       this.logger.error(`${blue('[Ulak]')} Send to socket "${socketId}" failed in namespace "${namespace}"`, error);
 

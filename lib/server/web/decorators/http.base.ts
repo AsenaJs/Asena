@@ -3,12 +3,12 @@ import { defineMiddleware } from '../helper';
 import { defineTypedMetadata, getOwnTypedMetadata } from '../../../utils/typedMetadata';
 import type { ApiParams, ControllerDecoratorParams, ControllerHandler, Route } from '../../../adapter';
 
-export function genericHandler({ method, path, description, middlewares, staticServe, validator }: ApiParams) {
+export function genericHandler({ method, path, summary, description, middlewares, staticServe, validator }: ApiParams) {
   return function (route: object, propertyKey: string, _descriptor: TypedPropertyDescriptor<ControllerHandler>) {
     const routes = getOwnTypedMetadata<Route>(ComponentConstants.RouteKey, route.constructor) || {};
 
     if (!routes[propertyKey]) {
-      routes[propertyKey] = { path, method, description, middlewares, staticServe, validator };
+      routes[propertyKey] = { path, method, summary, description, middlewares, staticServe, validator };
     }
 
     defineTypedMetadata<Route>(ComponentConstants.RouteKey, routes, route.constructor);
@@ -20,6 +20,7 @@ export function genericHandler({ method, path, description, middlewares, staticS
 export const DEFAULT_PARAMS: ControllerDecoratorParams = {
   path: '',
   middlewares: [],
+  summary: '',
   description: '',
   staticServe: undefined,
   validator: undefined,

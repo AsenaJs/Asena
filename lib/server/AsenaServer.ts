@@ -27,9 +27,12 @@ import type { PrepareConfigService } from './src/services/PrepareConfigService';
 import type { PrepareWebsocketService } from './src/services/PrepareWebsocketService';
 import type { PrepareValidatorService } from './src/services/PrepareValidatorService';
 import type { PrepareStaticServeConfigService } from './src/services/PrepareStaticServeConfigService';
+import type { PrepareFrontendControllerService } from './src/services/PrepareFrontendControllerService';
 import { Inject, PostConstruct } from '../ioc/component';
 import type { GlobalMiddlewareConfig, GlobalMiddlewareEntry } from './config/AsenaConfig';
 import type { PrepareEventService } from './src/services/PrepareEventService';
+import type { PrepareScheduleService } from './src/services/PrepareScheduleService';
+import type { CronRunner } from './schedule/CronRunner';
 
 /**
  * @description AsenaServer - Main server class for Asena framework
@@ -66,6 +69,15 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
   @Inject(ICoreServiceNames.PREPARE_EVENT_SERVICE)
   private prepareEventService: PrepareEventService;
 
+  @Inject(ICoreServiceNames.PREPARE_SCHEDULE_SERVICE)
+  private prepareScheduleService: PrepareScheduleService;
+
+  @Inject(ICoreServiceNames.PREPARE_FRONTEND_CONTROLLER_SERVICE)
+  private prepareFrontendControllerService: PrepareFrontendControllerService;
+
+  @Inject(ICoreServiceNames.CRON_RUNNER)
+  private cronRunner: CronRunner;
+
   // Instance state
   private _port!: number;
 
@@ -96,7 +108,9 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
     this._coreContainer.setPhase(CoreBootstrapPhase.APPLICATION_SETUP);
     await this.prepareConfigs();
     await this.prepareEventService.prepare();
+    await this.prepareScheduleService.prepare();
     await this.initializeControllers();
+    await this.prepareFrontendControllers();
     await this.prepareWebSocket();
 
     // Phase 8: Server ready
@@ -104,9 +118,22 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
 
     await this._adapter.start();
 
+    // Start scheduled jobs after server is ready
+    this.cronRunner.startAll();
+
     if (this._gc) {
       bun.gc(true);
     }
+  }
+
+  /**
+   * @description Stop the server and release resources
+   * @param {boolean} closeActiveConnections - Whether to close active connections immediately
+   * @returns {Promise<void>}
+   */
+  public async stop(closeActiveConnections = true): Promise<void> {
+    this.cronRunner.stopAll();
+    await this._adapter.stop(closeActiveConnections);
   }
 
   /**
@@ -135,6 +162,8 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
   private async initializeControllers(): Promise<void> {
     await this.validateAndSetControllers();
 
+    const registeredRoutes = new Map<string, { controllerName: string; handlerName: string }>();
+
     for (const controller of this.controllers) {
       const routes = getOwnTypedMetadata<Route>(ComponentConstants.RouteKey, controller.constructor) || {};
 
@@ -144,6 +173,10 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
 
       for (const [name, params] of Object.entries(routes)) {
         const lastPath = path.join(`${routePath}/`, params.path).replace(/\\/g, '/');
+        const controllerName =
+          getTypedMetadata<string>(ComponentConstants.NameKey, controller.constructor) || 'Unknown';
+
+        this.checkDuplicateRoute(registeredRoutes, params.method, lastPath, controllerName, name);
 
         const middlewares = await this.prepareRouteMiddleware(params);
         const validatorInstance = await this.prepareValidator(params.validator);
@@ -155,11 +188,62 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
           handler: controller[name].bind(controller),
           staticServe: await this.prepareStaticServeConfig(params.staticServe),
           validator: validatorInstance,
-          controllerName: getTypedMetadata<string>(ComponentConstants.NameKey, controller.constructor),
+          controllerName,
           controllerBasePath: routePath,
         });
       }
     }
+  }
+
+  /**
+   * @description Check for duplicate route registration and throw if found
+   */
+  private checkDuplicateRoute(
+    registeredRoutes: Map<string, { controllerName: string; handlerName: string }>,
+    method: string,
+    fullPath: string,
+    controllerName: string,
+    handlerName: string,
+  ): void {
+    const routeKey = `${method.toUpperCase()} ${fullPath}`;
+
+    // Check for exact duplicate (same method + path)
+    const existing = registeredRoutes.get(routeKey);
+
+    if (existing) {
+      throw new Error(
+        `Duplicate route detected: ${routeKey} — ` +
+          `already registered by ${existing.controllerName}.${existing.handlerName}(), ` +
+          `conflicts with ${controllerName}.${handlerName}()`,
+      );
+    }
+
+    // Check ALL conflicts: if new route is ALL, check if any method already registered for this path
+    if (method.toUpperCase() === 'ALL') {
+      for (const [key, entry] of registeredRoutes) {
+        if (key.endsWith(` ${fullPath}`)) {
+          throw new Error(
+            `Duplicate route detected: ALL ${fullPath} conflicts with ${key} — ` +
+              `already registered by ${entry.controllerName}.${entry.handlerName}(), ` +
+              `conflicts with ${controllerName}.${handlerName}()`,
+          );
+        }
+      }
+    }
+
+    // Check if ALL already registered for this path and new route conflicts
+    const allKey = `ALL ${fullPath}`;
+    const allEntry = registeredRoutes.get(allKey);
+
+    if (allEntry && method.toUpperCase() !== 'ALL') {
+      throw new Error(
+        `Duplicate route detected: ${routeKey} conflicts with ALL ${fullPath} — ` +
+          `already registered by ${allEntry.controllerName}.${allEntry.handlerName}(), ` +
+          `conflicts with ${controllerName}.${handlerName}()`,
+      );
+    }
+
+    registeredRoutes.set(routeKey, { controllerName, handlerName });
   }
 
   /**
@@ -246,6 +330,22 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
   }
 
   /**
+   * @description Prepare and register FrontendController HTML routes
+   * @returns {Promise<void>}
+   */
+  private async prepareFrontendControllers(): Promise<void> {
+    const htmlRoutes = await this.prepareFrontendControllerService.prepare();
+
+    if (!htmlRoutes.length) {
+      return;
+    }
+
+    for (const route of htmlRoutes) {
+      this._adapter.registerHTMLRoute(route.path, route.htmlBundle);
+    }
+  }
+
+  /**
    * @description Prepare and register WebSocket routes
    * @returns {Promise<void>}
    */
@@ -324,6 +424,16 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
         for (const middleware of preparedMiddlewares) {
           await this._adapter.use(middleware, config.routes);
         }
+      }
+    }
+
+    // WebSocket transport configuration
+    if (typeof configInstance.transport === 'function') {
+      const transport = await configInstance.transport();
+      const wsAdapter = this._adapter.getWebsocketAdapter();
+
+      if (wsAdapter) {
+        wsAdapter.transport = transport;
       }
     }
 

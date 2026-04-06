@@ -1,7 +1,14 @@
 import type { Class } from '../server/types';
-import type { ComponentType, ContainerService, Dependencies, Expressions, Strategies } from './types';
+import type {
+  ComponentPostProcessor,
+  ComponentType,
+  ContainerService,
+  Dependencies,
+  Expressions,
+  Strategies,
+} from './types';
 import { ComponentConstants } from './constants';
-import { getOwnTypedMetadata, getTypedMetadata } from '../utils/typedMetadata';
+import { getOwnTypedMetadata, getTypedMetadata } from '../utils';
 import { CircularDependencyDetector } from './CircularDependencyDetector';
 import { CORE_SERVICE } from './decorators';
 
@@ -9,6 +16,8 @@ export class Container {
   private _services: { [key: string]: ContainerService | ContainerService[] } = {};
 
   private circularDetector = new CircularDependencyDetector();
+
+  private postProcessors: ComponentPostProcessor[] = [];
 
   public constructor(services?: { [key: string]: ContainerService | ContainerService[] }) {
     this._services = services || {};
@@ -133,6 +142,15 @@ export class Container {
     return Promise.all(containerService.map(async (_service) => this.resolveContainerService<T>(_service)));
   }
 
+  /**
+   * @description Register a ComponentPostProcessor for post-processing newly created instances.
+   * PostProcessors are called in FIFO order after DI + PostConstruct.
+   * @param {ComponentPostProcessor} processor - The post-processor to register
+   */
+  public registerPostProcessor(processor: ComponentPostProcessor): void {
+    this.postProcessors.push(processor);
+  }
+
   private async prepareInstance<T>(Class: Class) {
     const newInstance = new Class();
 
@@ -142,7 +160,14 @@ export class Container {
 
     await this.executePostConstructs(newInstance, Class); // post construct
 
-    return newInstance as T;
+    // Post-processing (skipped when postProcessors is empty - zero overhead)
+    let processed: any = newInstance;
+
+    for (const processor of this.postProcessors) {
+      processed = (await processor.postProcess(processed, Class)) ?? processed;
+    }
+
+    return processed as T;
   }
 
   /**

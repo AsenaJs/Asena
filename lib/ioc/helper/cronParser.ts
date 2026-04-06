@@ -1,4 +1,6 @@
-// Create corn parser class
+/**
+ * @deprecated Use Bun.cron.parse() instead. This parser is replaced by Bun's native cron API.
+ */
 
 export interface CronField {
   value: string;

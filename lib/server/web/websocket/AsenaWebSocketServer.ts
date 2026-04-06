@@ -1,25 +1,25 @@
-import type { Server } from 'bun';
+import type { WebSocketTransport } from './WebSocketTransport';
 
 /**
  * AsenaWebSocketServer class handles WebSocket server operations and message broadcasting
  *
- * This class provides a thin wrapper around Bun's WebSocket Server implementation.
+ * This class provides a thin wrapper around the WebSocket transport layer.
  * All WebSocket services share a single instance of this wrapper for efficiency.
  */
 export class AsenaWebSocketServer {
   /**
-   * The underlying Bun WebSocket server instance
+   * The transport layer used for publishing messages
    * @private
    */
-  private server: Server<any>;
+  private transport: WebSocketTransport;
 
   /**
    * Creates a new instance of AsenaWebSocketServer
    *
-   * @param server - The Bun Server instance to use
+   * @param transport - The WebSocket transport to use for publishing
    */
-  public constructor(server: Server<any>) {
-    this.server = server;
+  public constructor(transport: WebSocketTransport) {
+    this.transport = transport;
   }
 
   /**
@@ -27,18 +27,17 @@ export class AsenaWebSocketServer {
    *
    * @param nameSpace - The target namespace to publish to
    * @param data - The data to publish. Supports ArrayBuffer, objects, strings, and numbers
-   * @returns void
    */
   public to(nameSpace: string, data?: any) {
-    if (data instanceof ArrayBuffer || data instanceof DataView || data instanceof SharedArrayBuffer) {
-      this.server.publish(nameSpace, data);
+    if (data instanceof ArrayBuffer || data instanceof DataView) {
+      this.transport.publish(nameSpace, data);
       return;
     }
 
     if ((typeof data === 'object' || typeof data === 'string') && data !== null) {
-      this.server.publish(nameSpace, JSON.stringify(data));
+      this.transport.publish(nameSpace, JSON.stringify(data));
     } else if (typeof data === 'number' || data === null || data === undefined) {
-      this.server.publish(nameSpace, String(data));
+      this.transport.publish(nameSpace, String(data));
     }
   }
 

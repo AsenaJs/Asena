@@ -27,6 +27,8 @@ export interface ApiParams<C extends AsenaContext<any, any> = any, SH = unknown>
   path: string;
   /** The HTTP method for the route. */
   method: HttpMethod;
+  /** A short summary of the route (displayed in OpenAPI UI). */
+  summary: string;
   /** A brief description of the route. */
   description: string;
   /** An array of middleware classes to be applied to the route. */
@@ -66,6 +68,11 @@ export interface ControllerDecoratorParams<C extends AsenaContext<any, any> = an
    * Optional array of middleware classes to be applied.
    */
   middlewares?: MiddlewareClass<C>[];
+
+  /**
+   * Optional short summary of the route (displayed in OpenAPI UI).
+   */
+  summary?: string;
 
   /**
    * Optional description of the route.

@@ -180,14 +180,22 @@ describe('Ulak', () => {
       expect(mockSocket.send).toHaveBeenCalledWith('plain text');
     });
 
-    test('should throw UlakError when socket not found', async () => {
-      try {
-        await ulak.toSocket('/test', 'non-existent-socket', { message: 'test' });
-      } catch (error) {
-        expect(error).toBeInstanceOf(UlakError);
-        expect((error as UlakError).code).toBe(UlakErrorCode.SOCKET_NOT_FOUND);
-        expect((error as UlakError).namespace).toBe('/test');
-      }
+    test('should fallback to service.to() when socket not found locally (cross-pod)', async () => {
+      const data = { message: 'cross-pod' };
+
+      // 'non-existent-socket' is not in the local sockets map
+      await ulak.toSocket('/test', 'non-existent-socket', data);
+
+      // Should fallback to service.to(socketId, data) for cross-pod delivery
+      expect(mockWebSocketService.to).toHaveBeenCalledWith('non-existent-socket', data);
+      // Should NOT call socket.send (socket doesn't exist locally)
+      expect(mockSocket.send).not.toHaveBeenCalled();
+    });
+
+    test('should fallback with string data when socket not found locally', async () => {
+      await ulak.toSocket('/test', 'non-existent-socket', 'plain text');
+
+      expect(mockWebSocketService.to).toHaveBeenCalledWith('non-existent-socket', 'plain text');
     });
 
     test('should throw UlakError when namespace not found', async () => {
@@ -359,6 +367,16 @@ describe('Ulak', () => {
       await scoped.toSocket('socket-123', data);
 
       expect(mockSocket.send).toHaveBeenCalledWith(JSON.stringify(data));
+    });
+
+    test('scoped toSocket should fallback to service.to when socket not found', async () => {
+      const scoped = ulak.namespace('/test');
+      const data = { message: 'cross-pod' };
+
+      await scoped.toSocket('non-existent', data);
+
+      expect(mockWebSocketService.to).toHaveBeenCalledWith('non-existent', data);
+      expect(mockSocket.send).not.toHaveBeenCalled();
     });
 
     test('scoped getSocketCount should return correct count', () => {

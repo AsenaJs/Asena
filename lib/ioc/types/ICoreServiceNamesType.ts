@@ -24,6 +24,11 @@ export enum ICoreServiceNames {
   PREPARE_VALIDATOR_SERVICE = 'PrepareValidatorService',
   PREPARE_STATIC_SERVE_CONFIG_SERVICE = 'PrepareStaticServeConfigService',
   PREPARE_EVENT_SERVICE = 'PrepareEventService',
+  PREPARE_SCHEDULE_SERVICE = 'PrepareScheduleService',
+  PREPARE_FRONTEND_CONTROLLER_SERVICE = 'PrepareFrontendControllerService',
+
+  // Schedule Services (Phase 5)
+  CRON_RUNNER = 'CronRunner',
 
   // Factory Services (Phase 6+)
   CORE_CONTAINER = 'CoreContainer',

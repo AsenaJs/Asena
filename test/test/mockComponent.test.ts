@@ -1,7 +1,7 @@
 import { describe, expect, mock, test } from 'bun:test';
 import { mockComponent, mockComponentAsync } from '@asenajs/asena/test';
-import { Component } from '@asenajs/asena/server';
-import { Inject } from '@asenajs/asena/ioc';
+import { Component } from '@asenajs/asena/decorators';
+import { Inject } from '@asenajs/asena/decorators/ioc';
 
 @Component()
 class UserService {

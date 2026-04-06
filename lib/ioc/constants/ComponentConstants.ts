@@ -33,6 +33,8 @@ export class ComponentConstants {
   // Controller specific
   public static readonly ControllerConfigKey = Symbol('controller:config');
 
+  public static readonly ControllerDescriptionKey = Symbol('controller:description');
+
   public static readonly RouteKey = Symbol('controller:route');
 
   // Middleware specific
@@ -56,6 +58,9 @@ export class ComponentConstants {
 
   // Static Serve specific
   public static readonly StaticServeRootKey = Symbol('staticServe:root');
+
+  // FrontendController specific
+  public static readonly PageRoutesKey = Symbol('frontendController:pageRoutes');
 
   // Event specific
   public static readonly EventHandlersKey = Symbol('event:handlers');

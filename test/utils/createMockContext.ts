@@ -1,7 +1,7 @@
 import { mock } from 'bun:test';
 import type { AsenaContext, CookieExtra, SendOptions } from '../../lib/adapter';
 import type { GlobalMiddlewareRouteConfig } from '../../lib/server/config';
-import { shouldApplyMiddleware } from '../../lib/utils/patternMatcher';
+import { shouldApplyMiddleware } from '../../lib/utils';
 
 export const createMockContext = () =>
   ({
@@ -36,6 +36,10 @@ export const createMockContext = () =>
     setWebSocketValue: mock((_value: any) => {}),
     // @ts-ignore
     getWebSocketValue: mock(<T>() => ({}) satisfies T),
+
+    stream: mock((_cb: any, _onError?: any) => new Response()),
+    streamSSE: mock((_cb: any, _onError?: any) => new Response()),
+    streamText: mock((_cb: any, _onError?: any) => new Response()),
 
     html: mock((_data: string) => _data),
     send: mock((_data: any, _status?: SendOptions | number) => _data),
@@ -116,6 +120,7 @@ export const createMockAdapter = () => {
 
       // If no exact match, try to find by method only (for debugging)
       if (!route) {
+        // @ts-ignore
         for (const [routeKey, routeValue] of registeredRoutes.entries()) {
           if (routeKey.startsWith(`${normalizedMethod}:`)) {
             console.log(`Found route: ${routeKey} for request: ${method}:${path}`);
@@ -131,7 +136,7 @@ export const createMockAdapter = () => {
 
         // Extract route parameters from path
 
-        mockContext.params = mockAdapter.extractRouteParams(route.path, path);
+        mockContext["params"] = mockAdapter.extractRouteParams(route.path, path);
 
         // Filter global middlewares based on pattern matching
         const applicableMiddlewares = globalMiddlewares
