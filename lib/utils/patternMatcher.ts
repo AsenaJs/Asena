@@ -23,8 +23,12 @@ import type { GlobalMiddlewareRouteConfig } from '../server/config';
  * matchesPattern('/health', '/api/*') // => false
  */
 export function matchesPattern(path: string, pattern: string): boolean {
-  // Exact match
-  if (path === pattern) {
+  // Normalize trailing slashes for consistent matching (except root '/')
+  const normalizedPath = path.length > 1 && path.endsWith('/') ? path.slice(0, -1) : path;
+  const normalizedPattern = pattern.length > 1 && pattern.endsWith('/') ? pattern.slice(0, -1) : pattern;
+
+  // Exact match (with trailing slash normalization)
+  if (normalizedPath === normalizedPattern) {
     return true;
   }
 

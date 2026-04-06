@@ -7,3 +7,5 @@ export { Options } from './Options';
 export { Head } from './Head';
 export { Connect } from './Connect';
 export { Trace } from './Trace';
+export { All } from './All';
+export { Route } from './Route';

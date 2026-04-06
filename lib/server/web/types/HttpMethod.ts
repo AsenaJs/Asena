@@ -8,4 +8,5 @@ export enum HttpMethod {
   HEAD = 'head',
   CONNECT = 'connect',
   TRACE = 'trace',
+  ALL = 'all',
 }

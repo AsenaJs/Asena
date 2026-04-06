@@ -38,7 +38,9 @@ const paramsGenerator = (params: ComponentParams | string, componentType: Compon
 
   if (
     typeof params === 'string' &&
-    (componentType === ComponentType.CONTROLLER || componentType === ComponentType.WEBSOCKET)
+    (componentType === ComponentType.CONTROLLER ||
+      componentType === ComponentType.WEBSOCKET ||
+      componentType === ComponentType.FRONTEND_CONTROLLER)
   ) {
     return defaultParam;
   }

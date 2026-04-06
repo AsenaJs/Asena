@@ -36,6 +36,38 @@ describe('matchesPattern', () => {
     expect(matchesPattern('/api/users/123', '/api/users/:id')).toBe(true);
     expect(matchesPattern('/api/posts/456', '/api/*/456')).toBe(true);
   });
+
+  test('trailing slash normalization — exact match', () => {
+    expect(matchesPattern('/health/', '/health')).toBe(true);
+    expect(matchesPattern('/health', '/health/')).toBe(true);
+    expect(matchesPattern('/api/users/', '/api/users')).toBe(true);
+    expect(matchesPattern('/api/users', '/api/users/')).toBe(true);
+  });
+
+  test('trailing slash normalization — root path unchanged', () => {
+    expect(matchesPattern('/', '/')).toBe(true);
+  });
+
+  test('trailing slash does NOT affect wildcard matching', () => {
+    // Wildcard uses original path, not normalized
+    expect(matchesPattern('/api/users', '/api/*')).toBe(true);
+    expect(matchesPattern('/api/users/', '/api/*')).toBe(true);
+  });
+
+  test('trailing slash does NOT affect param matching', () => {
+    expect(matchesPattern('/users/123', '/users/:id')).toBe(true);
+  });
+});
+
+describe('shouldApplyMiddleware — trailing slash', () => {
+  test('exclude with trailing slash variant', () => {
+    expect(shouldApplyMiddleware('/health/', { exclude: ['/health'] })).toBe(false);
+    expect(shouldApplyMiddleware('/health', { exclude: ['/health/'] })).toBe(false);
+  });
+
+  test('include with trailing slash variant', () => {
+    expect(shouldApplyMiddleware('/api/users/', { include: ['/api/*'] })).toBe(true);
+  });
 });
 
 describe('shouldApplyMiddleware', () => {

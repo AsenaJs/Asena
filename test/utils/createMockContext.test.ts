@@ -34,6 +34,10 @@ export const createMockContext = () =>
     // @ts-ignore
     getWebSocketValue: mock(<T>() => ({}) satisfies T),
 
+    stream: mock((_cb: any, _onError?: any) => new Response()),
+    streamSSE: mock((_cb: any, _onError?: any) => new Response()),
+    streamText: mock((_cb: any, _onError?: any) => new Response()),
+
     html: mock((_data: string) => new Response()),
     send: mock((_data: any, _status?: SendOptions | number) => new Response()),
     redirect: mock((_url: string) => {}),

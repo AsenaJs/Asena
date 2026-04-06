@@ -1,4 +1,25 @@
-import type { CookieExtra, SendOptions } from './types';
+import type { AsenaSSEStreamWriter, AsenaStreamWriter, CookieExtra, SendOptions } from './types';
+
+/**
+ * Augmentable interface for declaring typed context variables.
+ * Users can extend this interface via module augmentation to get type-safe getValue/setValue.
+ *
+ * @example
+ * ```typescript
+ * declare module '@asenajs/asena/adapter' {
+ *   interface AsenaVariables {
+ *     user: { id: string; name: string };
+ *     session: SessionData;
+ *   }
+ * }
+ *
+ * // Now type-safe with autocomplete:
+ * context.getValue('user')     // { id: string; name: string }
+ * context.setValue('user', u)  // type-checked
+ * ```
+ */
+// eslint-disable-next-line
+export interface AsenaVariables {}
 
 /**
  * AsenaContext represents the core context interface for handling HTTP requests and responses in Asena framework.
@@ -86,6 +107,15 @@ export interface AsenaContext<R, S extends Response> {
   getQueryAll: (query: string) => Promise<string[]>;
 
   /**
+   * Retrieves all query parameters as a key-value object.
+   * Single-value parameters are returned as strings, multi-value as arrays.
+   * For URL "?name=john&color=red&color=blue", returns { name: "john", color: ["red", "blue"] }
+   *
+   * @returns {Record<string, string | string[]>} All query parameters
+   */
+  getAllQueries: () => Record<string, string | string[]>;
+
+  /**
    * Retrieves a cookie value by name, with optional signature verification.
    *
    * @param {string} name - The cookie name
@@ -115,20 +145,23 @@ export interface AsenaContext<R, S extends Response> {
 
   /**
    * Retrieves a value from the context's state storage.
+   * When AsenaVariables is augmented, provides type-safe access for known keys.
    *
-   * @template T - The expected type of the value
-   * @param {string} key - The key to retrieve
-   * @returns {T} The stored value
+   * @param key - The key to retrieve
+   * @returns The stored value
    */
-  getValue: <T>(key: string) => T;
+  getValue<K extends keyof AsenaVariables>(key: K): AsenaVariables[K];
+  getValue<T = any>(key: string): T;
 
   /**
    * Stores a value in the context's state storage.
+   * When AsenaVariables is augmented, enforces correct value types for known keys.
    *
-   * @param {string} key - The key to store under
-   * @param {any} value - The value to store
+   * @param key - The key to store under
+   * @param value - The value to store
    */
-  setValue: (key: string, value: any) => void;
+  setValue<K extends keyof AsenaVariables>(key: K, value: AsenaVariables[K]): void;
+  setValue(key: string, value: any): void;
 
   /**
    * Stores a value specifically for WebSocket communication.
@@ -144,6 +177,62 @@ export interface AsenaContext<R, S extends Response> {
    * @returns {T} The stored WebSocket value
    */
   getWebSocketValue: <T>() => T;
+
+  /**
+   * Get the client IP address (lazy evaluated).
+   * Uses Bun's server.requestIP() under the hood.
+   * Result is cached after first call - zero cost if never called.
+   *
+   * @returns {string | null} The client IP address, or null if unavailable
+   */
+  getRequestIp?(): string | null;
+
+  /**
+   * Set a response header.
+   *
+   * @param {string} key - Header name
+   * @param {string} value - Header value
+   */
+  setResponseHeader?(key: string, value: string): void;
+
+  /**
+   * Start a generic binary/text stream.
+   * The callback receives a writer; the method returns a Response backed by the stream.
+   *
+   * @param cb - Async callback that writes to the stream
+   * @param onError - Optional error handler
+   * @returns Response backed by the readable side of the stream
+   */
+  stream(
+    cb: (stream: AsenaStreamWriter) => Promise<void>,
+    onError?: (error: Error, stream: AsenaStreamWriter) => Promise<void>,
+  ): Response | Promise<Response>;
+
+  /**
+   * Start a Server-Sent Events stream.
+   * Sets appropriate SSE headers automatically (text/event-stream, no-cache, keep-alive).
+   *
+   * @param cb - Async callback that writes SSE messages
+   * @param onError - Optional error handler
+   * @returns Response backed by the SSE stream
+   */
+  streamSSE(
+    cb: (stream: AsenaSSEStreamWriter) => Promise<void>,
+    onError?: (error: Error, stream: AsenaSSEStreamWriter) => Promise<void>,
+  ): Response | Promise<Response>;
+
+  /**
+   * Start a text stream with appropriate content-type headers.
+   * Sets Content-Type: text/plain and streaming-related headers.
+   *
+   * @param cb - Async callback that writes text
+   * @param onError - Optional error handler
+   * @returns Response backed by the text stream
+   */
+  streamText(
+    cb: (stream: AsenaStreamWriter) => Promise<void>,
+    onError?: (error: Error, stream: AsenaStreamWriter) => Promise<void>,
+  ): Response | Promise<Response>;
 
   /**
    * Sends an HTML response with appropriate content-type headers.

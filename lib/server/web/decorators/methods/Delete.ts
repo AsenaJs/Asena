@@ -8,7 +8,7 @@ import type { ControllerDecoratorParams } from '../../../../adapter';
  * @returns {Function} The generic handler for the DELETE request.
  */
 export function Delete(params: ControllerDecoratorParams | string): Function {
-  const { path, middlewares, description, staticServe, validator } = generateHandlerParams(params);
+  const { path, middlewares, summary, description, staticServe, validator } = generateHandlerParams(params);
 
-  return genericHandler({ method: HttpMethod.DELETE, path, middlewares, description, staticServe, validator });
+  return genericHandler({ method: HttpMethod.DELETE, path, summary, middlewares, description, staticServe, validator });
 }

@@ -81,6 +81,15 @@ export abstract class AsenaAdapter<C extends AsenaContext<any, any>, VS> {
   public abstract registerRoute(params: RouteParams<C, VS>): Promise<void> | void;
 
   /**
+   * Registers an HTML route for serving via Bun's native HTML import.
+   * HTML routes bypass the middleware chain entirely and are served directly by Bun.serve().
+   *
+   * @param path - Full URL path (e.g., '/ui/home')
+   * @param htmlBundle - The HTML bundle returned by importing an .html file
+   */
+  public abstract registerHTMLRoute(path: string, htmlBundle: unknown): void;
+
+  /**
    * Registers a WebSocket route with the application. This method establishes the connection
    * between HTTP routes and WebSocket handlers, allowing the adapter to properly route
    * WebSocket connection requests to the appropriate handlers.
@@ -114,4 +123,17 @@ export abstract class AsenaAdapter<C extends AsenaContext<any, any>, VS> {
    * @returns A promise that resolves when the options are set, or void.
    */
   public abstract serveOptions(options: () => Promise<AsenaServeOptions> | AsenaServeOptions): Promise<void> | void;
+
+  /**
+   * Stops the server and releases resources.
+   * @param closeActiveConnections - Whether to close active connections immediately
+   */
+  public abstract stop(closeActiveConnections?: boolean): Promise<void>;
+
+  /**
+   * Gets the WebSocket adapter for transport configuration
+   */
+  public getWebsocketAdapter(): AsenaWebsocketAdapter | undefined {
+    return this.websocketAdapter;
+  }
 }

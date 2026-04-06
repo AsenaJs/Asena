@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
 import { AsenaServerFactory } from '../../lib/server';
-import { Controller, Get, Inject, Scope, Service } from '../../lib/server/decorators';
+import { Controller, Service } from '../../lib/server/decorators';
+import { Get } from '../../lib/server/web/decorators';
+import { Inject, Scope } from '../../lib/ioc/component';
 import type { AsenaContext } from '../../lib/adapter';
 import { Container } from '../../lib/ioc';
 import { ComponentConstants } from '../../lib/ioc/constants';

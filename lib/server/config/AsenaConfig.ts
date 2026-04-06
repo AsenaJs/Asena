@@ -1,4 +1,5 @@
 import type { AsenaContext, AsenaServeOptions } from '../../adapter';
+import type { WebSocketTransport } from '../web/websocket';
 
 import type { MiddlewareClass } from '../web/middleware';
 
@@ -121,6 +122,21 @@ export interface AsenaConfig<C extends AsenaContext<any, any> = AsenaContext<any
    * @returns Array of middleware configurations
    */
   globalMiddlewares?(): Promise<GlobalMiddlewareEntry[]> | GlobalMiddlewareEntry[];
+
+  /**
+   * WebSocket transport for cross-pod messaging.
+   *
+   * When not specified, BunLocalTransport is used (single-pod, zero overhead).
+   * For multi-pod deployments, return a custom transport (e.g., RedisTransport).
+   *
+   * @example
+   * ```typescript
+   * transport() {
+   *   return new RedisTransport(this.redis);
+   * }
+   * ```
+   */
+  transport?(): WebSocketTransport | Promise<WebSocketTransport>;
 }
 
-export type AsenaConfigFunctions = 'onError' | 'serveOptions' | 'globalMiddlewares';
+export type AsenaConfigFunctions = 'onError' | 'serveOptions' | 'globalMiddlewares' | 'transport';

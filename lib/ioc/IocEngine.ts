@@ -1,4 +1,6 @@
 import {
+  type ComponentPostProcessor,
+  ComponentType,
   type Dependencies,
   type ICoreService,
   ICoreServiceNames,
@@ -14,10 +16,11 @@ import { ComponentConstants } from './constants';
 import * as process from 'node:process';
 import * as console from 'node:console';
 import { getStrategyClass } from './helper/iocHelper';
-import { getOwnTypedMetadata, getTypedMetadata } from '../utils/typedMetadata';
+import { getOwnTypedMetadata, getTypedMetadata } from '../utils';
 import { Inject, Scope } from './component';
 import { CoreService } from './decorators';
 import { CircularDependencyError } from './CircularDependencyDetector';
+import type { ServerLogger } from '../logger';
 
 /**
  * @description IoC Engine - Manages component registration and dependency injection
@@ -29,6 +32,9 @@ export class IocEngine implements ICoreService {
 
   @Inject('Container')
   private _container: Container;
+
+  @Inject(ICoreServiceNames.SERVER_LOGGER)
+  private logger: ServerLogger;
 
   private injectables: InjectableComponent[] = [];
 
@@ -49,7 +55,30 @@ export class IocEngine implements ICoreService {
 
     const injectableClasses = this.injectables.map((c) => c.Class);
 
-    await this.validateAndRegisterComponents(injectableClasses);
+    // Two-phase registration for PostProcessor support
+    const { postProcessorClasses, remainingClasses } = this.separatePostProcessors(injectableClasses);
+
+    // Phase A: Register PostProcessors and their dependencies first (without post-processing)
+    if (postProcessorClasses.length > 0) {
+      await this.validateAndRegisterComponents(postProcessorClasses);
+
+      // Resolve only actual PostProcessor instances (not their dependencies) and activate them
+      for (const cls of postProcessorClasses) {
+        const isPostProcessor = getTypedMetadata<boolean>(ComponentType.POST_PROCESSOR, cls);
+
+        if (isPostProcessor) {
+          const name = getTypedMetadata<string>(ComponentConstants.NameKey, cls) || cls.name;
+          const instance = await this._container.resolve<ComponentPostProcessor>(name);
+
+          this._container.registerPostProcessor(instance as ComponentPostProcessor);
+        }
+      }
+    }
+
+    // Phase B: Register remaining components (post-processing is now active)
+    if (remainingClasses.length > 0) {
+      await this.validateAndRegisterComponents(remainingClasses);
+    }
   }
 
   private async loadComponents(components?: InjectableComponent[]): Promise<void> {
@@ -266,6 +295,85 @@ export class IocEngine implements ICoreService {
     }
 
     return cycle.reverse();
+  }
+
+  /**
+   * @description Separates PostProcessor classes and their transitive dependencies from other components.
+   * PostProcessors and their deps are registered in Phase A (before post-processing is active).
+   * Non-PostProcessor dependencies pulled into Phase A will NOT be post-processed (by design).
+   */
+  private separatePostProcessors(classes: Class[]): {
+    postProcessorClasses: Class[];
+    remainingClasses: Class[];
+  } {
+    // Find all PostProcessor classes
+    const postProcessorSet = new Set<Class>();
+    const nameToClass = new Map<string, Class>();
+
+    for (const cls of classes) {
+      const name = getTypedMetadata<string>(ComponentConstants.NameKey, cls) || cls.name;
+
+      nameToClass.set(name, cls);
+    }
+
+    // Identify PostProcessor classes
+    for (const cls of classes) {
+      if (getTypedMetadata<boolean>(ComponentType.POST_PROCESSOR, cls)) {
+        postProcessorSet.add(cls);
+      }
+    }
+
+    if (postProcessorSet.size === 0) {
+      return { postProcessorClasses: [], remainingClasses: classes };
+    }
+
+    // Compute transitive dependency closure for all PostProcessors
+    const closureSet = new Set<Class>(postProcessorSet);
+
+    const addDependencyClosure = (cls: Class) => {
+      const deps = [
+        ...this.getDependencies(cls),
+        ...this.getStrategyDependencies(cls, this.injectables),
+      ];
+
+      for (const depName of deps) {
+        const depClass = nameToClass.get(depName);
+
+        if (depClass && !closureSet.has(depClass)) {
+          closureSet.add(depClass);
+
+          // Log warning for non-PostProcessor dependencies pulled into Phase A
+          if (!getTypedMetadata<boolean>(ComponentType.POST_PROCESSOR, depClass)) {
+            const ppName = getTypedMetadata<string>(ComponentConstants.NameKey, cls) || cls.name;
+
+            this.logger.warn(
+              `[IocEngine] PostProcessor '${ppName}' depends on '${depName}'. ${depName} will not be post-processed.`,
+            );
+          }
+
+          // Recurse into this dependency's own dependencies
+          addDependencyClosure(depClass);
+        }
+      }
+    };
+
+    for (const ppClass of postProcessorSet) {
+      addDependencyClosure(ppClass);
+    }
+
+    // Split into two groups
+    const postProcessorClasses: Class[] = [];
+    const remainingClasses: Class[] = [];
+
+    for (const cls of classes) {
+      if (closureSet.has(cls)) {
+        postProcessorClasses.push(cls);
+      } else {
+        remainingClasses.push(cls);
+      }
+    }
+
+    return { postProcessorClasses, remainingClasses };
   }
 
   private getDependencies(component: Class): string[] {

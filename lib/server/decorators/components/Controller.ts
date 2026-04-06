@@ -18,6 +18,10 @@ export const Controller = (params?: ControllerParams | string): ClassDecorator =
   return defineComponent(ComponentType.CONTROLLER, _params, (target) => {
     defineTypedMetadata<string>(ComponentConstants.PathKey, _params.path.replace(/^\/+/, '/') || '/', target);
 
+    if (_params.description) {
+      defineTypedMetadata<string>(ComponentConstants.ControllerDescriptionKey, _params.description, target);
+    }
+
     defineMiddleware(target, _params.middlewares || []);
 
     defineTypedMetadata<MiddlewareClass[]>(

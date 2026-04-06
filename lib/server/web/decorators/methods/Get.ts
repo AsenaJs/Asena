@@ -8,7 +8,7 @@ import type { ControllerDecoratorParams } from '../../../../adapter';
  * @returns {Function} The generic handler for the GET request.
  */
 export function Get(params: ControllerDecoratorParams | string): Function {
-  const { path, middlewares, description, staticServe, validator } = generateHandlerParams(params);
+  const { path, middlewares, summary, description, staticServe, validator } = generateHandlerParams(params);
 
-  return genericHandler({ method: HttpMethod.GET, path, middlewares, description, staticServe, validator });
+  return genericHandler({ method: HttpMethod.GET, path, summary, middlewares, description, staticServe, validator });
 }
