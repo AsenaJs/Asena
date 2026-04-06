@@ -126,16 +126,16 @@ export class CronRunner implements ICoreService {
 
     const delay = nextRun.getTime() - now;
 
-    job.timer = setTimeout(async () => {
+    job.timer = setTimeout(() => {
       if (!job.running) return;
 
-      try {
-        await job.handler();
-      } catch (error) {
-        this.logger.error(`[Schedule] Error in "${job.name}":`, error);
-      }
-
-      this.scheduleNext(job);
+      void Promise.resolve(job.handler())
+        .catch((error) => {
+          this.logger.error(`[Schedule] Error in "${job.name}":`, error);
+        })
+        .then(() => {
+          this.scheduleNext(job);
+        });
     }, delay);
   }
 }
