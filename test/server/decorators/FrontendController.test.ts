@@ -101,10 +101,7 @@ describe('@FrontendController Decorator', () => {
         private someService!: any;
       }
 
-      const isFrontendController = getTypedMetadata<boolean>(
-        ComponentType.FRONTEND_CONTROLLER,
-        TestFrontendController,
-      );
+      const isFrontendController = getTypedMetadata<boolean>(ComponentType.FRONTEND_CONTROLLER, TestFrontendController);
 
       expect(isFrontendController).toBe(true);
 

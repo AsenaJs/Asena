@@ -3,7 +3,7 @@ import { ComponentConstants, ComponentType, CoreService, ICoreServiceNames } fro
 import { Inject } from '../../../ioc/component';
 import { getTypedMetadata } from '../../../utils';
 import type { ServerLogger } from '../../../logger';
-import type { CronRunner } from '../../schedule/CronRunner';
+import type { CronRunner } from '../../schedule';
 
 /**
  * @description PrepareScheduleService - Discovers and registers scheduled components
@@ -56,9 +56,7 @@ export class PrepareScheduleService implements ICoreService {
 
     // Validate AsenaSchedule contract
     if (typeof instance.execute !== 'function') {
-      throw new Error(
-        `@Schedule class "${name}" must implement AsenaSchedule interface (missing execute() method)`,
-      );
+      throw new Error(`@Schedule class "${name}" must implement AsenaSchedule interface (missing execute() method)`);
     }
 
     this.cronRunner.registerJob(name, cronExpression, instance.execute.bind(instance));

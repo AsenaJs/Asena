@@ -331,10 +331,7 @@ export class IocEngine implements ICoreService {
     const closureSet = new Set<Class>(postProcessorSet);
 
     const addDependencyClosure = (cls: Class) => {
-      const deps = [
-        ...this.getDependencies(cls),
-        ...this.getStrategyDependencies(cls, this.injectables),
-      ];
+      const deps = [...this.getDependencies(cls), ...this.getStrategyDependencies(cls, this.injectables)];
 
       for (const depName of deps) {
         const depClass = nameToClass.get(depName);
