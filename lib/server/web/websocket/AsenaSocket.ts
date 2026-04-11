@@ -18,7 +18,6 @@ import type { WebSocketTransport } from './WebSocketTransport';
  * ```
  */
 export class AsenaSocket<T> {
-
   readonly subscriptions: string[];
   /**
    * The underlying Bun ServerWebSocket instance.

@@ -35,6 +35,13 @@ export interface AsenaContext<R, S extends Response> {
   res: S;
 
   /**
+   * The matched route pattern (e.g., `/users/:id`).
+   * Set by the adapter's router after matching. Used by OTel and other
+   * middleware to produce low-cardinality identifiers instead of raw URLs.
+   */
+  routePattern?: string;
+
+  /**
    * Request headers stored as key-value pairs
    */
   headers: Record<string, string>;

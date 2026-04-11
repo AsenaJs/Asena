@@ -1,5 +1,16 @@
 # @asenajs/asena
 
+## 0.7.1
+
+### Patch Changes
+
+- ### Features
+  - **Context**: Added `routePattern` property to `AsenaContext` interface. Provides the matched route pattern (e.g., `/users/:id`) instead of the raw URL, enabling low-cardinality identifiers for OpenTelemetry and middleware.
+
+  ### Improvements
+  - **FrontendController Registration**: `registerHTMLRoute()` now accepts `controllerName` and `controllerBasePath` parameters, allowing adapters to properly log and track FrontendController routes.
+  - **Internal**: Switched to barrel export for CronRunner import in PrepareScheduleService.
+
 ## 0.7.0
 
 ### Minor Changes

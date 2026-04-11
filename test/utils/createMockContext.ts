@@ -136,7 +136,7 @@ export const createMockAdapter = () => {
 
         // Extract route parameters from path
 
-        mockContext["params"] = mockAdapter.extractRouteParams(route.path, path);
+        mockContext['params'] = mockAdapter.extractRouteParams(route.path, path);
 
         // Filter global middlewares based on pattern matching
         const applicableMiddlewares = globalMiddlewares

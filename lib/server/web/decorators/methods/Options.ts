@@ -10,5 +10,13 @@ import type { ControllerDecoratorParams } from '../../../../adapter';
 export function Options(params: ControllerDecoratorParams | string): Function {
   const { path, middlewares, summary, description, staticServe, validator } = generateHandlerParams(params);
 
-  return genericHandler({ method: HttpMethod.OPTIONS, path, summary, middlewares, description, staticServe, validator });
+  return genericHandler({
+    method: HttpMethod.OPTIONS,
+    path,
+    summary,
+    middlewares,
+    description,
+    staticServe,
+    validator,
+  });
 }

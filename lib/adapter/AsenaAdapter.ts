@@ -86,8 +86,15 @@ export abstract class AsenaAdapter<C extends AsenaContext<any, any>, VS> {
    *
    * @param path - Full URL path (e.g., '/ui/home')
    * @param htmlBundle - The HTML bundle returned by importing an .html file
+   * @param controllerName - Name of the FrontendController that owns this route
+   * @param controllerBasePath - Base path of the FrontendController (e.g., '/ui')
    */
-  public abstract registerHTMLRoute(path: string, htmlBundle: unknown): void;
+  public abstract registerHTMLRoute(
+    path: string,
+    htmlBundle: unknown,
+    controllerName: string,
+    controllerBasePath: string,
+  ): void;
 
   /**
    * Registers a WebSocket route with the application. This method establishes the connection

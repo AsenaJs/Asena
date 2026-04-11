@@ -1,4 +1,10 @@
-import type { AsenaContext, AsenaSSEStreamWriter, AsenaStreamWriter, CookieExtra, SendOptions } from '../../lib/adapter';
+import type {
+  AsenaContext,
+  AsenaSSEStreamWriter,
+  AsenaStreamWriter,
+  CookieExtra,
+  SendOptions,
+} from '../../lib/adapter';
 
 /**
  * Minimal AsenaContext implementation for testing.

@@ -518,9 +518,7 @@ describe('Container', () => {
 
     await container.register('GrandChildWithAsyncPostConstruct', GrandChildWithAsyncPostConstruct, true);
 
-    const instance = (await container.resolve(
-      'GrandChildWithAsyncPostConstruct',
-    )) as GrandChildWithAsyncPostConstruct;
+    const instance = (await container.resolve('GrandChildWithAsyncPostConstruct')) as GrandChildWithAsyncPostConstruct;
 
     expect(instance).toBeInstanceOf(GrandChildWithAsyncPostConstruct);
     expect(instance.isReady).toBe(true);

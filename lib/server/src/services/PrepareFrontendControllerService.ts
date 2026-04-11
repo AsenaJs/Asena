@@ -10,6 +10,7 @@ export interface PreparedHTMLRoute {
   path: string;
   htmlBundle: unknown;
   controllerName: string;
+  controllerBasePath: string;
 }
 
 /**
@@ -43,8 +44,7 @@ export class PrepareFrontendControllerService implements ICoreService {
   }
 
   private async extractHTMLRoutes(controller: Class): Promise<PreparedHTMLRoute[]> {
-    const pageRoutes =
-      getOwnTypedMetadata<PageRoute>(ComponentConstants.PageRoutesKey, controller.constructor) || {};
+    const pageRoutes = getOwnTypedMetadata<PageRoute>(ComponentConstants.PageRoutesKey, controller.constructor) || {};
 
     const controllerName =
       getTypedMetadata<string>(ComponentConstants.NameKey, controller.constructor) || controller.constructor.name;
@@ -53,8 +53,7 @@ export class PrepareFrontendControllerService implements ICoreService {
       return [];
     }
 
-    const basePath: string =
-      getOwnTypedMetadata<string>(ComponentConstants.PathKey, controller.constructor) || '/';
+    const basePath: string = getOwnTypedMetadata<string>(ComponentConstants.PathKey, controller.constructor) || '/';
 
     const routes: PreparedHTMLRoute[] = [];
 
@@ -71,7 +70,7 @@ export class PrepareFrontendControllerService implements ICoreService {
         );
       }
 
-      routes.push({ path: fullPath, htmlBundle, controllerName });
+      routes.push({ path: fullPath, htmlBundle, controllerName, controllerBasePath: basePath });
     }
 
     return routes;

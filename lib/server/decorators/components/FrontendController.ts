@@ -22,10 +22,6 @@ export const FrontendController = (params: FrontendControllerParams | string): C
     typeof params === 'string' ? { path: params, name: undefined } : params || { path: '', name: undefined };
 
   return defineComponent(ComponentType.FRONTEND_CONTROLLER, _params, (target) => {
-    defineTypedMetadata<string>(
-      ComponentConstants.PathKey,
-      _params.path.replace(/^\/+/, '/') || '/',
-      target,
-    );
+    defineTypedMetadata<string>(ComponentConstants.PathKey, _params.path.replace(/^\/+/, '/') || '/', target);
   });
 };

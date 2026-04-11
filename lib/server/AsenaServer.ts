@@ -341,7 +341,7 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
     }
 
     for (const route of htmlRoutes) {
-      this._adapter.registerHTMLRoute(route.path, route.htmlBundle);
+      this._adapter.registerHTMLRoute(route.path, route.htmlBundle, route.controllerName, route.controllerBasePath);
     }
   }
 
