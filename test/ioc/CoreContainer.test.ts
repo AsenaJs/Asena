@@ -89,7 +89,7 @@ describe('CoreContainer', () => {
     test('should throw error on double initialization', async () => {
       await coreContainer.bootstrap(mockAdapter as any, mockLogger);
 
-      expect(coreContainer.bootstrap(mockAdapter as any, mockLogger)).rejects.toThrow(
+      await expect(coreContainer.bootstrap(mockAdapter as any, mockLogger)).rejects.toThrow(
         'CoreContainer already initialized',
       );
     });
@@ -182,7 +182,7 @@ describe('CoreContainer', () => {
     test('should throw error when resolving unregistered service', async () => {
       await coreContainer.bootstrap(mockAdapter as any, mockLogger);
 
-      expect(coreContainer.resolve('NonExistentService')).rejects.toThrow('NonExistentService is not registered');
+      await expect(coreContainer.resolve('NonExistentService')).rejects.toThrow('NonExistentService is not registered');
     });
 
     test('resolved services should be singletons', async () => {
@@ -230,12 +230,18 @@ describe('CoreContainer', () => {
   });
 
   describe('Error Handling', () => {
-    test('should handle missing adapter gracefully', async () => {
-      expect(coreContainer.bootstrap(null as any, mockLogger)).rejects.toThrow();
+    test('should bootstrap without adapter (headless mode)', async () => {
+      await coreContainer.bootstrap(undefined, mockLogger);
+
+      // Adapter is not registered - AsenaServer resolves it lazily via container.has()
+      expect(coreContainer.container.has(ICoreServiceNames.ASENA_ADAPTER)).toBe(false);
+
+      // Other core services are still registered
+      expect(coreContainer.container.has(ICoreServiceNames.PREPARE_MICROSERVICE_SERVICE)).toBe(true);
     });
 
     test('should handle missing logger gracefully', async () => {
-      expect(coreContainer.bootstrap(mockAdapter as any, null as any)).rejects.toThrow();
+      await expect(coreContainer.bootstrap(mockAdapter as any, null as any)).rejects.toThrow();
     });
   });
 

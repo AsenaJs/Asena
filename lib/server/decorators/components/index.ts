@@ -8,3 +8,4 @@ export * from './WebSocket';
 export * from './StaticServe';
 export * from './EventService';
 export * from './FrontendController';
+export * from './MessageController';

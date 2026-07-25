@@ -23,6 +23,19 @@ describe('AsenaServerFactory Integration', () => {
     mockLogger = mockSetup.logger;
   });
 
+  test('should throw without an adapter unless headless is explicit', async () => {
+    // A wiring bug that yields an undefined adapter must fail fast instead of
+    // silently booting an HTTP-less application
+    await expect(AsenaServerFactory.create({ logger: mockLogger } as any)).rejects.toThrow(/headless/);
+  });
+
+  test('should create a headless server with explicit opt-in', async () => {
+    const server = await AsenaServerFactory.create({ headless: true, logger: mockLogger });
+
+    expect(server).toBeInstanceOf(AsenaServer);
+    expect(server.coreContainer.container.has(ICoreServiceNames.ASENA_ADAPTER)).toBe(false);
+  });
+
   test('should create server with all dependencies injected', async () => {
     @Service()
     class TestService {
@@ -53,6 +66,9 @@ describe('AsenaServerFactory Integration', () => {
     expect(server.serviceName).toBe('AsenaServer');
 
     // Verify core dependencies are injected
+    // (adapter is resolved lazily for headless mode support)
+    expect(server['_adapter']).toBeUndefined();
+    await server['resolveAdapter']();
     expect(server['_adapter']).toBe(mockAdapter);
     expect(server['_logger']).toBe(mockLogger);
     expect(server['prepareMiddleware']).toBeDefined();

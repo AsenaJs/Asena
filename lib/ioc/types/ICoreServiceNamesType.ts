@@ -26,6 +26,7 @@ export enum ICoreServiceNames {
   PREPARE_EVENT_SERVICE = 'PrepareEventService',
   PREPARE_SCHEDULE_SERVICE = 'PrepareScheduleService',
   PREPARE_FRONTEND_CONTROLLER_SERVICE = 'PrepareFrontendControllerService',
+  PREPARE_MICROSERVICE_SERVICE = 'PrepareMicroserviceService',
 
   // Schedule Services (Phase 5)
   CRON_RUNNER = 'CronRunner',

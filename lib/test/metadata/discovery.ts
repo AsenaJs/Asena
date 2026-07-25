@@ -1,4 +1,4 @@
-import type { Dependencies, Expressions } from '../../ioc';
+import type { DependencyClasses, Dependencies, Expressions } from '../../ioc';
 import type { FieldMetadata } from '../types';
 import { ComponentConstants } from '../../ioc';
 import { getTypedMetadata, getOwnTypedMetadata } from '../../utils';
@@ -20,20 +20,53 @@ import { getTypedMetadata, getOwnTypedMetadata } from '../../utils';
  * ```
  */
 export function discoverInjectedFields(instance: any): FieldMetadata[] {
+  return discoverInjectedFieldsFromClass(Object.getPrototypeOf(instance)?.constructor);
+}
+
+/**
+ * Discovers all fields with @Inject decorator in a component class
+ * Traverses the constructor chain to support inheritance - no instantiation required
+ *
+ * This is the class-based counterpart of {@link discoverInjectedFields}. It is what
+ * slice tests use, since they must inspect a component's dependencies before deciding
+ * whether to register it for real or replace it with a mock.
+ *
+ * @param ComponentClass - Component class to inspect
+ * @returns Array of field metadata containing field names, service names, class refs and expressions
+ *
+ * @example
+ * ```typescript
+ * const fields = discoverInjectedFieldsFromClass(AuthService);
+ * // Returns: [
+ * //   { fieldName: 'userService', serviceName: 'UserService', serviceClass: UserService },
+ * //   { fieldName: 'chat', serviceName: '__Ulak__', expression: (u) => u.namespace('/chat') }
+ * // ]
+ * ```
+ */
+export function discoverInjectedFieldsFromClass(ComponentClass: any): FieldMetadata[] {
   const fields: FieldMetadata[] = [];
   const processedFields = new Set<string>();
 
-  // Traverse prototype chain (similar to how Container does it)
-  let currentPrototype = Object.getPrototypeOf(instance);
+  let currentClass = ComponentClass;
 
-  while (currentPrototype && currentPrototype !== Object.prototype) {
-    const constructor = currentPrototype.constructor;
+  // Traverse the constructor chain (similar to how Container does it)
+  while (currentClass && currentClass !== Function.prototype) {
+    // Stop at native code - matches Container.getPrototypeChain behaviour
+    if (typeof currentClass !== 'function' || currentClass.toString().includes('[native code]')) {
+      break;
+    }
 
     // Get dependencies metadata for this level
-    const dependencies = getOwnTypedMetadata<Dependencies>(ComponentConstants.DependencyKey, constructor);
+    const dependencies = getOwnTypedMetadata<Dependencies>(ComponentConstants.DependencyKey, currentClass);
+
+    // Get injected class references for this level (class-based injections only)
+    const dependencyClasses = getOwnTypedMetadata<DependencyClasses>(
+      ComponentConstants.DependencyClassKey,
+      currentClass,
+    );
 
     // Get expressions metadata for this level
-    const expressions = getOwnTypedMetadata<Expressions>(ComponentConstants.ExpressionKey, constructor);
+    const expressions = getOwnTypedMetadata<Expressions>(ComponentConstants.ExpressionKey, currentClass);
 
     if (dependencies) {
       // Process each dependency field
@@ -48,13 +81,14 @@ export function discoverInjectedFields(instance: any): FieldMetadata[] {
         fields.push({
           fieldName,
           serviceName,
+          serviceClass: dependencyClasses?.[fieldName],
           expression: expressions?.[fieldName],
         });
       }
     }
 
-    // Move up the prototype chain
-    currentPrototype = Object.getPrototypeOf(currentPrototype);
+    // Move up the constructor chain
+    currentClass = Object.getPrototypeOf(currentClass);
   }
 
   return fields;

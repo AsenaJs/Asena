@@ -1,3 +1,12 @@
 export { mockComponent, mockComponentAsync } from './mockComponent';
 export type { MockComponentOptions, MockedComponent } from './types';
 export { createMockFromClass } from './factory/mockFactory';
+export { createDeepMock } from './factory/deepMock';
+export { createTestUlakStub, type TestUlakNameSpace } from './factory/ulakStub';
+export { discoverInjectedFields, discoverInjectedFieldsFromClass } from './metadata/discovery';
+export { createTestApp } from './harness/createTestApp';
+export { createWebTest } from './harness/createWebTest';
+export { createCapturingLogger, silentLogger, type CapturedLogEntry } from './harness/silentLogger';
+export type { DispatchMode, TestApp, TestAppOptions, WebTestOptions, WebTestResult } from './harness/types';
+export { TestHttpCall } from './http/TestHttpCall';
+export { TestHttpResponse } from './http/TestHttpResponse';

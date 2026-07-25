@@ -20,6 +20,7 @@ import type { EventHandlerMetadata, EventDispatchService } from '../../event';
  * - Prefix='user', event='created' → 'user.created'
  * - Prefix='user', event='*.updated' → 'user.*.updated'
  * - Prefix='user', event='' → 'user'
+ * - Handler opted out (prefix: false) → event, verbatim
  */
 @CoreService(ICoreServiceNames.PREPARE_EVENT_SERVICE)
 export class PrepareEventService implements ICoreService {
@@ -75,7 +76,9 @@ export class PrepareEventService implements ICoreService {
       }
 
       // Build final event pattern
-      const finalPattern = this.buildEventPattern(prefix, metadata.pattern);
+      // `!== false`: metadata written by a pre-0.8 decorator build carries no
+      // flag and must follow the current default (apply the prefix)
+      const finalPattern = this.buildEventPattern(prefix, metadata.pattern, metadata.prefix !== false);
 
       // Bind method to service instance
       const boundHandler = service[methodName].bind(service);
@@ -88,12 +91,15 @@ export class PrepareEventService implements ICoreService {
   /**
    * Build final event pattern from prefix and event
    *
-   * Rules:
+   * Rules (identical to PrepareMicroserviceService.buildPattern and
+   * UlakMessages.buildPattern):
+   * - Handler opted out (prefix: false) → event
    * - No prefix → event
    * - No event → prefix
    * - Both → prefix.event
    */
-  private buildEventPattern(prefix: string, event: string): string {
+  private buildEventPattern(prefix: string, event: string, applyPrefix: boolean): string {
+    if (!applyPrefix) return event;
     if (!prefix) return event;
     if (!event) return prefix;
     return `${prefix}.${event}`;

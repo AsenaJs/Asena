@@ -3,6 +3,32 @@ import { CoreService, type ICoreService, ICoreServiceNames } from '../../ioc';
 import { type BulkOperation, type BulkResult, UlakError, UlakErrorCode } from './types';
 import { Inject } from '../../ioc/component';
 import { blue, type ServerLogger } from '../../logger';
+import { DEFAULT_TRANSPORT_NAME } from '../microservice/types';
+import { composeOnSend } from '../microservice/interceptorChain';
+import type { MessagingInterceptor, OutboundContext } from '../microservice/types';
+import type { EmitOptions, MicroserviceTransport, SendOptions } from '../microservice/MicroserviceTransport';
+
+/**
+ * @description Options for Ulak microservice sends - adds named transport selection
+ */
+export interface UlakSendOptions extends SendOptions {
+  /**
+   * Named microservice transport to use (multi-broker projects)
+   * @default 'default'
+   */
+  transport?: string;
+}
+
+/**
+ * @description Options for Ulak microservice emits - adds named transport selection
+ */
+export interface UlakEmitOptions extends EmitOptions {
+  /**
+   * Named microservice transport to use (multi-broker projects)
+   * @default 'default'
+   */
+  transport?: string;
+}
 
 /**
  * Central WebSocket message broker for Asena.js
@@ -39,6 +65,16 @@ export class Ulak implements ICoreService {
    * Map of namespace path to WebSocket service instance
    */
   private namespaces: Map<string, AsenaWebSocketService<any>> = new Map();
+
+  /**
+   * Named microservice transports (set during bootstrap by PrepareMicroserviceService)
+   */
+  private microserviceTransports: Map<string, MicroserviceTransport> = new Map();
+
+  /**
+   * Messaging interceptors applied to all outgoing send/emit calls
+   */
+  private microserviceInterceptors: MessagingInterceptor[] = [];
 
   /**
    * Initialize Ulak messaging system
@@ -312,6 +348,106 @@ export class Ulak implements ICoreService {
   }
 
   /**
+   * Wire the microservice transports into Ulak
+   * Called during bootstrap by PrepareMicroserviceService - not intended for user code
+   *
+   * @param transports - Named transports ('default' for the single-transport form)
+   * @param interceptors - Interceptors applied to all outgoing send/emit calls
+   */
+  public setMicroserviceTransports(
+    transports: Map<string, MicroserviceTransport>,
+    interceptors: MessagingInterceptor[] = [],
+  ): void {
+    this.microserviceTransports = transports;
+    this.microserviceInterceptors = interceptors;
+  }
+
+  /**
+   * Check if a microservice transport is configured and connected
+   *
+   * @param transport - Named transport to check
+   * @returns True when the transport exists and reports a live connection
+   */
+  public isMicroserviceConnected(transport: string = DEFAULT_TRANSPORT_NAME): boolean {
+    const instance = this.microserviceTransports.get(transport);
+
+    return instance ? instance.isConnected : false;
+  }
+
+  /**
+   * Get all configured microservice transports (read-only)
+   * Used by the health endpoint to report per-transport status
+   */
+  public getMicroserviceTransports(): ReadonlyMap<string, MicroserviceTransport> {
+    return this.microserviceTransports;
+  }
+
+  /**
+   * Send a request to another service and await its reply (request/response)
+   *
+   * @param pattern - Full request pattern (e.g. 'order.create')
+   * @param data - Request payload
+   * @param options - Timeout, headers and named transport selection
+   * @returns The reply produced by the remote @MessagePattern handler
+   * @throws {UlakError} NO_TRANSPORT / TRANSPORT_NOT_FOUND / TIMEOUT / REMOTE_ERROR
+   */
+  public async send<T = unknown>(pattern: string, data?: unknown, options?: UlakSendOptions): Promise<T> {
+    if (!pattern) {
+      // Fail fast: an empty pattern would otherwise create a nonsense broker
+      // stream and burn the full request timeout before surfacing
+      throw new UlakError('Pattern cannot be empty', UlakErrorCode.SEND_FAILED);
+    }
+
+    const transport = this.getMicroserviceTransport(options?.transport);
+
+    const ctx: OutboundContext = { pattern, kind: 'send', headers: { ...options?.headers }, data };
+
+    return composeOnSend(this.microserviceInterceptors, ctx, () =>
+      transport.send<T>(pattern, data, { timeout: options?.timeout, headers: ctx.headers }),
+    ) as Promise<T>;
+  }
+
+  /**
+   * Emit a fire-and-forget event to other services
+   *
+   * @param pattern - Full event pattern (e.g. 'order.created')
+   * @param data - Event payload
+   * @param options - Headers and named transport selection
+   * @throws {UlakError} NO_TRANSPORT / TRANSPORT_NOT_FOUND
+   */
+  public async emit(pattern: string, data?: unknown, options?: UlakEmitOptions): Promise<void> {
+    if (!pattern) {
+      throw new UlakError('Pattern cannot be empty', UlakErrorCode.SEND_FAILED);
+    }
+
+    const transport = this.getMicroserviceTransport(options?.transport);
+
+    const ctx: OutboundContext = { pattern, kind: 'emit', headers: { ...options?.headers }, data };
+
+    await composeOnSend(this.microserviceInterceptors, ctx, () =>
+      transport.emit(pattern, data, { headers: ctx.headers }),
+    );
+  }
+
+  /**
+   * Select a pattern-scoped microservice messaging view
+   * Patterns passed to the returned view are joined with the prefix ('order' + 'create' → 'order.create')
+   *
+   * @param prefix - Pattern prefix (empty for absolute patterns)
+   * @param options - Named transport selection
+   * @returns Scoped messages instance
+   *
+   * @example
+   * ```typescript
+   * const orders = ulak.messages('order');
+   * const res = await orders.send('create', dto); // sends 'order.create'
+   * ```
+   */
+  public messages<T extends string = ''>(prefix?: T, options?: { transport?: string }): Ulak.Messages<T> {
+    return new UlakMessages((prefix || '') as T, this, options?.transport);
+  }
+
+  /**
    * Dispose of all resources and stop background tasks
    * Should be called during application shutdown
    */
@@ -341,6 +477,34 @@ export class Ulak implements ICoreService {
     }
 
     return service;
+  }
+
+  /**
+   * Get a named microservice transport or throw
+   *
+   * @param name - Named transport (defaults to 'default')
+   * @throws {UlakError} NO_TRANSPORT when none configured, TRANSPORT_NOT_FOUND for unknown names
+   */
+  private getMicroserviceTransport(name: string = DEFAULT_TRANSPORT_NAME): MicroserviceTransport {
+    if (this.microserviceTransports.size === 0) {
+      throw new UlakError(
+        'No microservice transport configured - configure a microservice transport in your @Config transport()',
+        UlakErrorCode.NO_TRANSPORT,
+      );
+    }
+
+    const transport = this.microserviceTransports.get(name);
+
+    if (!transport) {
+      const available = Array.from(this.microserviceTransports.keys()).join(', ');
+
+      throw new UlakError(
+        `Microservice transport "${name}" not found - available transports: ${available}`,
+        UlakErrorCode.TRANSPORT_NOT_FOUND,
+      );
+    }
+
+    return transport;
   }
 }
 
@@ -394,6 +558,37 @@ export namespace Ulak {
      */
     getSocketCount(): number;
   }
+
+  /**
+   * Pattern-scoped microservice messaging view
+   * Provides ergonomic API without repeating the pattern prefix
+   */
+  export interface Messages<P extends string = string> {
+    /**
+     * The pattern prefix ('' for absolute patterns)
+     */
+    readonly prefix: P;
+
+    /**
+     * Send a request and await its reply (request/response)
+     * The pattern is joined with the prefix ('create' → 'order.create')
+     *
+     * @param pattern - Request pattern relative to the prefix
+     * @param data - Request payload
+     * @param options - Timeout and headers
+     */
+    send<T = unknown>(pattern: string, data?: unknown, options?: SendOptions): Promise<T>;
+
+    /**
+     * Emit a fire-and-forget event
+     * The pattern is joined with the prefix ('created' → 'order.created')
+     *
+     * @param pattern - Event pattern relative to the prefix
+     * @param data - Event payload
+     * @param options - Headers
+     */
+    emit(pattern: string, data?: unknown, options?: EmitOptions): Promise<void>;
+  }
 }
 
 /**
@@ -423,6 +618,35 @@ class UlakNameSpace<T extends string> implements Ulak.NameSpace<T> {
 
   public getSocketCount(): number {
     return this.ulak.getSocketCount(this.path);
+  }
+}
+
+/**
+ * Internal implementation of pattern-scoped microservice messaging
+ */
+class UlakMessages<P extends string> implements Ulak.Messages<P> {
+  public constructor(
+    public readonly prefix: P,
+    private readonly ulak: Ulak,
+    private readonly transport?: string,
+  ) {}
+
+  public async send<T = unknown>(pattern: string, data?: unknown, options?: SendOptions): Promise<T> {
+    return this.ulak.send<T>(this.buildPattern(pattern), data, { ...options, transport: this.transport });
+  }
+
+  public async emit(pattern: string, data?: unknown, options?: EmitOptions): Promise<void> {
+    await this.ulak.emit(this.buildPattern(pattern), data, { ...options, transport: this.transport });
+  }
+
+  /**
+   * Join prefix and pattern (same rule as message handler prefixes):
+   * no prefix → pattern, no pattern → prefix, both → prefix.pattern
+   */
+  private buildPattern(pattern: string): string {
+    if (!this.prefix) return pattern;
+    if (!pattern) return this.prefix;
+    return `${this.prefix}.${pattern}`;
   }
 }
 
@@ -457,4 +681,41 @@ class UlakNameSpace<T extends string> implements Ulak.NameSpace<T> {
  */
 export function ulak<T extends string>(namespace: T) {
   return [ICoreServiceNames.__ULAK__, (ulak: Ulak) => ulak.namespace(namespace)] as const;
+}
+
+/**
+ * Helper functions for injecting microservice messaging views from Ulak
+ * Declaration merging keeps the single `ulak` entry point:
+ * `ulak('/chat')` → WebSocket namespace, `ulak.messages('order')` → microservice messaging
+ */
+// eslint-disable-next-line @typescript-eslint/no-namespace
+export namespace ulak {
+  /**
+   * Inject a pattern-scoped microservice messaging view
+   *
+   * @param prefix - Pattern prefix joined to every send/emit ('' for absolute patterns)
+   * @param options - Named transport selection (multi-broker projects)
+   * @returns A tuple of [serviceName, expression] for @Inject decorator
+   *
+   * @example
+   * ```typescript
+   * @Service('CheckoutService')
+   * export class CheckoutService {
+   *   @Inject(ulak.messages('order'))
+   *   private orders: Ulak.Messages<'order'>;
+   *
+   *   async checkout(dto: CheckoutDto) {
+   *     const res = await this.orders.send('create', dto);  // sends 'order.create'
+   *     await this.orders.emit('created', { id: res.id });  // emits 'order.created'
+   *   }
+   * }
+   *
+   * // Named transport (multi-broker projects)
+   * @Inject(ulak.messages('metrics', { transport: 'analytics' }))
+   * private metrics: Ulak.Messages<'metrics'>;
+   * ```
+   */
+  export function messages<P extends string = ''>(prefix?: P, options?: { transport?: string }) {
+    return [ICoreServiceNames.__ULAK__, (u: Ulak) => u.messages(prefix, options)] as const;
+  }
 }

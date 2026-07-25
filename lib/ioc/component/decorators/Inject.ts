@@ -1,5 +1,5 @@
 import type { Class } from '../../../server/types';
-import type { Dependencies, Expressions } from '../../types';
+import type { DependencyClasses, Dependencies, Expressions } from '../../types';
 import { ComponentConstants } from '../../constants';
 import { defineTypedMetadata, getOwnTypedMetadata, getTypedMetadata } from '../../../utils/typedMetadata';
 
@@ -37,6 +37,8 @@ export const Inject = (
   return (target: object, propertyKey: string): void => {
     let dependencyName: string;
     let resolvedExpression: ((injectedClass: any) => any) | undefined = expression;
+    // Kept only for class-based injections - string injections carry no class reference
+    let dependencyClass: Class | undefined;
 
     // Check if Injection is a tuple [serviceName, expression]
     if (Array.isArray(Injection) && Injection.length === 2) {
@@ -45,12 +47,18 @@ export const Inject = (
       // Check Name type, it can be a Class or String
       dependencyName = typeof name === 'string' ? name : getTypedMetadata<string>(ComponentConstants.NameKey, name);
 
+      if (typeof name !== 'string') {
+        dependencyClass = name;
+      }
+
       resolvedExpression = tupleExpression;
     } else if (typeof Injection === 'string') {
       dependencyName = Injection;
     } else {
       // Injection is a Class
       dependencyName = getTypedMetadata<string>(ComponentConstants.NameKey, Injection);
+      // The `length === 2` guard above stops TS narrowing the tuple out of this branch
+      dependencyClass = Injection as Class;
     }
 
     // Store dependency
@@ -62,6 +70,23 @@ export const Inject = (
     }
 
     defineTypedMetadata<Dependencies>(ComponentConstants.DependencyKey, dependencies, target.constructor);
+
+    // Store the class reference (class-based injections only) so test utilities can
+    // derive the real method shape without instantiating the dependency
+    if (dependencyClass) {
+      const dependencyClasses: DependencyClasses =
+        getOwnTypedMetadata<DependencyClasses>(ComponentConstants.DependencyClassKey, target.constructor) || {};
+
+      if (!dependencyClasses[propertyKey]) {
+        dependencyClasses[propertyKey] = dependencyClass;
+      }
+
+      defineTypedMetadata<DependencyClasses>(
+        ComponentConstants.DependencyClassKey,
+        dependencyClasses,
+        target.constructor,
+      );
+    }
 
     // Store expression if provided
     if (resolvedExpression) {

@@ -1,12 +1,20 @@
 import type { MockComponentOptions, MockedComponent } from './types';
 import { discoverInjectedFields } from './metadata/discovery';
 import { createMockFromClass } from './factory/mockFactory';
+import { createDeepMock } from './factory/deepMock';
 
 /**
  * Creates a test instance of a component with all @Inject dependencies automatically mocked
  *
  * This is the main API for testing Asena components. It discovers all @Inject decorated
  * fields, generates mock objects for them, and injects them into a new instance.
+ *
+ * What each field receives depends on how it was injected:
+ * - `@Inject(UserService)` - a mock shaped like the class: every method becomes a bun mock
+ * - `@Inject(ulak('/chat'))` and other expression injections - the expression is evaluated
+ *   against a deep mock, so any call chain works and every call stays assertable
+ * - `@Inject('UserService')` - a plain `{}`, because a string carries no class reference.
+ *   Pass `overrides` for those fields.
  *
  * @template T - Type of the component being mocked
  * @param ComponentClass - Component class to instantiate and mock
@@ -55,6 +63,24 @@ import { createMockFromClass } from './factory/mockFactory';
  *   }
  * });
  * ```
+ *
+ * @example
+ * ```typescript
+ * // Expression-based injections (e.g. the ulak() helper) work automatically:
+ * // the expression is evaluated against a deep mock, so the field behaves
+ * // like a real namespace and every method call is assertable
+ * const { instance, mocks } = mockComponent(ChatService);
+ *
+ * await instance.sendAnnouncement('hello');
+ *
+ * expect(mocks.chat.broadcast).toHaveBeenCalledWith({ type: 'announcement', text: 'hello' });
+ *
+ * // A field present in overrides is used as-is - its expression is skipped
+ * const stub = createTestUlakStub('/chat');
+ * const { instance: withStub } = mockComponent(ChatService, {
+ *   overrides: { chat: stub },
+ * });
+ * ```
  */
 export function mockComponent<T extends object>(
   ComponentClass: new (...args: any[]) => T,
@@ -74,18 +100,23 @@ export function mockComponent<T extends object>(
   const mocks: Record<string, any> = {};
 
   for (const field of fieldsToMock) {
-    const { fieldName, expression } = field;
+    const { fieldName, expression, serviceClass } = field;
 
     let mockValue: any;
 
-    if (options.overrides?.[fieldName]) {
+    if (options.overrides && Object.hasOwn(options.overrides, fieldName)) {
+      // Overrides are the FINAL field value: the expression is intentionally
+      // skipped and falsy values (0, '', null) are respected
       mockValue = options.overrides[fieldName];
+    } else if (expression) {
+      // Expression fields (e.g. @Inject(ulak('/chat'))) receive a deep mock
+      // so any call chain the expression performs works without a running app
+      mockValue = expression(createDeepMock());
     } else {
-      mockValue = createMockFromClass(undefined);
-    }
-
-    if (expression) {
-      mockValue = expression(mockValue);
+      // Class injections (@Inject(UserService)) get a mock shaped like the real class:
+      // every method becomes a bun mock. String injections (@Inject('UserService'))
+      // carry no class reference, so they degrade to {} and need an explicit override
+      mockValue = createMockFromClass(serviceClass);
     }
 
     (instance as any)[fieldName] = mockValue;

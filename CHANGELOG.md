@@ -1,5 +1,101 @@
 # @asenajs/asena
 
+## 0.8.0
+
+### Minor Changes
+
+- 732f7cf: ### Microservice messaging
+
+  Asena services can now talk to each other over a message broker, supporting both **orchestration** (request/response) and **choreography** (fire-and-forget events). The core ships the broker-agnostic SPI and an in-process reference transport; real brokers live in separate packages ([`@asenajs/asena-redis`](https://www.npmjs.com/package/@asenajs/asena-redis) Redis Streams, [`@asenajs/asena-kafka`](https://www.npmjs.com/package/@asenajs/asena-kafka) Kafka).
+  - **`@MessageController(prefix?)`** — a new component type holding message handlers. Accepts a prefix string or `{ prefix, transport, name }`.
+  - **`@MessagePattern(pattern)`** — request/response handler; the method's return value is sent back as the reply. Wildcards are rejected at decoration time (exact routing is required).
+  - **`@EventPattern(pattern)`** — fire-and-forget handler; wildcards supported (`payment.*`, `*.completed`, `user.*.created`).
+  - Both accept `{ pattern, prefix?, skip? }`, and every handler receives `(data, context: MessageContext)` with `pattern`, `messageId`, `correlationId`, `headers`, `timestamp` and `attempt`.
+
+  **Client API on `Ulak`:**
+  - `ulak.send(pattern, data, options?)` — request/response, awaits the remote reply, honors a timeout.
+  - `ulak.emit(pattern, data, options?)` — fire-and-forget event.
+  - `ulak.messages(prefix?, { transport? })` and the `ulak.messages('order')` injection helper — a pattern-scoped view so callers don't repeat the prefix: `orders.send('create', dto)` → `order.create`.
+  - New `UlakErrorCode` members: `NO_TRANSPORT`, `TRANSPORT_NOT_FOUND`, `TIMEOUT`, `REMOTE_ERROR`.
+
+  **Transport SPI** (`@asenajs/asena/microservice`, a new export subpath):
+  - `MicroserviceTransport` — implement `init`, `registerMessageHandler`, `registerEventHandler`, `listen`, `send`, `emit`, `destroy` to plug in any broker.
+  - `InMemoryTransport` — zero-dependency in-process transport for development and tests.
+  - `MessagingInterceptor` (`onSend` / `onReceive`) — wrapper hooks around outgoing and incoming messages, registered via `transport() { return { microservice, interceptors: [...] } }`. This is how [`@asenajs/asena-otel`](https://www.npmjs.com/package/@asenajs/asena-otel) propagates trace context.
+  - **Multiple named transports** — `transport()` accepts a record, and `@MessageController({ transport: 'kafka' })` binds a controller to one of them, so a single service can bridge two brokers. A single unnamed transport registers as `default`.
+
+  Transports are connected and start consuming before the HTTP adapter binds, so handlers are live the moment the service is reachable. Controllers found with no transport configured fail the boot with a clear message, and a transport with zero handlers starts no consumer loop (client-only mode).
+
+  ### Headless mode
+
+  An Asena service no longer needs an HTTP server. `AsenaServerFactory.create({ headless: true })` boots the container, IoC, message controllers, the event system and schedules without an adapter — for workers driven purely by messages. Omitting the adapter _without_ `headless: true` still fails, so the intent must be explicit. Adapter-only features (`globalMiddlewares`, `onError`, WebSocket transport) log a warning and are skipped instead of crashing.
+
+  ### Health endpoint
+
+  `AsenaServerFactory.create({ health: { port, path? } })` starts a small standalone health server (default path `/healthz`), mainly for headless deployments and Kubernetes probes. It reports each named transport separately and returns `503` while any configured transport is disconnected.
+
+  ### Also
+  - **`PatternHandlerIndex`** (`@asenajs/asena/event`) — the shared exact-map + wildcard-array lookup used by the event system and every transport, now a reusable export.
+  - `AsenaAdapter.start()` accepts an optional `AsenaStartOptions`. The parameter is optional, so existing adapters keep compiling and may ignore it.
+
+- 732f7cf: Fix `mockComponent` crash for services with `@Inject(ulak(...))` dependencies and improve expression handling:
+  - **Fix:** `mockComponent` no longer throws `TypeError: ulak.namespace is not a function` for expression-based injections (e.g. the `ulak()` helper). Expressions are now evaluated against a deep mock, so injected namespaces work out of the box and their methods are assertable Bun mocks.
+  - **Behavior change:** a field present in `overrides` is now used as the FINAL injected value — its `@Inject` expression is skipped instead of being applied on top of the override.
+  - **Behavior change:** override presence is checked with `Object.hasOwn`, so falsy override values (`0`, `''`, `null`, `undefined`) are injected as-is instead of being silently ignored.
+  - **New:** `createDeepMock()` exported from `@asenajs/asena/test` — Proxy-based deep mock where any property access yields a Bun mock and any call returns a chainable deep mock.
+  - **New:** `createTestUlakStub(path)` exported from `@asenajs/asena/test` — fully typed `Ulak.NameSpace` stub with all methods mocked.
+
+- 732f7cf: Add an integration test harness to `@asenajs/asena/test` and fix `mockComponent` auto-mocking:
+  - **Fix:** `mockComponent` now generates real method mocks for class-based injections (`@Inject(UserService)`). Previously every non-expression field received an empty object, so the documented "auto-generates mocks for all methods" behavior only worked when you passed `overrides`. String injections (`@Inject('UserService')`) still degrade to `{}` — a string carries no class reference — and continue to need an explicit override.
+  - **New:** `createTestApp(options)` — boots a full application (container, all bootstrap phases, real adapter and routing) for testing. Spring's `@SpringBootTest` equivalent. Supports `overrides` to replace any registered service with a double, `await using` cleanup, and an ephemeral `port: 0` binding that removes random-port collisions.
+  - **New:** `createWebTest(options)` — boots only the web layer. Controllers, their middlewares and their validators are real; every other injected dependency is auto-mocked from its class shape. Spring's `@WebMvcTest` equivalent. `mocks` is keyed by service name, with one shared double per service.
+  - **New:** `TestHttpCall` / `TestHttpResponse` — supertest-style fluent assertions (`expectStatus`, `expectHeader`, `expectJson`, `expectJsonContains`, `expectBody`, `expect`). Requests are lazy and memoized; the response body is buffered once so it can be read repeatedly.
+  - **New:** `silentLogger` and `createCapturingLogger()` — a no-op `ServerLogger` and a recording variant for asserting on warnings.
+  - **New:** `dispatch: 'socket'` — runs the adapter's real routing pipeline over a unix domain socket instead of a TCP port, so parallel suites cannot collide. Use `app.wsUrl(path)` to build WebSocket URLs that work in both dispatch modes.
+  - **New:** `Container.overrideInstance(key, instance)` and `Container.isOverridden(key)`. Overrides are seeded before user components register, so the real class is never constructed (no `@PostConstruct` side effects) and dependents capture the double. `AsenaServerFactory.create({ overrides })` exposes this; overriding a core service throws.
+  - **New:** `AsenaServer.httpServer` getter exposes the Bun server the adapter bound, which is the only way to read the actual port when starting on port 0.
+  - **New:** `discoverInjectedFieldsFromClass(Class)` exported from `@asenajs/asena/test`, plus `FieldMetadata.serviceClass`.
+  - **Fix:** `AsenaServerFactory.create({ port: 0 })` is no longer silently ignored (`if (port)` treated 0 as absent).
+  - `AsenaAdapter.start()` now accepts an optional `AsenaStartOptions` argument. The parameter is optional, so existing adapters keep compiling and may ignore it.
+
+- 732f7cf: ### Breaking Changes
+  - **The `@MessageController` prefix is now applied to `@EventPattern` too.** Previously it was joined onto `@MessagePattern` patterns only and event patterns were always absolute. The prefix is now joined onto **every** handler in the controller, and a handler opts out with `prefix: false`.
+
+    ```typescript
+    // Before (0.7)
+    @MessageController('order')
+    class OrderHandler {
+      @MessagePattern('create')          // -> 'order.create'
+      @EventPattern('payment.completed') // -> 'payment.completed'
+    }
+
+    // After (0.8)
+    @MessageController('order')
+    class OrderHandler {
+      @MessagePattern('create')          // -> 'order.create'   (unchanged)
+      @EventPattern('created')           // -> 'order.created'  (prefix now applied)
+      @EventPattern({ pattern: 'payment.completed', prefix: false }) // -> 'payment.completed'
+    }
+    ```
+
+    **Why:** the outbound client side already prefixed events. `ulak.messages('order').emit('created')` publishes `order.created`, but `@MessageController('order') @EventPattern('created')` subscribed to bare `created` — sender and listener disagreed, and the message was silently lost. One rule now governs both directions, and it matches the in-process `@EventService`/`@On` system.
+
+    **Migration:** every `@EventPattern` on a **prefixed** controller must be either rewritten relative to the prefix or given `prefix: false`. Controllers without a prefix are unaffected. Asena logs the resolved patterns for each controller at boot so the result is visible immediately:
+
+    ```
+    [Microservice] OrderHandler → "default" (prefix "order") msg: order.create | evt: order.created
+    ```
+
+  - **`@EventPattern('*')` under a prefix is no longer a global catch-all** — it resolves to `order.*`, which matches `order.created` and `order.item.added` but not `payment.completed` or the bare `order`. Audit and logging listeners that must see every event need `prefix: false`.
+  - **A wildcard `@MessageController` prefix is now a boot error.** `@MessageController('order.*')` previously only failed if the controller had a `@MessagePattern` (the transport vetoed the joined result); on the event side it would now silently produce subscriptions like `order.*.created`. It is rejected at boot with the controller name and the `prefix: false` escape hatch in the message.
+  - **Kafka external topics:** a handler for a foreign topic on a prefixed controller now registers under the joined name and **stops consuming**, while the service still boots green and reports healthy. Add `prefix: false` to those `@EventPattern`s. `@asenajs/asena-kafka` prints a hint at `listen()` naming the shadowed handler.
+
+  ### New
+  - **`prefix: false` on `@MessagePattern` and `@EventPattern`** — registers the pattern verbatim, ignoring the controller prefix. `prefix: false` does not relax the `@MessagePattern` wildcard ban; request/response still requires exact routing.
+  - **`prefix: false` on `@On`** — the in-process event system gains the same opt-out. Previously an `@EventService('user')` class could not listen to an absolute pattern at all without a second, prefix-less service. Purely additive; the default stays `true`.
+  - **`PatternHandlerIndex.patterns()`** (`@asenajs/asena/event`) — lists registered patterns, exact first then wildcard. Diagnostics only; used by transports to explain why an expected source matched no handler.
+  - Message and event pattern validation errors in `InMemoryTransport` now mention the `prefix: false` escape hatch.
+
 ## 0.7.1
 
 ### Patch Changes

@@ -1,4 +1,11 @@
-import type { AsenaServeOptions, BaseMiddleware, ErrorHandler, RouteParams, WebsocketRouteParams } from './types';
+import type {
+  AsenaServeOptions,
+  AsenaStartOptions,
+  BaseMiddleware,
+  ErrorHandler,
+  RouteParams,
+  WebsocketRouteParams,
+} from './types';
 import type { Server } from 'bun';
 import type { AsenaWebsocketAdapter } from './AsenaWebsocketAdapter';
 import type { ServerLogger } from '../logger';
@@ -111,7 +118,7 @@ export abstract class AsenaAdapter<C extends AsenaContext<any, any>, VS> {
    * Initializes and starts the server
    * @returns Server instance
    */
-  public abstract start(): Promise<Server<any>> | Server<any>;
+  public abstract start(options?: AsenaStartOptions): Promise<Server<any>> | Server<any>;
 
   /**
    * Sets up global error handling

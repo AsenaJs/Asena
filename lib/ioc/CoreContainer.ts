@@ -11,6 +11,7 @@ import { PrepareStaticServeConfigService } from '../server/src/services/PrepareS
 import { PrepareEventService } from '../server/src/services/PrepareEventService';
 import { PrepareScheduleService } from '../server/src/services/PrepareScheduleService';
 import { PrepareFrontendControllerService } from '../server/src/services/PrepareFrontendControllerService';
+import { PrepareMicroserviceService } from '../server/src/services/PrepareMicroserviceService';
 import { Ulak } from '../server/messaging';
 import { EventDispatchService } from '../server/event';
 import { EventEmitter } from '../server/event';
@@ -35,11 +36,11 @@ export class CoreContainer {
   /**
    * @description Bootstrap core framework services
    * Executes Phase 1-5: System-level services
-   * @param {AsenaAdapter} adapter - HTTP adapter instance
+   * @param {AsenaAdapter | undefined} adapter - HTTP adapter instance (undefined = headless mode)
    * @param {ServerLogger} logger - Logger instance
    * @returns {Promise<void>}
    */
-  public async bootstrap(adapter: AsenaAdapter<any, any>, logger: ServerLogger): Promise<void> {
+  public async bootstrap(adapter: AsenaAdapter<any, any> | undefined, logger: ServerLogger): Promise<void> {
     if (this._initialized) {
       throw new Error('CoreContainer already initialized');
     }
@@ -111,11 +112,16 @@ export class CoreContainer {
 
   /**
    * @description Phase 4: Register HTTP Adapter
-   * @param {AsenaAdapter} adapter - HTTP adapter instance
+   * In headless mode (no adapter) the phase still advances - phases are
+   * bookkeeping, and AsenaServer resolves the adapter lazily via container.has()
+   * @param {AsenaAdapter | undefined} adapter - HTTP adapter instance
    * @returns {Promise<void>}
    */
-  private async registerAdapters(adapter: AsenaAdapter<any, any>): Promise<void> {
-    await this._container.registerInstance(ICoreServiceNames.ASENA_ADAPTER, adapter);
+  private async registerAdapters(adapter: AsenaAdapter<any, any> | undefined): Promise<void> {
+    if (adapter) {
+      await this._container.registerInstance(ICoreServiceNames.ASENA_ADAPTER, adapter);
+    }
+
     this._phase = CoreBootstrapPhase.PREPARE_SERVICES_INIT;
   }
 
@@ -141,6 +147,7 @@ export class CoreContainer {
       { name: ICoreServiceNames.PREPARE_STATIC_SERVE_CONFIG_SERVICE, Class: PrepareStaticServeConfigService },
       { name: ICoreServiceNames.PREPARE_EVENT_SERVICE, Class: PrepareEventService },
       { name: ICoreServiceNames.PREPARE_FRONTEND_CONTROLLER_SERVICE, Class: PrepareFrontendControllerService },
+      { name: ICoreServiceNames.PREPARE_MICROSERVICE_SERVICE, Class: PrepareMicroserviceService },
 
       // Schedule system (CronRunner must be registered before PrepareScheduleService)
       { name: ICoreServiceNames.CRON_RUNNER, Class: CronRunner },

@@ -22,6 +22,35 @@ describe('@On Decorator', () => {
       expect(handlers!['handleUserCreated'].pattern).toBe('user.created');
       expect(handlers!['handleUserCreated'].methodName).toBe('handleUserCreated');
       expect(handlers!['handleUserCreated'].skip).toBe(false);
+      expect(handlers!['handleUserCreated'].prefix).toBe(true);
+    });
+
+    test('should default prefix to true for object params without the flag', () => {
+      class TestService {
+        @On({ event: 'user.updated' })
+        handleUpdated() {}
+      }
+
+      const handlers = getTypedMetadata<Record<string, EventHandlerMetadata>>(
+        ComponentConstants.EventHandlersKey,
+        TestService,
+      );
+
+      expect(handlers!['handleUpdated'].prefix).toBe(true);
+    });
+
+    test('should store the prefix: false opt-out', () => {
+      class TestService {
+        @On({ event: 'payment.completed', prefix: false })
+        handlePayment() {}
+      }
+
+      const handlers = getTypedMetadata<Record<string, EventHandlerMetadata>>(
+        ComponentConstants.EventHandlersKey,
+        TestService,
+      );
+
+      expect(handlers!['handlePayment'].prefix).toBe(false);
     });
 
     test('should support object params with skip flag', () => {
