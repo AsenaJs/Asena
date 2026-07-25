@@ -23,6 +23,10 @@ import type { EventHandlerMetadata, OnParams } from '../types';
  *
  *   @On({ event: 'deleted', skip: true })  // Temporarily disabled
  *   handleDeleted(eventName: string, data: any) { }
+ *
+ *   // Absolute - opts out of the 'user' prefix
+ *   @On({ event: 'payment.completed', prefix: false })
+ *   handlePayment(eventName: string, data: any) { }
  * }
  *
  * @example
@@ -54,6 +58,8 @@ export function On(params: OnParams | string): MethodDecorator {
     handlers[propertyKey.toString()] = {
       pattern: _params.event,
       methodName: propertyKey.toString(),
+      // `!== false` covers the string shorthand and objects that omit the flag
+      prefix: _params.prefix !== false,
       skip: _params.skip || false,
     };
 

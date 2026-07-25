@@ -117,7 +117,9 @@ export class IocEngine implements ICoreService {
 
       const _interface = getTypedMetadata<string>(ComponentConstants.InterfaceKey, injectable);
 
-      if (_interface) {
+      // An overridden component must not sneak back in under its @Implements interface key -
+      // registering there would construct the real class and run its @PostConstruct anyway
+      if (_interface && !this._container.isOverridden(name)) {
         await this._container.register(_interface, injectable, isSingleton);
       }
     }

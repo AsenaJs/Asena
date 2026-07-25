@@ -28,3 +28,20 @@ export interface AsenaServeOptions {
   serveOptions?: AsenaServerOptions;
   wsOptions?: WSOptions;
 }
+
+/**
+ * Options passed to `AsenaAdapter.start()`.
+ *
+ * Every field is optional and adapters may ignore what they do not support, so adding
+ * one stays backwards compatible for third-party adapters.
+ */
+export interface AsenaStartOptions {
+  /**
+   * Listen on a unix domain socket instead of a TCP port.
+   *
+   * Test harnesses use this to exercise the real routing pipeline without occupying a
+   * port. Adapters implementing it must not pass `hostname` to `Bun.serve` while it is
+   * set - Bun rejects that combination with "Cannot specify both hostname and unix".
+   */
+  unix?: string;
+}

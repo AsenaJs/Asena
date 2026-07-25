@@ -64,6 +64,7 @@ export const createMockAdapter = () => {
     name: 'MockAdapter',
     setPort: mock((_port: number) => {}),
     start: mock(async () => {}),
+    stop: mock(async (_closeActiveConnections?: boolean) => {}),
     registerRoute: mock(async (route: any) => {
       // Store route for testing
       const key = `${route.method}:${route.path}`;

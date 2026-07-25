@@ -46,6 +46,27 @@ describe('PrepareEventService', () => {
       expect(called).toBe(true);
     });
 
+    test('should register an @On handler verbatim when it opts out of the prefix', async () => {
+      const seen: string[] = [];
+
+      @EventService({ prefix: 'user' })
+      class UserEventService {
+        @On({ event: 'payment.completed', prefix: false })
+        handlePayment(eventName: string) {
+          seen.push(eventName);
+        }
+      }
+
+      await container.registerInstance('UserEventService', new UserEventService());
+
+      await prepareService.prepare();
+
+      emitter.emit('payment.completed');
+      emitter.emit('user.payment.completed');
+
+      expect(seen).toEqual(['payment.completed']);
+    });
+
     test('should use event pattern when no prefix', async () => {
       let called = false;
 

@@ -1,7 +1,7 @@
 import { CoreService } from '../../ioc';
 import { ICoreServiceNames } from '../../ioc';
 import type { ICoreService } from '../../ioc';
-import { matchesEventPattern } from './eventPatternMatcher';
+import { PatternHandlerIndex } from './PatternHandlerIndex';
 import type { EventHandler, EventSubscription } from './types';
 
 /**
@@ -34,15 +34,10 @@ export class EventDispatchService implements ICoreService {
   private warmedUp = false;
 
   /**
-   * Exact pattern cache for O(1) lookup
-   * Key: exact event pattern, Value: handlers for that pattern
+   * Hybrid lookup index (exact Map + wildcard array), shared implementation
+   * with the microservice transports
    */
-  private exactMatches: Map<string, EventHandler[]> = new Map();
-
-  /**
-   * Wildcard patterns that need O(n) matching
-   */
-  private wildcardPatterns: EventSubscription[] = [];
+  private index = new PatternHandlerIndex<EventSubscription>();
 
   /**
    * Register a handler for an event pattern
@@ -105,26 +100,8 @@ export class EventDispatchService implements ICoreService {
       this.warmup();
     }
 
-    const handlersToCall: EventSubscription[] = [];
-
-    // 1. Check exact match cache - O(1)
-    const exactHandlers = this.exactMatches.get(eventName);
-    if (exactHandlers) {
-      for (const handler of exactHandlers) {
-        // Find full subscription info (for 'once' support)
-        const sub = this.handlers.find((s) => s.handler === handler && s.pattern === eventName);
-        if (sub) {
-          handlersToCall.push(sub);
-        }
-      }
-    }
-
-    // 2. Check wildcard patterns - O(n) but smaller n
-    for (const sub of this.wildcardPatterns) {
-      if (matchesEventPattern(eventName, sub.pattern)) {
-        handlersToCall.push(sub);
-      }
-    }
+    // 1-2. Collect matching subscriptions: exact matches O(1), then wildcards O(n)
+    const handlersToCall = this.index.collect(eventName);
 
     // 3. No handlers matched
     if (handlersToCall.length === 0) {
@@ -177,19 +154,10 @@ export class EventDispatchService implements ICoreService {
    * @private
    */
   private warmup(): void {
-    this.exactMatches.clear();
-    this.wildcardPatterns = [];
+    this.index.clear();
 
     for (const sub of this.handlers) {
-      if (sub.pattern.includes('*')) {
-        // Wildcard pattern - needs O(n) matching on dispatch
-        this.wildcardPatterns.push(sub);
-      } else {
-        // Exact pattern - O(1) lookup on dispatch
-        const handlers = this.exactMatches.get(sub.pattern) || [];
-        handlers.push(sub.handler);
-        this.exactMatches.set(sub.pattern, handlers);
-      }
+      this.index.add(sub.pattern, sub);
     }
 
     this.warmedUp = true;
@@ -212,8 +180,7 @@ export class EventDispatchService implements ICoreService {
    */
   public clearHandlers(): void {
     this.handlers = [];
-    this.exactMatches.clear();
-    this.wildcardPatterns = [];
+    this.index.clear();
     this.warmedUp = false;
   }
 }

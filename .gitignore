@@ -9,3 +9,5 @@ roadmaps
 /junit.xml
 /CLAUDE.md
 /docs
+# packed tarballs
+*.tgz

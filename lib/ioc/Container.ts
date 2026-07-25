@@ -19,11 +19,20 @@ export class Container {
 
   private postProcessors: ComponentPostProcessor[] = [];
 
+  private overriddenKeys = new Set<string>();
+
   public constructor(services?: { [key: string]: ContainerService | ContainerService[] }) {
     this._services = services || {};
   }
 
   public async register(key: string, Class: Class, singleton: boolean) {
+    // An overridden key keeps its test double. Returning early means the real class is
+    // never instantiated (no @PostConstruct side effects) and the entry never turns
+    // into an array, which is what resolve() would otherwise hand back.
+    if (this.overriddenKeys.has(key)) {
+      return;
+    }
+
     if (this._services[key]) {
       if (Array.isArray(this._services[key])) {
         this._services[key].push({ Class, instance: singleton ? await this.prepareInstance(Class) : null, singleton });
@@ -61,6 +70,44 @@ export class Container {
     };
   }
 
+  /**
+   * @description Replace a service with a pre-created test double (Spring's @MockBean).
+   *
+   * Seeds the container before user components are registered: any later `register()`
+   * call for the same key becomes a no-op, so the real class is never constructed and
+   * dependents capture the override in their injection closures.
+   *
+   * @param {string} key - Service identifier to override
+   * @param {T} instance - Replacement instance
+   * @returns {void}
+   */
+  public overrideInstance<T>(key: string, instance: T): void {
+    if (instance === null || instance === undefined) {
+      throw new Error(
+        `Cannot override service '${key}' with ${instance === null ? 'null' : 'undefined'} - ` +
+          'an override must be an object instance. ' +
+          'A null override would fail later with an opaque "instance cannot be null" error at resolve time.',
+      );
+    }
+
+    this.overriddenKeys.add(key);
+
+    this._services[key] = {
+      Class: ((instance as any).constructor ?? Object) as Class,
+      instance,
+      singleton: true,
+    };
+  }
+
+  /**
+   * @description Check whether a key has been replaced by an override
+   * @param {string} key - Service key
+   * @returns {boolean}
+   */
+  public isOverridden(key: string): boolean {
+    return this.overriddenKeys.has(key);
+  }
+
   public async resolve<T>(key: string): Promise<(T | T[]) | null> {
     // Check circular dependency
     this.circularDetector.checkCircular(key);
@@ -81,6 +128,15 @@ export class Container {
     } finally {
       this.circularDetector.pop(key);
     }
+  }
+
+  /**
+   * @description Check if a service is registered without resolving it
+   * @param {string} key - Service key
+   * @returns {boolean}
+   */
+  public has(key: string): boolean {
+    return this._services[key] !== undefined;
   }
 
   public resolveStrategy<T>(key: string): Promise<T[] | null> {

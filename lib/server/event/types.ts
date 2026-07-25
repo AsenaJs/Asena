@@ -25,6 +25,14 @@ export interface OnParams {
   event: string;
 
   /**
+   * Join the @EventService prefix onto `event`.
+   * Set false to listen on an absolute pattern — another domain's event
+   * vocabulary, or a global catch-all ('*').
+   * @default true
+   */
+  prefix?: boolean;
+
+  /**
    * Skip this handler (useful for temporarily disabling handlers)
    * @default false
    */
@@ -45,6 +53,12 @@ export interface EventHandlerMetadata {
    * Method name to call when event is emitted
    */
   methodName: string;
+
+  /**
+   * Whether the @EventService prefix is joined onto `pattern`.
+   * Normalized at decoration time (`prefix: false` opt-out → false).
+   */
+  prefix: boolean;
 
   /**
    * Whether this handler should be skipped

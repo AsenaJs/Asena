@@ -10,6 +10,7 @@ import {
 import type {
   ApiParams,
   AsenaAdapter,
+  AsenaStartOptions,
   BaseMiddleware,
   BaseStaticServeParams,
   BaseValidator,
@@ -30,9 +31,16 @@ import type { PrepareStaticServeConfigService } from './src/services/PrepareStat
 import type { PrepareFrontendControllerService } from './src/services/PrepareFrontendControllerService';
 import { Inject, PostConstruct } from '../ioc/component';
 import type { GlobalMiddlewareConfig, GlobalMiddlewareEntry } from './config/AsenaConfig';
+import { normalizeTransportConfig } from './config/AsenaConfig';
+import type { Ulak } from './messaging/Ulak';
+import type { HealthOptions } from './AsenaServerFactory';
+import { HealthServer } from './health/HealthServer';
 import type { PrepareEventService } from './src/services/PrepareEventService';
 import type { PrepareScheduleService } from './src/services/PrepareScheduleService';
+import type { PrepareMicroserviceService } from './src/services/PrepareMicroserviceService';
 import type { CronRunner } from './schedule/CronRunner';
+import type { MessagingInterceptor } from './microservice/types';
+import type { MicroserviceTransport } from './microservice/MicroserviceTransport';
 
 /**
  * @description AsenaServer - Main server class for Asena framework
@@ -45,11 +53,15 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
   @Inject(ICoreServiceNames.CORE_CONTAINER)
   private _coreContainer!: CoreContainer;
 
-  @Inject(ICoreServiceNames.ASENA_ADAPTER)
-  private _adapter!: A;
+  // NOT injected eagerly: resolved lazily in start() via container.has()
+  // so the server can boot in headless mode without an HTTP adapter
+  private _adapter?: A;
 
   @Inject(ICoreServiceNames.SERVER_LOGGER)
   private _logger!: ServerLogger;
+
+  @Inject(ICoreServiceNames.__ULAK__)
+  private _ulak!: Ulak;
 
   @Inject(ICoreServiceNames.PREPARE_MIDDLEWARE_SERVICE)
   private prepareMiddleware!: PrepareMiddlewareService;
@@ -75,6 +87,9 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
   @Inject(ICoreServiceNames.PREPARE_FRONTEND_CONTROLLER_SERVICE)
   private prepareFrontendControllerService: PrepareFrontendControllerService;
 
+  @Inject(ICoreServiceNames.PREPARE_MICROSERVICE_SERVICE)
+  private prepareMicroserviceService: PrepareMicroserviceService;
+
   @Inject(ICoreServiceNames.CRON_RUNNER)
   private cronRunner: CronRunner;
 
@@ -84,6 +99,20 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
   private _gc = false;
 
   private controllers: Class[] = [];
+
+  // Microservice transports collected from the transport() config hook
+  private microserviceTransports: Map<string, MicroserviceTransport> = new Map();
+
+  private messagingInterceptors: MessagingInterceptor[] = [];
+
+  // Optional health endpoint (mainly for headless deployments / K8s probes)
+  private _health?: HealthOptions;
+
+  private healthServer?: HealthServer;
+
+  // The Bun server returned by the adapter - exposes the actually bound port, which is
+  // what a caller needs when starting on port 0 or on a unix socket
+  private _httpServer?: bun.Server<any>;
 
   /**
    * @description Lifecycle hook - called after dependencies are injected
@@ -97,29 +126,49 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
   /**
    * @description Start the server
    * Main entry point after factory creation
+   * @param {AsenaStartOptions} options - Optional transport overrides forwarded to the adapter
    * @returns {Promise<void>}
    */
-  public async start(): Promise<void> {
-    this._logger.info(`Adapter: ${green(this._adapter.name)} implemented`);
-    this._adapter.setPort(this._port);
+  public async start(options?: AsenaStartOptions): Promise<void> {
+    await this.resolveAdapter();
+
+    if (this._adapter) {
+      this._logger.info(`Adapter: ${green(this._adapter.name)} implemented`);
+      this._adapter.setPort(this._port);
+    } else {
+      this._logger.info('Headless mode: no HTTP adapter configured');
+      this.warnAdapterlessComponents();
+    }
+
     this._logger.info('All components registered and ready to use');
 
     // Phase 7: Application setup
     this._coreContainer.setPhase(CoreBootstrapPhase.APPLICATION_SETUP);
     await this.prepareConfigs();
+    await this.prepareMicroservices();
     await this.prepareEventService.prepare();
     await this.prepareScheduleService.prepare();
-    await this.initializeControllers();
-    await this.prepareFrontendControllers();
-    await this.prepareWebSocket();
+
+    if (this._adapter) {
+      await this.initializeControllers();
+      await this.prepareFrontendControllers();
+      await this.prepareWebSocket();
+    }
 
     // Phase 8: Server ready
     this._coreContainer.setPhase(CoreBootstrapPhase.SERVER_READY);
 
-    await this._adapter.start();
+    if (this._adapter) {
+      this._httpServer = await this._adapter.start(options);
+    }
 
     // Start scheduled jobs after server is ready
     this.cronRunner.startAll();
+
+    if (this._health) {
+      this.healthServer = new HealthServer(this._health, this._ulak, this._logger);
+      this.healthServer.start();
+    }
 
     if (this._gc) {
       bun.gc(true);
@@ -133,7 +182,11 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
    */
   public async stop(closeActiveConnections = true): Promise<void> {
     this.cronRunner.stopAll();
-    await this._adapter.stop(closeActiveConnections);
+    this.healthServer?.stop();
+    // Adapter first: in-flight HTTP handlers may still call ulak.send(), so
+    // transports must outlive the HTTP surface that uses them
+    await this._adapter?.stop(closeActiveConnections);
+    await this.prepareMicroserviceService.destroy();
   }
 
   /**
@@ -148,11 +201,78 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
   }
 
   /**
+   * @description Configure the optional health endpoint (mainly for headless/K8s probes)
+   * Builder pattern for API compatibility
+   * @param {HealthOptions} options - Health endpoint options
+   * @returns {this}
+   */
+  public health(options: HealthOptions): this {
+    this._health = options;
+    return this;
+  }
+
+  /**
+   * @description Lazily resolve the HTTP adapter if one was registered.
+   * Headless mode (no adapter) is valid - all adapter-dependent steps are skipped.
+   * @returns {Promise<void>}
+   */
+  private async resolveAdapter(): Promise<void> {
+    if (this._adapter) {
+      return;
+    }
+
+    if (this._coreContainer.container.has(ICoreServiceNames.ASENA_ADAPTER)) {
+      this._adapter = await this._coreContainer.resolve<A>(ICoreServiceNames.ASENA_ADAPTER);
+    }
+  }
+
+  /**
+   * @description Warn about HTTP-only components that cannot work without an adapter
+   * @returns {void}
+   */
+  private warnAdapterlessComponents(): void {
+    const httpOnlyTypes = [ComponentType.CONTROLLER, ComponentType.WEBSOCKET, ComponentType.FRONTEND_CONTROLLER];
+
+    const services = this._coreContainer.container.services;
+
+    for (const type of httpOnlyTypes) {
+      const names: string[] = [];
+
+      for (const value of Object.values(services)) {
+        const entries = Array.isArray(value) ? value : [value];
+
+        for (const entry of entries) {
+          if (entry?.Class && getTypedMetadata<boolean>(type, entry.Class)) {
+            names.push(entry.Class.name);
+          }
+        }
+      }
+
+      if (names.length) {
+        this._logger.warn(
+          `Headless mode: ${type} component(s) [${names.join(', ')}] require an HTTP adapter and will be ignored`,
+        );
+      }
+    }
+  }
+
+  /**
    * @description Get current CoreContainer instance
    * @returns {CoreContainer}
    */
   public get coreContainer(): CoreContainer {
     return this._coreContainer;
+  }
+
+  /**
+   * @description The Bun server the adapter is listening on, once start() has run.
+   *
+   * Undefined in headless mode and before start(). Read `httpServer.port` to learn the
+   * actually bound port - the only way to find it out when starting on port 0.
+   * @returns {bun.Server | undefined}
+   */
+  public get httpServer(): bun.Server<any> | undefined {
+    return this._httpServer;
   }
 
   /**
@@ -402,43 +522,77 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
     }
 
     if (typeof configInstance.serveOptions === 'function') {
-      await this._adapter.serveOptions(configInstance.serveOptions.bind(configInstance));
+      if (this._adapter) {
+        await this._adapter.serveOptions(configInstance.serveOptions.bind(configInstance));
+      } else {
+        this._logger.warn('Headless mode: serveOptions() ignored (no HTTP adapter)');
+      }
     }
 
     if (typeof configInstance.onError === 'function') {
-      await this._adapter.onError(configInstance.onError.bind(configInstance));
+      if (this._adapter) {
+        await this._adapter.onError(configInstance.onError.bind(configInstance));
+      } else {
+        this._logger.warn('Headless mode: onError() ignored (no HTTP adapter)');
+      }
     }
 
     // Pattern-based global middleware registration
     if (typeof configInstance.globalMiddlewares === 'function') {
-      const middlewareEntries = await configInstance.globalMiddlewares();
+      if (this._adapter) {
+        const middlewareEntries = await configInstance.globalMiddlewares();
 
-      for (const entry of middlewareEntries) {
-        // Normalize entry to config format (handles backward compatibility)
-        const config = this.normalizeMiddlewareEntry(entry);
+        for (const entry of middlewareEntries) {
+          // Normalize entry to config format (handles backward compatibility)
+          const config = this.normalizeMiddlewareEntry(entry);
 
-        // Prepare middleware instances
-        const preparedMiddlewares = await this.prepareMiddlewares([config.middleware]);
+          // Prepare middleware instances
+          const preparedMiddlewares = await this.prepareMiddlewares([config.middleware]);
 
-        // Register with adapter (pass route config)
-        for (const middleware of preparedMiddlewares) {
-          await this._adapter.use(middleware, config.routes);
+          // Register with adapter (pass route config)
+          for (const middleware of preparedMiddlewares) {
+            await this._adapter.use(middleware, config.routes);
+          }
         }
+      } else {
+        this._logger.warn('Headless mode: globalMiddlewares() ignored (no HTTP adapter)');
       }
     }
 
-    // WebSocket transport configuration
+    // Transport configuration (WebSocket + microservice)
     if (typeof configInstance.transport === 'function') {
-      const transport = await configInstance.transport();
-      const wsAdapter = this._adapter.getWebsocketAdapter();
+      const result = await configInstance.transport();
+      const normalized = await normalizeTransportConfig(result);
 
-      if (wsAdapter) {
-        wsAdapter.transport = transport;
+      if (normalized.websocket) {
+        if (this._adapter) {
+          const wsAdapter = this._adapter.getWebsocketAdapter();
+
+          if (wsAdapter) {
+            wsAdapter.transport = normalized.websocket;
+          }
+        } else {
+          this._logger.warn('Headless mode: websocket transport ignored (no HTTP adapter)');
+        }
       }
+
+      // Microservice part works in BOTH modes - consumed by prepareMicroservices()
+      this.microserviceTransports = normalized.microservices;
+      this.messagingInterceptors = normalized.interceptors;
     }
 
     const name = getOwnTypedMetadata<string>(ComponentConstants.NameKey, configInstance.constructor);
 
     this._logger.info(`Config ${yellow(name)} applied`);
+  }
+
+  /**
+   * @description Prepare microservice message handlers and transports
+   * Runs before the HTTP adapter starts so handlers are live before HTTP goes up.
+   * Also validates that @MessageController components have a configured transport (fail fast).
+   * @returns {Promise<void>}
+   */
+  private async prepareMicroservices(): Promise<void> {
+    await this.prepareMicroserviceService.prepare(this.microserviceTransports, this.messagingInterceptors);
   }
 }

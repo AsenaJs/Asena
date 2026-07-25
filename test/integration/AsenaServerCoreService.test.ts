@@ -52,8 +52,12 @@ describe('AsenaServer Core Service Integration', () => {
 
     // Verify all field injections
     expect(server['_coreContainer']).toBe(coreContainer);
-    expect(server['_adapter']).toBe(mockAdapter);
     expect(server['_logger']).toBe(mockLogger);
+
+    // Adapter is resolved lazily (headless mode support) - not injected eagerly
+    expect(server['_adapter']).toBeUndefined();
+    await server['resolveAdapter']();
+    expect(server['_adapter']).toBe(mockAdapter);
     expect(server['prepareMiddleware']).toBeDefined();
     expect(server['prepareConfigService']).toBeDefined();
     expect(server['prepareWebsocketService']).toBeDefined();

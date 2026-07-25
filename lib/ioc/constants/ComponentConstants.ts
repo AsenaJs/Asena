@@ -16,6 +16,8 @@ export class ComponentConstants {
 
   public static readonly DependencyKey = Symbol('component:dependency');
 
+  public static readonly DependencyClassKey = Symbol('component:dependencyClass');
+
   public static readonly SoftDependencyKey = Symbol('component:softDependency');
 
   public static readonly StrategyKey = Symbol('component:strategy');
@@ -66,4 +68,11 @@ export class ComponentConstants {
   public static readonly EventHandlersKey = Symbol('event:handlers');
 
   public static readonly EventPrefixKey = Symbol('event:prefix');
+
+  // Microservice specific
+  public static readonly MessageHandlersKey = Symbol('microservice:handlers');
+
+  public static readonly MessagePrefixKey = Symbol('microservice:prefix');
+
+  public static readonly MessageTransportKey = Symbol('microservice:transport');
 }

@@ -18,6 +18,11 @@ export interface MockComponentOptions {
   /**
    * Provide custom mocks instead of auto-generated ones (optional)
    *
+   * An override is the FINAL value injected into the field. For expression-based
+   * injections (e.g. @Inject(ulak('/chat'))) the expression is skipped entirely
+   * when the field is overridden. Presence is checked with Object.hasOwn, so
+   * falsy values (0, '', null, undefined) are injected as-is rather than ignored.
+   *
    * @example
    * ```typescript
    * mockComponent(AuthService, {
@@ -81,6 +86,15 @@ export interface FieldMetadata {
    * Service name (from @Inject decorator)
    */
   serviceName: string;
+
+  /**
+   * Class reference the field was injected with.
+   *
+   * Only present for class-based injections (`@Inject(UserService)`). String-based
+   * injections (`@Inject('UserService')`) carry no class reference, so this is
+   * undefined and auto-mocking degrades to an empty object.
+   */
+  serviceClass?: any;
 
   /**
    * Optional expression function for transformation

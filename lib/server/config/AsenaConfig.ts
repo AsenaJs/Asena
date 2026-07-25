@@ -2,6 +2,99 @@ import type { AsenaContext, AsenaServeOptions } from '../../adapter';
 import type { WebSocketTransport } from '../web/websocket';
 
 import type { MiddlewareClass } from '../web/middleware';
+import type { MessagingInterceptor } from '../microservice/types';
+import type { MicroserviceTransport } from '../microservice/MicroserviceTransport';
+import { DEFAULT_TRANSPORT_NAME } from '../microservice/types';
+
+/**
+ * Object form of the transport() hook - configures WebSocket and microservice
+ * transports separately (all fields optional)
+ */
+export interface AsenaTransportConfig {
+  /**
+   * WebSocket transport for cross-pod messaging (same as the bare return form)
+   */
+  websocket?: WebSocketTransport | Promise<WebSocketTransport>;
+
+  /**
+   * Microservice transport(s). A single transport is registered under the
+   * name 'default'; a named map allows multiple brokers in one project
+   * (e.g. part on Redis, part on NATS).
+   *
+   * @example
+   * microservice: new RedisMicroserviceTransport({ ... })
+   * @example
+   * microservice: { default: redisTransport, analytics: natsTransport }
+   */
+  microservice?:
+    | MicroserviceTransport
+    | Record<string, MicroserviceTransport>
+    | Promise<MicroserviceTransport | Record<string, MicroserviceTransport>>;
+
+  /**
+   * Messaging interceptors applied to all microservice transports
+   * (e.g. OpenTelemetry trace propagation)
+   */
+  interceptors?: MessagingInterceptor[];
+}
+
+/**
+ * Normalized result of the transport() hook
+ */
+export interface NormalizedTransportConfig {
+  websocket?: WebSocketTransport;
+  microservices: Map<string, MicroserviceTransport>;
+  interceptors: MessagingInterceptor[];
+}
+
+/**
+ * Normalize the transport() hook result into a single shape.
+ *
+ * - A bare WebSocketTransport (has a publish function) is the legacy form → { websocket }
+ * - An object form is discriminated per field; a single MicroserviceTransport
+ *   (has a send function) becomes the 'default' named transport
+ * - An object with none of the known fields throws (catches accidentally
+ *   returning a bare MicroserviceTransport, which would otherwise be a silent no-op)
+ *
+ * CAVEAT: the legacy detection is duck-typed on `publish`. A custom
+ * MicroserviceTransport that also defines a `publish` method would be
+ * mistaken for a bare WebSocketTransport when returned bare - such
+ * transports must use the explicit `{ microservice: ... }` object form.
+ */
+export async function normalizeTransportConfig(
+  result: WebSocketTransport | AsenaTransportConfig,
+): Promise<NormalizedTransportConfig> {
+  // Legacy form: bare WebSocketTransport (publish is its only required member)
+  if (typeof (result as WebSocketTransport).publish === 'function') {
+    return { websocket: result as WebSocketTransport, microservices: new Map(), interceptors: [] };
+  }
+
+  const config = result as AsenaTransportConfig;
+
+  if (config.websocket === undefined && config.microservice === undefined && config.interceptors === undefined) {
+    throw new Error(
+      'transport() returned an object without websocket/microservice/interceptors fields - return a WebSocketTransport or an AsenaTransportConfig object',
+    );
+  }
+
+  const websocket = config.websocket ? await config.websocket : undefined;
+
+  const microservices = new Map<string, MicroserviceTransport>();
+
+  if (config.microservice) {
+    const resolved = await config.microservice;
+
+    if (typeof (resolved as MicroserviceTransport).send === 'function') {
+      microservices.set(DEFAULT_TRANSPORT_NAME, resolved as MicroserviceTransport);
+    } else {
+      for (const [name, transport] of Object.entries(resolved as Record<string, MicroserviceTransport>)) {
+        microservices.set(name, transport);
+      }
+    }
+  }
+
+  return { websocket, microservices, interceptors: config.interceptors || [] };
+}
 
 /**
  * Route configuration for global middleware
@@ -124,19 +217,46 @@ export interface AsenaConfig<C extends AsenaContext<any, any> = AsenaContext<any
   globalMiddlewares?(): Promise<GlobalMiddlewareEntry[]> | GlobalMiddlewareEntry[];
 
   /**
-   * WebSocket transport for cross-pod messaging.
+   * Transport configuration for cross-pod WebSocket messaging and
+   * microservice messaging.
    *
-   * When not specified, BunLocalTransport is used (single-pod, zero overhead).
-   * For multi-pod deployments, return a custom transport (e.g., RedisTransport).
+   * Two return forms are supported:
+   * 1. Bare WebSocketTransport (legacy, backward compatible) - configures
+   *    only the WebSocket transport. When not specified, BunLocalTransport
+   *    is used (single-pod, zero overhead).
+   * 2. AsenaTransportConfig object - configures WebSocket and microservice
+   *    transports separately, plus messaging interceptors.
    *
    * @example
    * ```typescript
+   * // Legacy form - WebSocket only
    * transport() {
    *   return new RedisTransport(this.redis);
    * }
+   *
+   * // Object form - WebSocket + microservice
+   * transport() {
+   *   return {
+   *     websocket: new RedisTransport(this.redis),
+   *     microservice: new RedisMicroserviceTransport({
+   *       url: 'redis://localhost:6379',
+   *       serviceName: 'order-service',
+   *     }),
+   *   };
+   * }
+   *
+   * // Multiple named microservice transports (multi-broker projects)
+   * transport() {
+   *   return {
+   *     microservice: {
+   *       default: new RedisMicroserviceTransport({ ... }),
+   *       analytics: new NatsMicroserviceTransport({ ... }),
+   *     },
+   *   };
+   * }
    * ```
    */
-  transport?(): WebSocketTransport | Promise<WebSocketTransport>;
+  transport?(): WebSocketTransport | AsenaTransportConfig | Promise<WebSocketTransport | AsenaTransportConfig>;
 }
 
 export type AsenaConfigFunctions = 'onError' | 'serveOptions' | 'globalMiddlewares' | 'transport';

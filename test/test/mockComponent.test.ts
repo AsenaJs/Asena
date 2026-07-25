@@ -1,7 +1,11 @@
 import { describe, expect, mock, test } from 'bun:test';
-import { mockComponent, mockComponentAsync } from '@asenajs/asena/test';
-import { Component } from '@asenajs/asena/decorators';
-import { Inject } from '@asenajs/asena/decorators/ioc';
+// Imported from lib/ (not the @asenajs/asena/test specifier, which resolves to dist/) so a
+// stale build cannot mask a regression. All four must come from the same tree: metadata keys
+// are Symbols created per module instance, so mixing lib/ and dist/ makes them invisible.
+import { createTestUlakStub, mockComponent, mockComponentAsync } from '../../lib/test';
+import { Component } from '../../lib/server/decorators';
+import { Inject } from '../../lib/ioc/component';
+import { ulak, type Ulak } from '../../lib/server/messaging';
 
 @Component()
 class UserService {
@@ -70,6 +74,39 @@ class ServiceWithExpression {
   }
 }
 
+@Component()
+// @ts-ignore
+class StringInjectedService {
+  // A string carries no class reference, so this field cannot be auto-mocked from a shape
+  @Inject('UserService')
+  private userService: UserService;
+
+  public async find(id: string) {
+    return await this.userService.findById(id);
+  }
+}
+
+@Component()
+class StatsService {
+  @Inject(ulak('/stats'))
+  private statsChannel: Ulak.NameSpace<'/stats'>;
+
+  @Inject(UserService)
+  private userService: UserService;
+
+  public async createAnonUser(name: string) {
+    const user = await this.userService.createUser(name, `${name}@example.com`);
+
+    await this.statsChannel.broadcast({ action: 'update', data: { newUser: 1 } });
+
+    return user;
+  }
+
+  public async publishStats(payload: any) {
+    await this.statsChannel.broadcast(payload);
+  }
+}
+
 describe('mockComponent', () => {
   describe('basic functionality', () => {
     test('should create instance with mocked dependencies', () => {
@@ -132,6 +169,64 @@ describe('mockComponent', () => {
     });
   });
 
+  describe('auto-mock from class injections', () => {
+    test('should generate callable method mocks without any overrides', async () => {
+      const { instance, mocks } = mockComponent(AuthService);
+
+      mocks['userService'].createUser.mockResolvedValue({ id: 'user-123', name: 'Ada', email: 'ada@example.com' });
+      mocks['loginService'].login.mockResolvedValue({ token: 'auto-token', userId: 'user-123' });
+
+      const result = await instance.register('Ada', 'ada@example.com', 'password');
+
+      expect(result.user.id).toBe('user-123');
+      expect(result.token).toBe('auto-token');
+      expect(mocks['userService'].createUser).toHaveBeenCalledWith('Ada', 'ada@example.com');
+    });
+
+    test('should mock every method declared on the injected class', () => {
+      const { mocks } = mockComponent(AuthService);
+
+      expect(Object.keys(mocks['userService']).sort()).toEqual(['createUser', 'deleteUser', 'findById']);
+      expect(Object.keys(mocks['loginService']).sort()).toEqual(['login', 'validateToken']);
+    });
+
+    test('should default async methods to resolving null', async () => {
+      const { mocks } = mockComponent(AuthService);
+
+      await expect(mocks['userService'].findById('1')).resolves.toBeNull();
+    });
+
+    test('should auto-mock class injections alongside expression injections', async () => {
+      const { instance, mocks } = mockComponent(StatsService);
+
+      mocks['userService'].createUser.mockResolvedValue({ id: 'anon-1', name: 'anon' });
+
+      const user = await instance.createAnonUser('anon');
+
+      expect(user.id).toBe('anon-1');
+      // the ulak field still goes through the deep-mock branch and stays assertable
+      expect(mocks['statsChannel'].broadcast).toHaveBeenCalledWith({ action: 'update', data: { newUser: 1 } });
+    });
+
+    test('should still fall back to an empty object for string injections', () => {
+      const { mocks } = mockComponent(StringInjectedService);
+
+      expect(mocks['userService']).toEqual({});
+      expect(mocks['userService'].findById).toBeUndefined();
+    });
+
+    test('should let an override win over the auto-generated mock', () => {
+      const customMock = { findById: mock(async () => ({ id: 'custom' })) };
+
+      const { instance, mocks } = mockComponent(PaymentService, {
+        overrides: { userService: customMock },
+      });
+
+      expect(mocks['userService']).toBe(customMock);
+      expect((instance as any).userService).toBe(customMock);
+    });
+  });
+
   describe('options.injections', () => {
     test('should only mock specified fields', () => {
       const { mocks } = mockComponent(AuthService, {
@@ -182,6 +277,110 @@ describe('mockComponent', () => {
       expect(mocks['loginService']).toBe(customMock);
       expect(mocks['userService']).toBeDefined();
       expect(mocks['userService']).not.toBe(customMock);
+    });
+  });
+
+  describe('expression-based injections', () => {
+    test('should not throw for services with ulak() injections', () => {
+      // Regression: previously threw "TypeError: ulak.namespace is not a function"
+      const { instance, mocks } = mockComponent(StatsService);
+
+      expect(instance).toBeInstanceOf(StatsService);
+      expect(mocks['statsChannel']).toBeDefined();
+    });
+
+    test('should auto-mock ulak fields with an assertable deep mock', async () => {
+      const { instance, mocks } = mockComponent(StatsService);
+
+      await instance.publishStats({ action: 'update', data: { newUser: 1 } });
+
+      expect(mocks['statsChannel'].broadcast).toHaveBeenCalledTimes(1);
+      expect(mocks['statsChannel'].broadcast).toHaveBeenCalledWith({ action: 'update', data: { newUser: 1 } });
+    });
+
+    test('should use ulak overrides as-is without applying the expression', async () => {
+      // Regression: previously the expression ran ON TOP of the override
+      const stub = createTestUlakStub('/stats');
+
+      const { instance, mocks } = mockComponent(StatsService, {
+        overrides: {
+          statsChannel: stub,
+          userService: { createUser: mock(async (name: string, email: string) => ({ id: '1', name, email })) },
+        },
+      });
+
+      expect(mocks['statsChannel']).toBe(stub);
+      expect((instance as any).statsChannel).toBe(stub);
+
+      await instance.createAnonUser('John');
+
+      expect(stub.broadcast).toHaveBeenCalledWith({ action: 'update', data: { newUser: 1 } });
+    });
+
+    test('should auto-mock plain expression fields', async () => {
+      const { instance, mocks } = mockComponent(ServiceWithExpression);
+
+      mocks['createUserFn'].mockResolvedValue({ id: '1', name: 'John' });
+
+      const result = await instance.addUser('John', 'john@example.com');
+
+      expect(result).toEqual({ id: '1', name: 'John' });
+      expect(mocks['createUserFn']).toHaveBeenCalledWith('John', 'john@example.com');
+    });
+
+    test('should use overrides as-is for plain expression fields', async () => {
+      const createUserFn = mock(async () => ({ id: '9', name: 'Custom' }));
+
+      const { instance, mocks } = mockComponent(ServiceWithExpression, {
+        overrides: { createUserFn },
+      });
+
+      expect(mocks['createUserFn']).toBe(createUserFn);
+
+      const result = await instance.addUser('John', 'john@example.com');
+
+      expect(result).toEqual({ id: '9', name: 'Custom' });
+    });
+
+    test('should respect the injections filter for expression fields', () => {
+      const { instance: untouched } = mockComponent(StatsService, { injections: [] });
+
+      expect((untouched as any).statsChannel).toBeUndefined();
+
+      const { instance, mocks } = mockComponent(StatsService, { injections: ['statsChannel'] });
+
+      expect(mocks['statsChannel']).toBeDefined();
+      expect(mocks['userService']).toBeUndefined();
+      expect((instance as any).userService).toBeUndefined();
+    });
+  });
+
+  describe('falsy overrides', () => {
+    test('should inject falsy override values as-is', () => {
+      const { instance } = mockComponent(AuthService, {
+        overrides: { userService: null, loginService: '' },
+      });
+
+      expect((instance as any).userService).toBeNull();
+      expect((instance as any).loginService).toBe('');
+    });
+
+    test('should respect explicit undefined overrides', () => {
+      const { instance, mocks } = mockComponent(StatsService, {
+        overrides: { statsChannel: undefined },
+      });
+
+      // Field is present in overrides, so no expression runs and no auto-mock is generated
+      expect((instance as any).statsChannel).toBeUndefined();
+      expect(Object.hasOwn(mocks, 'statsChannel')).toBe(true);
+    });
+
+    test('should not apply expressions to falsy overrides', () => {
+      expect(() => {
+        mockComponent(StatsService, {
+          overrides: { statsChannel: null },
+        });
+      }).not.toThrow();
     });
   });
 

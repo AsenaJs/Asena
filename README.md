@@ -6,7 +6,7 @@
 
 [![Version](https://img.shields.io/badge/version-0.7.1-blue.svg)](https://asena.sh)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
-[![Bun Version](https://img.shields.io/badge/Bun-1.3.11%2B-blueviolet)](https://bun.sh)
+[![Bun Version](https://img.shields.io/badge/Bun-1.3.12%2B-blueviolet)](https://bun.sh)
 
 A high-performance IoC web framework for Bun runtime, bringing Spring Boot's automatic component discovery and field-based dependency injection to TypeScript.
 

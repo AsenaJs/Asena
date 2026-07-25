@@ -83,6 +83,10 @@
       "import": "./dist/lib/server/messaging/index.js",
       "types": "./dist/lib/server/messaging/index.d.ts"
     },
+    "./microservice": {
+      "import": "./dist/lib/server/microservice/index.js",
+      "types": "./dist/lib/server/microservice/index.d.ts"
+    },
     "./event": {
       "import": "./dist/lib/server/event/index.js",
       "types": "./dist/lib/server/event/index.d.ts"
