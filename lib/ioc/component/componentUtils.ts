@@ -2,6 +2,8 @@ import { type ComponentParams, ComponentType, type Dependencies, type Strategies
 import { ComponentConstants } from '../constants';
 import { defineTypedMetadata, getOwnTypedMetadata } from '../../utils/typedMetadata';
 import { Scope } from './Scope';
+import { registerDeclaredComponent } from './componentRegistry';
+import type { Class } from '../../server/types';
 
 export const defineComponent = <T extends ComponentParams>(
   componentType: ComponentType,
@@ -14,6 +16,10 @@ export const defineComponent = <T extends ComponentParams>(
     defineTypedMetadata<boolean>(componentType, true, target);
 
     defineTypedMetadata<boolean>(ComponentConstants.IOCObjectKey, true, target);
+
+    // Records the declaring file too, so components written directly in the entry
+    // file stay discoverable - the scan has to skip that file (see componentRegistry)
+    registerDeclaredComponent(target as Class);
 
     defineTypedMetadata<Scope>(ComponentConstants.ScopeKey, scope, target);
 

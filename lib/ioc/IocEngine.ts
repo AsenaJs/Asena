@@ -14,10 +14,9 @@ import * as path from 'node:path';
 import type { Class } from '../server/types';
 import { ComponentConstants } from './constants';
 import * as process from 'node:process';
-import * as console from 'node:console';
 import { getStrategyClass } from './helper/iocHelper';
 import { getOwnTypedMetadata, getTypedMetadata } from '../utils';
-import { Inject, Scope } from './component';
+import { getComponentsDeclaredIn, Inject, Scope } from './component';
 import { CoreService } from './decorators';
 import { CircularDependencyError } from './CircularDependencyDetector';
 import type { ServerLogger } from '../logger';
@@ -26,6 +25,12 @@ import type { ServerLogger } from '../logger';
  * @description IoC Engine - Manages component registration and dependency injection
  * Core service that handles automatic component discovery and registration
  */
+/**
+ * @description How long a single component file may take to import before the
+ * engine points at it. Only a warning - the import is never cancelled.
+ */
+const DEFAULT_IMPORT_TIMEOUT = 10_000;
+
 @CoreService(ICoreServiceNames.IOC_ENGINE)
 export class IocEngine implements ICoreService {
   public serviceName = 'IocEngine';
@@ -39,6 +44,12 @@ export class IocEngine implements ICoreService {
   private injectables: InjectableComponent[] = [];
 
   private config?: IocConfig;
+
+  /** Entry files kept out of the scan, empty unless the scan actually ran */
+  private entryFiles = new Set<string>();
+
+  /** Entry-declared components that existed by the time the scan ran */
+  private entryComponents = new Set<Class>();
 
   /**
    * @description Set IoC configuration
@@ -91,14 +102,128 @@ export class IocEngine implements ICoreService {
       throw new Error('No components or configuration found');
     }
 
-    const files = getAllFiles(this.config.sourceFolder);
-    const newInjectables = await this.getInjectables(files);
+    const entryFiles = (this.entryFiles = this.resolveEntryFiles());
 
-    this.injectables = [...this.injectables, ...newInjectables];
+    // The entry file must not be imported. While it awaits AsenaServerFactory.create
+    // at module scope it is in the evaluating-async state, so importing it here is a
+    // cyclic dynamic import that can only settle once this scan returns - a deadlock
+    // (Bun >= 1.3.14 follows the spec and waits, older versions short-circuited it).
+    const files = getAllFiles(this.config.sourceFolder).filter((file) => !entryFiles.has(this.toAbsolutePath(file)));
+
+    const scanned = await this.getInjectables(files);
+
+    // Components declared directly in the entry file are still supported: their
+    // decorators ran before the bootstrap call, so they come from the registry
+    // rather than from a module namespace
+    const entryClasses = getComponentsDeclaredIn(entryFiles);
+
+    this.entryComponents = new Set(entryClasses);
+
+    const declaredInEntry = this.processComponents(entryClasses);
+
+    this.injectables = this.dedupeInjectables([...this.injectables, ...scanned, ...declaredInEntry]);
 
     if (!this.injectables.length) {
       throw new Error('No components found');
     }
+  }
+
+  /**
+   * @description Report components that were declared in the entry file *after* the
+   * bootstrap call. Their decorators had not run yet when the scan read the registry,
+   * so they never made it into the container - and without this they would just be
+   * quietly missing at runtime.
+   * @returns {void}
+   */
+  public warnAboutLateEntryComponents(): void {
+    if (!this.entryFiles.size) {
+      return;
+    }
+
+    const late = getComponentsDeclaredIn(this.entryFiles).filter((cls) => !this.entryComponents.has(cls));
+
+    if (!late.length) {
+      return;
+    }
+
+    this.logger.warn(
+      `[IocEngine] ${late.length} component(s) declared after the AsenaServerFactory.create() call were not ` +
+        `registered: ${late.map((cls) => cls.name).join(', ')}. ` +
+        'Move them above the bootstrap call, or into their own file under sourceFolder.',
+    );
+  }
+
+  /**
+   * @description Absolute paths of the files that must be kept out of the scan:
+   * the entry declared in the config, and the module actually being executed.
+   * They are usually the same file, but not always - a project may declare one
+   * `rootFile` and start another, or run without a config at all.
+   * @returns {Set<string>} Resolved absolute entry paths
+   */
+  private resolveEntryFiles(): Set<string> {
+    const entryFiles = new Set<string>();
+
+    if (this.config?.rootFile) {
+      entryFiles.add(path.resolve(process.cwd(), this.config.rootFile));
+    }
+
+    const runningModule = typeof Bun !== 'undefined' ? Bun.main : process.argv[1];
+
+    if (runningModule) {
+      entryFiles.add(path.resolve(runningModule));
+    }
+
+    return entryFiles;
+  }
+
+  /**
+   * @description Resolve a scanned path against the working directory. `getAllFiles`
+   * mirrors the form of the folder it was given, so a `sourceFolder` configured as an
+   * absolute path yields absolute entries that must not be joined onto cwd again.
+   * @param {string} file - Path as returned by the scan
+   * @returns {string} Absolute path
+   */
+  private toAbsolutePath(file: string): string {
+    return path.isAbsolute(file) ? path.normalize(file) : path.resolve(process.cwd(), file);
+  }
+
+  /**
+   * @description Collapse components that arrived from more than one source - a class
+   * re-exported through a barrel file, or one found by both the scan and the registry.
+   *
+   * Deduplication is by class identity, not by name: `Container.register` promotes a
+   * key to an array when the same name is registered twice, which would construct the
+   * component a second time (running @PostConstruct again) and hand every dependent an
+   * array instead of an instance.
+   * @param {InjectableComponent[]} components - Components from every source
+   * @returns {InjectableComponent[]} Components with duplicates removed
+   */
+  private dedupeInjectables(components: InjectableComponent[]): InjectableComponent[] {
+    const seen = new Set<Class>();
+    const byName = new Map<string, Class>();
+    const unique: InjectableComponent[] = [];
+
+    for (const component of components) {
+      if (seen.has(component.Class)) continue;
+
+      seen.add(component.Class);
+
+      const name = getTypedMetadata<string>(ComponentConstants.NameKey, component.Class) || component.Class.name;
+      const claimed = byName.get(name);
+
+      if (claimed && claimed !== component.Class) {
+        this.logger.warn(
+          `[IocEngine] Two different classes resolve to the component name '${name}'. ` +
+            'Only one of them will be registered - give one an explicit name to disambiguate.',
+        );
+      } else {
+        byName.set(name, component.Class);
+      }
+
+      unique.push(component);
+    }
+
+    return unique;
   }
 
   private async validateAndRegisterComponents(injectableClasses: Class[]): Promise<void> {
@@ -136,22 +261,53 @@ export class IocEngine implements ICoreService {
   }
 
   private async importFiles(files: string[]): Promise<any[]> {
+    const timeout = this.config?.importTimeout ?? DEFAULT_IMPORT_TIMEOUT;
+
     const importPromises = files.map(async (file) => {
       try {
-        const filePath = path.join(process.cwd(), file);
-        const module = await import(filePath);
+        const module = await this.importFile(this.toAbsolutePath(file), file, timeout);
 
         return Object.values(module);
       } catch (error) {
-        // Use proper logging instead of console.log
-        console.error(`Failed to import file ${file}:`, error);
-        return [];
+        // A file inside sourceFolder that cannot be imported used to be skipped, which
+        // started the server with that component silently missing - the first symptom
+        // being an injection failure or a vanished route much later
+        this.logger.error(`[IocEngine] Failed to import component file '${file}':`, error);
+
+        throw new Error(`Failed to import component file '${file}'`, { cause: error });
       }
     });
 
     const results = await Promise.all(importPromises);
 
     return results.flat();
+  }
+
+  /**
+   * @description Import a single component file, pointing at it if it takes suspiciously
+   * long. A module whose top-level await never settles would otherwise hang the boot with
+   * no output at all; the import itself is left alone, only reported.
+   * @param {string} filePath - Absolute path to import
+   * @param {string} file - Path as scanned, for the message
+   * @param {number} timeout - Milliseconds before warning, 0 disables
+   * @returns {Promise<any>} The imported module namespace
+   */
+  private async importFile(filePath: string, file: string, timeout: number): Promise<any> {
+    const timer =
+      timeout > 0
+        ? setTimeout(() => {
+            this.logger.warn(
+              `[IocEngine] Import of '${file}' has not settled after ${timeout}ms. ` +
+                'A top-level await in that file that never resolves will hang startup.',
+            );
+          }, timeout)
+        : undefined;
+
+    try {
+      return await import(filePath);
+    } finally {
+      if (timer !== undefined) clearTimeout(timer);
+    }
   }
 
   private processComponents(components: any[]): InjectableComponent[] {
@@ -178,7 +334,7 @@ export class IocEngine implements ICoreService {
         interface: _interface,
       };
     } catch (error) {
-      console.error('Failed to create component object:', error);
+      this.logger.error('[IocEngine] Failed to create component object:', error);
       return null;
     }
   }

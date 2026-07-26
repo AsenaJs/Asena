@@ -6,6 +6,7 @@ import {
   CoreService,
   type ICoreService,
   ICoreServiceNames,
+  type IocEngine,
 } from '../ioc';
 import type {
   ApiParams,
@@ -59,6 +60,9 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
 
   @Inject(ICoreServiceNames.SERVER_LOGGER)
   private _logger!: ServerLogger;
+
+  @Inject(ICoreServiceNames.IOC_ENGINE)
+  private _iocEngine!: IocEngine;
 
   @Inject(ICoreServiceNames.__ULAK__)
   private _ulak!: Ulak;
@@ -139,6 +143,11 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
       this._logger.info('Headless mode: no HTTP adapter configured');
       this.warnAdapterlessComponents();
     }
+
+    // Runs here rather than during the scan: statements between create() and start()
+    // in the entry file have executed by now, so a component declared below the
+    // bootstrap call is visible and can be reported instead of silently missing
+    this._iocEngine.warnAboutLateEntryComponents();
 
     this._logger.info('All components registered and ready to use');
 
