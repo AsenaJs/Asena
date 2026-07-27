@@ -54,11 +54,11 @@ describe('PrepareValidatorService', () => {
   it('should throw error when validator is an array', async () => {
     mockContainer.resolve = mock(() => []);
 
-    expect(service.prepare({} as any)).rejects.toThrow('Validator cannot be array');
+    expect(service.prepare(TestValidator)).rejects.toThrow('Validator cannot be array');
   });
 
   it('should prepare validator with all method handlers', async () => {
-    const result: BaseValidator<any> = await service.prepare({} as any);
+    const result: BaseValidator<any> = await service.prepare(TestValidator);
 
     expect(result).toEqual({
       json: {
@@ -80,7 +80,7 @@ describe('PrepareValidatorService', () => {
 
     mockContainer.resolve = mock(() => mockValidator);
 
-    const result = await service.prepare({} as any);
+    const result = await service.prepare(TestValidator);
 
     expect(result).toHaveProperty('json');
     expect(result).not.toHaveProperty('shouldNotBeHere');
@@ -89,7 +89,7 @@ describe('PrepareValidatorService', () => {
   it('should not include non-function properties', async () => {
     mockContainer.resolve = mock(() => mockValidator);
 
-    const result = await service.prepare({} as any);
+    const result = await service.prepare(TestValidator);
 
     expect(result).toHaveProperty('json');
     expect(result).not.toHaveProperty('asenaIsGoodFrameWork');

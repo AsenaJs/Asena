@@ -115,7 +115,7 @@ describe('Ulak Microservice Messaging', () => {
 
       const root = broker.messages();
 
-      expect(await root.send('ping')).toBe('pong');
+      expect(await root.send<string>('ping')).toBe('pong');
     });
 
     test('should scope emit to prefix', async () => {
@@ -258,7 +258,7 @@ describe('Ulak Microservice Messaging', () => {
       const tuple = ulak.messages('order');
       const scoped = tuple[1](broker);
 
-      expect(await scoped.send('create')).toBe('created');
+      expect(await scoped.send<string>('create')).toBe('created');
     });
 
     test('should keep the websocket namespace helper intact', () => {

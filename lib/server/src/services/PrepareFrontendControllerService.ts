@@ -1,7 +1,7 @@
 import type { Container, ICoreService } from '../../../ioc';
 import { ComponentConstants, ComponentType, CoreService, ICoreServiceNames } from '../../../ioc';
 import { Inject } from '../../../ioc/component';
-import { getOwnTypedMetadata, getTypedMetadata } from '../../../utils';
+import { getChainedTypedMetadata, getOwnTypedMetadata, getTypedMetadata } from '../../../utils';
 import type { PageRoute } from '../../web/decorators/Page';
 import type { Class } from '../../types';
 import * as path from 'node:path';
@@ -44,7 +44,9 @@ export class PrepareFrontendControllerService implements ICoreService {
   }
 
   private async extractHTMLRoutes(controller: Class): Promise<PreparedHTMLRoute[]> {
-    const pageRoutes = getOwnTypedMetadata<PageRoute>(ComponentConstants.PageRoutesKey, controller.constructor) || {};
+    // Chained: @Page writes to the class declaring the method, so pages inherited from a
+    // base controller belong to this one as well (subclass overrides by method name).
+    const pageRoutes = getChainedTypedMetadata<PageRoute>(ComponentConstants.PageRoutesKey, controller.constructor);
 
     const controllerName =
       getTypedMetadata<string>(ComponentConstants.NameKey, controller.constructor) || controller.constructor.name;

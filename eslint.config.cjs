@@ -17,6 +17,8 @@ module.exports = tseslint.config(
   // Global ignores
   {
     ignores: [
+      // Release tooling: outside the tsconfig project, so typed linting cannot see it
+      'scripts/**',
       'dist/**',
       'node_modules/**',
       '*.js',

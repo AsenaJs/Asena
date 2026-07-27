@@ -1,5 +1,167 @@
 # @asenajs/asena
 
+## 0.9.0
+
+### Minor Changes
+
+- Decorators declared on a base class are now inherited by the decorated subclass
+
+  Method-level decorators write their metadata to the class where the method is _declared_, but
+  the readers did not walk the prototype chain. `@Get`/`@Post`/… and `@Page` were read with
+  `getOwnMetadata`, so routes and pages on a base class were never registered — the route simply
+  did not exist, with no error and no log line. `@On`, `@MessagePattern` and `@EventPattern` were
+  read with `getMetadata`, which returns the nearest ancestor's record whole, so a single handler
+  declared on the subclass silently discarded every handler it inherited.
+
+  The rule is now the one Spring (`MethodIntrospector.selectMethods` scans the hierarchy) and
+  JAX-RS §3.6 use, and it has two halves:
+
+  > **What changes the behaviour of a request travels with the route. What says where the route
+  > lives, or what a class is, belongs to the concrete class.**
+
+  **Inherited:** `@Get`/`@Post`/`@Put`/`@Delete`/`@Patch`/`@Options`/`@Head`/`@All`, `@Page`,
+  `@On`, `@MessagePattern`, `@EventPattern`, `@Override`, and a controller's class-level
+  `middlewares`. A subclass overrides an inherited handler **by method name** and keeps the rest.
+
+  **Not inherited:** `@Controller`/`@WebSocket`/`@FrontendController` paths, component names,
+  scopes, event and message prefixes, and the component-type markers.
+
+  The same merge is applied to `extractControllerRouteInfo` — which `@asenajs/asena-openapi` uses
+  to build its schema — and to the `createWebTest` slice harness, so the schema, the tests and the
+  running server all report the same route set.
+
+  ## Breaking changes
+  1. **Routes, pages and handlers on a base class now register.** Decorated methods that were
+     previously dead become live endpoints and subscriptions. An inherited `@EventPattern` opens a
+     real subscription on the configured transport. Each component logs what it inherited at
+     startup.
+  2. **Two methods resolving to the same path now throw** `Duplicate route detected` (the
+     equivalent of Spring's `Ambiguous mapping`) instead of one silently winning. The message names
+     both methods, because with inheritance the other one is usually in a file you are not looking
+     at. Rename the subclass method to match the inherited one to turn the conflict back into an
+     override. The same applies to two controllers extending one route-carrying base and sharing a
+     `@Controller` prefix.
+  3. **A subclass inherits its base's controller-level `middlewares`.** `@Controller` writes that
+     key unconditionally — an empty array when none are declared — so reading it own-only let a
+     subclass shadow its base's guards while still inheriting the base's routes: the route
+     registered, the guard did not. A subclass may add middlewares; it can no longer silently drop
+     an inherited one. To publish routes without a base's guards, move them to an _undecorated_
+     base class.
+  4. **An undecorated subclass of a component is no longer registered**, and the engine now
+     **warns**, naming both classes. Component identity is read own-only. Previously such a class
+     was registered under its _base's_ name, the container promoted the entry to an array, and
+     every `@Inject(Base)` handed out `[Base, Sub]` — failing on first property access, far from
+     the cause. Silently skipping it would have been worse: with `@Schedule` the cron would simply
+     never fire. The same check now also applies to components passed explicitly to
+     `AsenaServerFactory.create({ components: [...] })`, which used to bypass validation entirely.
+  5. **`NotFoundError`, `NOT_FOUND_ERROR` and `isNotFoundError` are removed.** An unmatched route
+     is no longer modelled as an error; see `onNotFound` below.
+  6. **Eight unused `ComponentConstants` keys are removed** (`TypeKey`, `ControllerConfigKey`,
+     `MethodKey`, `RoutePathKey`, `RouteMiddlewaresKey`, `RouteValidatorKey`, `WebSocketPathKey`,
+     `WebSocketMiddlewaresKey`). None had a writer or a reader anywhere in the framework.
+  7. **Two components can no longer share a name.** It is now a startup error naming both classes,
+     where it was a warning on the scan path and nothing at all on the explicit
+     `components: [...]` path. The resolution was silent and arbitrary: both classes survived
+     deduplication, `initializeGraph` then keyed them by name in a `Map`, and whichever came last
+     in scan order overwrote the other. Only the winner was registered — so a route naming the
+     loser ran the winner's handler, and `@Inject(Loser)` returned an instance of the winner:
+
+     ```typescript
+     const makeGuard = (token: string) => {
+       @Middleware()
+       class FactoryGuard extends AsenaMiddlewareService {
+         /* … */
+       }
+       return FactoryGuard;
+     };
+     const ReadGuard = makeGuard('read'); // both classes are named 'FactoryGuard',
+     const AdminGuard = makeGuard('admin'); // and nothing in the source looks duplicated
+     ```
+
+     A component name is an identity, so two classes claiming one is a conflict rather than a
+     preference — the same reasoning as `Duplicate route detected`, one layer down. Give one of
+     them an explicit name (`@Service({ name: '…' })`) to resolve it. Listing the same class twice
+     is still deduplicated, not rejected.
+
+  8. **A middleware or validator that is not itself a component now fails at startup**, naming the
+     class, instead of resolving to its base class. `PrepareMiddlewareService` and
+     `PrepareValidatorService` looked the component name up off the prototype chain, so an
+     _undecorated_ subclass — no longer registered under the own-only identity rule above —
+     resolved to its **ancestor's** name and the ancestor's handler ran in its place:
+
+     ```typescript
+     @Middleware() class ReadGuard extends MiddlewareService { /* permissive */ }
+     class AdminGuard extends ReadGuard { /* strict */ }        // @Middleware() forgotten
+
+     @Delete({ path: '/:id', middlewares: [AdminGuard] })       // ran ReadGuard, answered 200
+     ```
+
+     The route registered, the request was authorized by the **weaker** guard, and nothing was
+     logged: the undecorated-subclass warning above only fires for classes the scan sees, and a
+     guard used solely from a `middlewares` array is usually not exported. The same applied to
+     validators, where the permissive base schema silently replaced the stricter one. Both now
+     throw, and `defineMiddleware` records the soft dependency under the class's own name.
+
+     Deleting the decorator used to be caught — 0.8.1 refused to boot with a spurious
+     `Circular dependency detected`, because the subclass registered under its base's name and
+     `getDependencies` turned that into a self-edge. Fixing that self-edge is what turned a noisy
+     boot failure into a silent one, so this is a regression introduced _within_ this release, not
+     a pre-existing hazard.
+
+  ## New: `AsenaConfig.onNotFound(context, request)`
+
+  `onError` is for errors your code threw. `onNotFound` is for requests that matched no route — a
+  routing outcome, not a failure — so neither handler has to ask which it is looking at:
+
+  ```typescript
+  public onNotFound(context: Context, request: NotFoundRequest) {
+    return context.send({ title: 'Not Found', status: 404, instance: request.path }, 404);
+  }
+  ```
+
+  `request.path` and `request.method` are normalised by the adapter, so the same body works on
+  either one. With no handler declared, both adapters answer `{"error":"Not Found"}` with a 404.
+  `AsenaAdapter.onNotFound` is optional, and the server warns at startup when a config declares
+  the hook but the adapter in use cannot honour it.
+
+  ## New: `isHttpException()` and the `HTTP_EXCEPTION` brand
+
+  `ValidationError` was branded from the start; the base class users actually throw was not. With
+  two resolved copies of an adapter, `error instanceof HttpException` answers false and every
+  deliberate 401/403/404 collapses to a generic 500 — silently, because the API still responds.
+
+  ## Other fixes
+  - `@MessagePattern` now throws when two handlers resolve to the same pattern on the same
+    transport — request/response has no way to decide which one replies. `@EventPattern` and `@On`
+    are exempt, where several handlers on one pattern is fan-out.
+  - `IocEngine.getDependencies` no longer reports a circular dependency when a component's parent
+    class resolves to the component's own registered name. A decorator that returns a subclass of
+    the class it decorates (`@Repository`, `@Database`, `@Redis`, `@Kafka`) made every such
+    component depend on itself.
+  - `IocEngine.getStrategyDependencies` recursed on `parentClass.constructor`, which for a class is
+    always `Function`, so a `@Strategy` field declared on a base class was missing from the
+    dependency graph and the component resolved before its implementations were registered.
+  - `Container.injectStrategies` guarded on the _existence_ of an own property descriptor while
+    `injectDependencies` guards on its _value_. A base class's `@Strategy` won over the subclass's
+    override, and under `useDefineForClassFields` (the default at ES2022+) an initializer-less
+    field was never injected at all — invisible when running under Bun, which uses Set semantics.
+  - `defineMiddleware` read the soft-dependency record off `target.constructor` while writing it to
+    `target`, so each call overwrote the previous one and route-level middlewares never made it
+    into the dependency graph.
+  - `mockFactory` detected methods on the own prototype only, so a service inheriting from a base
+    class was mocked without them and slice tests failed inside the harness with
+    `… is not a function`.
+  - `hasInjectedFields`, `getFieldServiceName` and `getFieldExpression` in the test metadata
+    helpers read record-shaped metadata with `getMetadata`, which the `{}` seed written by
+    `defineComponent` guaranteed would shadow the base class's record.
+  - The headless-mode startup warning read the component-type marker off the chain — the only
+    reader in the framework that still did — so a `@Service` extending a `@Controller` was listed
+    as an HTTP-only component that "will be ignored", while being registered and working normally.
+
+  **New exports:** `getChainedTypedMetadata`, `getChainedTypedMetadataList`, `getPrototypeChainOf`
+  from `@asenajs/asena/utils`; `NotFoundHandler`, `NotFoundRequest`, `HTTP_EXCEPTION`,
+  `HttpExceptionLike`, `isHttpException` from `@asenajs/asena/adapter`.
+
 ## 0.8.1
 
 ### Patch Changes

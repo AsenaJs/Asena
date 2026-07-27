@@ -4,50 +4,25 @@ import { defineTypedMetadata, getTypedMetadata } from '../../lib/utils/typedMeta
 import { Service } from '../../lib/server/decorators';
 
 describe('Symbol Keys Security', () => {
-  test('should have unique Symbol keys', () => {
-    const key1 = ComponentConstants.NameKey;
-    const key2 = ComponentConstants.TypeKey;
-    const key3 = ComponentConstants.ScopeKey;
+  // Enumerated rather than listed by hand. The hand-written list had drifted: it named eight
+  // keys no decorator wrote and no reader read, and it silently omitted every key added since
+  // it was written. Reading the class means a new key is covered the moment it exists.
+  const allKeys = Object.getOwnPropertyNames(ComponentConstants)
+    .filter((name) => !['length', 'name', 'prototype'].includes(name))
+    .map((name) => [name, (ComponentConstants as any)[name]] as const);
 
-    expect(typeof key1).toBe('symbol');
-    expect(typeof key2).toBe('symbol');
-    expect(typeof key3).toBe('symbol');
-    expect(key1).not.toBe(key2);
-    expect(key2).not.toBe(key3);
-    expect(key1).not.toBe(key3);
+  test('should have unique Symbol keys', () => {
+    const values = allKeys.map(([, value]) => value);
+
+    expect(new Set(values).size).toBe(values.length);
   });
 
   test('all ComponentConstants keys should be Symbols', () => {
-    const keys = [
-      ComponentConstants.NameKey,
-      ComponentConstants.TypeKey,
-      ComponentConstants.ScopeKey,
-      ComponentConstants.PathKey,
-      ComponentConstants.InterfaceKey,
-      ComponentConstants.DependencyKey,
-      ComponentConstants.SoftDependencyKey,
-      ComponentConstants.StrategyKey,
-      ComponentConstants.ExpressionKey,
-      ComponentConstants.PostConstructKey,
-      ComponentConstants.OverrideKey,
-      ComponentConstants.IOCObjectKey,
-      ComponentConstants.CronKey,
-      ComponentConstants.ControllerConfigKey,
-      ComponentConstants.RouteKey,
-      ComponentConstants.MiddlewaresKey,
-      ComponentConstants.ValidatorKey,
-      ComponentConstants.MethodKey,
-      ComponentConstants.RoutePathKey,
-      ComponentConstants.RouteMiddlewaresKey,
-      ComponentConstants.RouteValidatorKey,
-      ComponentConstants.WebSocketPathKey,
-      ComponentConstants.WebSocketMiddlewaresKey,
-      ComponentConstants.StaticServeRootKey,
-    ];
+    expect(allKeys.length).toBeGreaterThan(0);
 
-    keys.forEach((key) => {
-      expect(typeof key).toBe('symbol');
-    });
+    for (const [name, value] of allKeys) {
+      expect(typeof value, `${name} must be a Symbol, not a string key`).toBe('symbol');
+    }
   });
 
   test('should prevent external manipulation with string keys', () => {

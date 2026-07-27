@@ -170,14 +170,18 @@ export class Container {
   private filterServices(typeOfComponent: ComponentType) {
     return Object.entries(this._services)
       .filter(([, value]) => {
+        // Own-only, matching `metadataExtractor.isController` and friends. Walking the chain
+        // here meant a @Service extending a @Controller answered true for CONTROLLER, so it was
+        // resolved as one - and since PathKey is own-only it mounted its inherited routes at the
+        // server root.
         if (Array.isArray(value)) {
           // check every element in the array is the same type
           return value.every((service) => {
-            return getTypedMetadata(typeOfComponent, service.Class);
+            return getOwnTypedMetadata(typeOfComponent, service.Class);
           });
         }
 
-        return getTypedMetadata(typeOfComponent, value.Class);
+        return getOwnTypedMetadata(typeOfComponent, value.Class);
       })
       .map(([, value]) => value);
   }
@@ -279,7 +283,15 @@ export class Container {
           throw new Error('interfaceName must be a string');
         }
 
-        if (Object.getOwnPropertyDescriptor(newInstance, propertyKey)) continue;
+        // Same guard shape as injectDependencies, deliberately. Testing for the *descriptor*
+        // broke two ways: the chain runs ancestors-first, so a base class's accessor made the
+        // subclass's @Strategy override look "already set" and it was skipped; and under
+        // `useDefineForClassFields` (the default at ES2022+) an initializer-less field is an
+        // own property `= undefined` at construction, so the strategy was never injected at
+        // all. Bun's transpiler uses Set semantics, which is why running from source hides it.
+        const strategyProperty = Object.getOwnPropertyDescriptor(newInstance, propertyKey);
+
+        if (strategyProperty?.value !== undefined) continue;
 
         const strategy: Class[] = await this.resolveStrategy<Class>(interfaceName);
 
@@ -357,6 +369,17 @@ export class Container {
     return Boolean(isCoreService);
   }
 
+  /**
+   * Deliberately NOT `getPrototypeChainOf` from utils, even though the two overlap.
+   *
+   * This walk carries two rules the generic helper does not: it bails out at a class whose
+   * source reads `[native code]` (so injection never tries to walk into a built-in or a bound
+   * constructor), with an escape hatch for `@CoreService` classes, and it returns leaf-first
+   * because every caller here reverses it themselves.
+   *
+   * The generic helper is the right reader for decorator metadata; this one guards instance
+   * construction. Merging them would mean picking one set of stop conditions for both.
+   */
   private getPrototypeChain(Class: any): any[] {
     const chain: any[] = [];
     let currentClass = Class;

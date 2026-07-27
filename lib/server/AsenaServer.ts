@@ -20,10 +20,15 @@ import type {
 } from '../adapter';
 import * as path from 'node:path';
 import type { MiddlewareClass, ValidatorClass } from './web/middleware';
-import { ComponentConstants } from '../ioc/constants';
+import { ComponentConstants } from '../ioc';
 import * as bun from 'bun';
 import { blue, green, type ServerLogger, yellow } from '../logger';
-import { getOwnTypedMetadata, getTypedMetadata } from '../utils/typedMetadata';
+import {
+  getChainedTypedMetadata,
+  getChainedTypedMetadataList,
+  getOwnTypedMetadata,
+  getTypedMetadata,
+} from '../utils/typedMetadata';
 import type { PrepareMiddlewareService } from './src/services/PrepareMiddlewareService';
 import type { PrepareConfigService } from './src/services/PrepareConfigService';
 import type { PrepareWebsocketService } from './src/services/PrepareWebsocketService';
@@ -31,17 +36,17 @@ import type { PrepareValidatorService } from './src/services/PrepareValidatorSer
 import type { PrepareStaticServeConfigService } from './src/services/PrepareStaticServeConfigService';
 import type { PrepareFrontendControllerService } from './src/services/PrepareFrontendControllerService';
 import { Inject, PostConstruct } from '../ioc/component';
-import type { GlobalMiddlewareConfig, GlobalMiddlewareEntry } from './config/AsenaConfig';
-import { normalizeTransportConfig } from './config/AsenaConfig';
-import type { Ulak } from './messaging/Ulak';
+import type { GlobalMiddlewareConfig, GlobalMiddlewareEntry } from './config';
+import { ASENA_CONFIG_FUNCTIONS, ASENA_CONFIG_HOOK_ALIASES, normalizeTransportConfig } from './config/AsenaConfig';
+import type { Ulak } from './messaging';
 import type { HealthOptions } from './AsenaServerFactory';
-import { HealthServer } from './health/HealthServer';
+import { HealthServer } from './health';
 import type { PrepareEventService } from './src/services/PrepareEventService';
 import type { PrepareScheduleService } from './src/services/PrepareScheduleService';
 import type { PrepareMicroserviceService } from './src/services/PrepareMicroserviceService';
-import type { CronRunner } from './schedule/CronRunner';
-import type { MessagingInterceptor } from './microservice/types';
-import type { MicroserviceTransport } from './microservice/MicroserviceTransport';
+import type { CronRunner } from './schedule';
+import type { MessagingInterceptor } from './microservice';
+import type { MicroserviceTransport } from './microservice';
 
 /**
  * @description AsenaServer - Main server class for Asena framework
@@ -251,7 +256,10 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
         const entries = Array.isArray(value) ? value : [value];
 
         for (const entry of entries) {
-          if (entry?.Class && getTypedMetadata<boolean>(type, entry.Class)) {
+          // Own-only, like every other component-type read in the framework. Off the chain a
+          // @Service extending a @Controller was named here as an HTTP-only component that would
+          // "be ignored" - while being registered and working perfectly.
+          if (entry?.Class && getOwnTypedMetadata<boolean>(type, entry.Class)) {
             names.push(entry.Class.name);
           }
         }
@@ -294,9 +302,17 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
     const registeredRoutes = new Map<string, { controllerName: string; handlerName: string }>();
 
     for (const controller of this.controllers) {
-      const routes = getOwnTypedMetadata<Route>(ComponentConstants.RouteKey, controller.constructor) || {};
+      // Chained: a @Get declared on a base class is written to that base class, so reading
+      // own metadata only would drop it. Merged ancestors-first, so a subclass overrides an
+      // inherited route by method name.
+      const routes = getChainedTypedMetadata<Route>(ComponentConstants.RouteKey, controller.constructor);
 
+      // PathKey stays own-only on purpose: it is written by @Controller onto the class it
+      // decorates, which is always the concrete subclass, so inherited routes correctly pick
+      // up the subclass's prefix.
       const routePath: string = getOwnTypedMetadata<string>(ComponentConstants.PathKey, controller.constructor) || '';
+
+      this.logInheritedRoutes(controller, routes);
 
       await this.prepareTopMiddlewares({ controller, routePath });
 
@@ -322,6 +338,30 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
         });
       }
     }
+  }
+
+  /**
+   * @description Report routes a controller picked up from its base classes
+   *
+   * Inheriting routes is supported, but it is invisible in the source of the controller you
+   * are looking at - so the resolved set is logged once per controller. Silent when the
+   * controller declares everything itself, which is the common case.
+   * @param {any} controller - The resolved controller instance
+   * @param {Route} routes - The merged route map for that controller
+   * @returns {void}
+   */
+  private logInheritedRoutes(controller: any, routes: Route): void {
+    const ownRoutes = getOwnTypedMetadata<Route>(ComponentConstants.RouteKey, controller.constructor) || {};
+    const inherited = Object.keys(routes).filter((handlerName) => !(handlerName in ownRoutes));
+
+    if (inherited.length === 0) {
+      return;
+    }
+
+    const controllerName =
+      getTypedMetadata<string>(ComponentConstants.NameKey, controller.constructor) || controller.constructor.name;
+
+    this._logger.info(`Controller ${yellow(controllerName)} inherits routes: ${inherited.join(', ')}`);
   }
 
   /**
@@ -411,8 +451,14 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
     { controller, routePath }: PrepareMiddlewareParams,
     websocket = false,
   ): Promise<BaseMiddleware[]> {
-    const topMiddlewares =
-      getTypedMetadata<MiddlewareClass[]>(ComponentConstants.MiddlewaresKey, controller.constructor) || [];
+    // Unioned across the chain, not read own-only. @Controller always writes this key - an
+    // empty array when no middlewares are declared - so a subclass would otherwise shadow its
+    // base's guards while still inheriting the base's routes: the route registers, the guard
+    // does not. A subclass may add middlewares; it can never silently drop an inherited one.
+    const topMiddlewares = getChainedTypedMetadataList<MiddlewareClass>(
+      ComponentConstants.MiddlewaresKey,
+      controller.constructor,
+    );
 
     const middlewares = await this.prepareMiddlewares(topMiddlewares);
 
@@ -486,7 +532,11 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
     }
 
     for (const websocket of websockets) {
-      const path = getTypedMetadata<string>(ComponentConstants.PathKey, websocket.constructor);
+      // Own-only, to agree with PrepareWebsocketService, which reads the same key off the same
+      // class four lines earlier in the boot. When the two disagreed the halves desynced: the
+      // route mounted at the base's path while `namespace` stayed undefined, so the adapter
+      // rejected it with a message pointing at a class the user never wrote.
+      const path = getOwnTypedMetadata<string>(ComponentConstants.PathKey, websocket.constructor);
       const middlewares = await this.prepareTopMiddlewares({ controller: websocket as unknown as Class }, true);
 
       await this._adapter.registerWebsocketRoute({
@@ -519,6 +569,38 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
   }
 
   /**
+   * @description Warn about @Config members the framework will never read
+   *
+   * Hooks are looked up reflectively, so a member with the right intent but the wrong name
+   * or shape is a silent no-op: the server starts, logs nothing, and the middleware or
+   * handler simply never runs. Type checking cannot catch either case - an extra property
+   * on a subclass is always legal - so they are reported here instead.
+   * @param {object} configInstance - The resolved @Config instance
+   * @returns {void}
+   */
+  private warnOnIgnoredConfigMembers(configInstance: object): void {
+    const members = configInstance as Record<string, unknown>;
+
+    for (const [alias, hook] of Object.entries(ASENA_CONFIG_HOOK_ALIASES)) {
+      if (Array.isArray(members[alias])) {
+        this._logger.warn(
+          `Config has a '${alias}' property, but only ${hook}() is read - move it to ${hook}() { return [...]; } or it will never be applied`,
+        );
+      }
+    }
+
+    for (const hook of ASENA_CONFIG_FUNCTIONS) {
+      const value = members[hook];
+
+      if (value !== undefined && typeof value !== 'function') {
+        this._logger.warn(
+          `Config '${hook}' is a ${typeof value}, not a method - it is ignored. Declare it as ${hook}() { ... }`,
+        );
+      }
+    }
+  }
+
+  /**
    * @description Prepare and apply configuration
    * Updated to support pattern-based global middlewares
    * @returns {Promise<void>}
@@ -529,6 +611,8 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
     if (!configInstance) {
       return;
     }
+
+    this.warnOnIgnoredConfigMembers(configInstance);
 
     if (typeof configInstance.serveOptions === 'function') {
       if (this._adapter) {
@@ -543,6 +627,21 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
         await this._adapter.onError(configInstance.onError.bind(configInstance));
       } else {
         this._logger.warn('Headless mode: onError() ignored (no HTTP adapter)');
+      }
+    }
+
+    if (typeof configInstance.onNotFound === 'function') {
+      if (!this._adapter) {
+        this._logger.warn('Headless mode: onNotFound() ignored (no HTTP adapter)');
+      } else if (typeof this._adapter.onNotFound !== 'function') {
+        // The hook is optional on AsenaAdapter so third-party adapters keep compiling. Say so
+        // rather than letting a declared handler silently never run.
+        this._logger.warn(
+          `Config declares onNotFound(), but adapter '${this._adapter.name}' does not support it - ` +
+            'unmatched routes will use the adapter default',
+        );
+      } else {
+        await this._adapter.onNotFound(configInstance.onNotFound.bind(configInstance));
       }
     }
 

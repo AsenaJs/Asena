@@ -2,7 +2,12 @@ import type { AsenaAdapter, Route } from '../../adapter';
 import { ComponentConstants, ComponentType, ICoreServiceNames } from '../../ioc';
 import type { Class } from '../../server/types';
 import type { MiddlewareClass } from '../../server/web/middleware';
-import { getOwnTypedMetadata, getTypedMetadata } from '../../utils';
+import {
+  getChainedTypedMetadata,
+  getChainedTypedMetadataList,
+  getOwnTypedMetadata,
+  getTypedMetadata,
+} from '../../utils';
 import { createMockFromClass } from '../factory/mockFactory';
 import { discoverInjectedFieldsFromClass } from '../metadata/discovery';
 import { createTestApp } from './createTestApp';
@@ -31,23 +36,30 @@ function collectWebLayer(controllers: Class[]): Set<Class> {
   const webLayer = new Set<Class>(controllers);
 
   for (const controller of controllers) {
-    for (const middleware of getTypedMetadata<MiddlewareClass[]>(ComponentConstants.MiddlewaresKey, controller) || []) {
-      webLayer.add(middleware as unknown as Class);
+    // Chained union, matching AsenaServer.prepareTopMiddlewares - otherwise a slice test would
+    // boot without a base class's guards and report green on an unguarded route.
+    for (const middleware of getChainedTypedMetadataList<MiddlewareClass>(
+      ComponentConstants.MiddlewaresKey,
+      controller,
+    )) {
+      webLayer.add(middleware);
     }
 
-    const routes = getOwnTypedMetadata<Route>(ComponentConstants.RouteKey, controller) || {};
+    // Chained, to match what AsenaServer will register: an inherited route's middleware and
+    // validator have to reach the container too, or the slice boot throws on them.
+    const routes = getChainedTypedMetadata<Route>(ComponentConstants.RouteKey, controller);
 
     for (const params of Object.values(routes)) {
       for (const middleware of params.middlewares || []) {
-        webLayer.add(middleware as unknown as Class);
+        webLayer.add(middleware);
       }
 
       if (params.validator) {
-        webLayer.add(params.validator as unknown as Class);
+        webLayer.add(params.validator);
       }
 
       if (params.staticServe) {
-        webLayer.add(params.staticServe as unknown as Class);
+        webLayer.add(params.staticServe);
       }
     }
   }
@@ -92,7 +104,7 @@ export async function createWebTest<A extends AsenaAdapter<any, any> = AsenaAdap
   }
 
   for (const controller of controllerList) {
-    if (typeof controller !== 'function' || !getTypedMetadata(ComponentType.CONTROLLER, controller)) {
+    if (typeof controller !== 'function' || !getOwnTypedMetadata(ComponentType.CONTROLLER, controller)) {
       throw new Error(
         `createWebTest expects @Controller classes, but received '${(controller as any)?.name ?? typeof controller}'. ` +
           'Pass services and middlewares through `components` instead.',

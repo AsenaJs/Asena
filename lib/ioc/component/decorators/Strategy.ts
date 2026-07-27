@@ -15,8 +15,6 @@ export const Strategy = (Injection: Class | string, expression?: (injectedClass)
     const strategies: Strategies =
       getOwnTypedMetadata<Strategies>(ComponentConstants.StrategyKey, target.constructor) || {};
 
-    defineTypedMetadata<Class | string>('design:type', Injection, target.constructor, propertyKey);
-
     const injectionName =
       typeof Injection === 'string' ? Injection : getTypedMetadata<string>(ComponentConstants.NameKey, Injection);
 

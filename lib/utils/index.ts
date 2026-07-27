@@ -1,5 +1,12 @@
 export { matchesPattern, shouldApplyMiddleware } from './patternMatcher';
-export { getTypedMetadata, getOwnTypedMetadata, defineTypedMetadata } from './typedMetadata';
+export {
+  getTypedMetadata,
+  getOwnTypedMetadata,
+  getChainedTypedMetadata,
+  getChainedTypedMetadataList,
+  getPrototypeChainOf,
+  defineTypedMetadata,
+} from './typedMetadata';
 export {
   extractControllerRouteInfo,
   extractComponentName,

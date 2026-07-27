@@ -35,13 +35,15 @@ describe('UlakError', () => {
   });
 
   describe('error codes', () => {
+    // expect<string>: these assertions pin the enum members' *runtime* strings, which is
+    // exactly the comparison TypeScript refuses between an enum member and a string literal.
     test('should have all expected error codes', () => {
-      expect(UlakErrorCode.NAMESPACE_NOT_FOUND).toBe('NAMESPACE_NOT_FOUND');
-      expect(UlakErrorCode.SOCKET_NOT_FOUND).toBe('SOCKET_NOT_FOUND');
-      expect(UlakErrorCode.BROADCAST_FAILED).toBe('BROADCAST_FAILED');
-      expect(UlakErrorCode.SEND_FAILED).toBe('SEND_FAILED');
-      expect(UlakErrorCode.INVALID_NAMESPACE).toBe('INVALID_NAMESPACE');
-      expect(UlakErrorCode.SERVICE_NOT_INITIALIZED).toBe('SERVICE_NOT_INITIALIZED');
+      expect<string>(UlakErrorCode.NAMESPACE_NOT_FOUND).toBe('NAMESPACE_NOT_FOUND');
+      expect<string>(UlakErrorCode.SOCKET_NOT_FOUND).toBe('SOCKET_NOT_FOUND');
+      expect<string>(UlakErrorCode.BROADCAST_FAILED).toBe('BROADCAST_FAILED');
+      expect<string>(UlakErrorCode.SEND_FAILED).toBe('SEND_FAILED');
+      expect<string>(UlakErrorCode.INVALID_NAMESPACE).toBe('INVALID_NAMESPACE');
+      expect<string>(UlakErrorCode.SERVICE_NOT_INITIALIZED).toBe('SERVICE_NOT_INITIALIZED');
     });
 
     test('should use correct error codes for different scenarios', () => {

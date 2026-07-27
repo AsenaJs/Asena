@@ -60,7 +60,7 @@ describe('PrepareMicroserviceService', () => {
       await prepareService.prepare(transports());
 
       // Message pattern gets the prefix
-      expect(await transport.send('order.create', {})).toBe('ok');
+      expect(await transport.send<string>('order.create', {})).toBe('ok');
 
       // Event pattern gets the prefix too
       await transport.emit('order.payment.completed', {});
@@ -107,7 +107,7 @@ describe('PrepareMicroserviceService', () => {
 
       await prepareService.prepare(transports());
 
-      expect(await transport.send('ping')).toBe('pong');
+      expect(await transport.send<string>('ping')).toBe('pong');
       await expect(transport.send('order.ping')).rejects.toThrow(/No message handler/);
     });
 
@@ -244,7 +244,7 @@ describe('PrepareMicroserviceService', () => {
 
       await prepareService.prepare(transports());
 
-      expect(await transport.send('ping')).toBe('pong');
+      expect(await transport.send<string>('ping')).toBe('pong');
     });
 
     test('should skip handlers marked with skip', async () => {
@@ -278,7 +278,7 @@ describe('PrepareMicroserviceService', () => {
 
       await prepareService.prepare(transports());
 
-      expect(await transport.send('order.state')).toBe('instance-state');
+      expect(await transport.send<string>('order.state')).toBe('instance-state');
     });
 
     test('should wire Ulak with the transports', async () => {
@@ -294,7 +294,7 @@ describe('PrepareMicroserviceService', () => {
 
       await prepareService.prepare(transports());
 
-      expect(await broker.send('ping')).toBe('pong');
+      expect(await broker.send<string>('ping')).toBe('pong');
       expect(broker.isMicroserviceConnected()).toBe(true);
     });
   });
@@ -370,7 +370,7 @@ describe('PrepareMicroserviceService', () => {
 
       await prepareService.prepare(transports({ [DEFAULT_TRANSPORT_NAME]: transport, analytics }));
 
-      expect(await analytics.send('metrics.query')).toBe('analytics-result');
+      expect(await analytics.send<string>('metrics.query')).toBe('analytics-result');
       await expect(transport.send('metrics.query')).rejects.toThrow(/No message handler/);
     });
 
@@ -429,7 +429,7 @@ describe('PrepareMicroserviceService', () => {
 
       await prepareService.prepare(transports());
 
-      expect(await broker.send('remote.echo', 'hello')).toBe('hello');
+      expect(await broker.send<string>('remote.echo', 'hello')).toBe('hello');
     });
   });
 
@@ -462,7 +462,7 @@ describe('PrepareMicroserviceService', () => {
 
       await prepareService.prepare(transports(), [interceptor]);
 
-      expect(await transport.send('order.create')).toBe('ok');
+      expect(await transport.send<string>('order.create')).toBe('ok');
       expect(order).toEqual(['before:order.create', 'handler', 'after:order.create']);
     });
   });

@@ -1,0 +1,50 @@
+{
+  // Type-checks the whole package INCLUDING test/, which tsconfig.json excludes
+  // because it is the build config and must not emit test files into dist/.
+  //
+  // Why this file exists: `bun test` transpiles without type-checking, so before
+  // this config nothing ever type-checked test/. A test could reference a symbol
+  // the source had already deleted, get `undefined` back, and still pass - which
+  // is exactly how two SymbolSecurity.test.ts cases went on asserting nothing
+  // through a whole release cycle.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    // Check only. `build` (tsc -p tsconfig.json) still owns dist/.
+    "noEmit": true,
+    "declaration": false,
+    "sourceMap": false,
+
+    // --- Relaxations, test-tree only. The build config keeps all of these on. ---
+
+    // Tests declare classes and fields for no reason other than to run a decorator
+    // over them (@Inject, @Service, @MessagePattern), and take callback parameters
+    // they do not use in order to match a framework signature. Both are correct test
+    // code and neither says anything about whether an API still exists. Left on they
+    // produce 41 reports here and bury the errors this config is for.
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+
+    // Route tables, container service maps and metadata records are all
+    // `{ [key: string]: T }`. Tests read them with dot access (`routes.handleAll`).
+    // Requiring bracket access is a style preference; a property that no longer
+    // exists is reported as TS2339 either way, which is the signal we want.
+    "noPropertyAccessFromIndexSignature": false,
+
+    // Set semantics, not define semantics. Two reasons, and neither is cosmetic:
+    //
+    // 1. It is what these tests actually execute under. `bun test` runs the tree from
+    //    source through Bun's transpiler, which uses Set semantics for class fields.
+    //    Type-checking under define semantics would be checking a different program.
+    // 2. AsenaJS's documented inheritance idiom is a subclass redeclaring a decorated
+    //    field - `@Strategy('Loud') public override greeters: any[]` over a base
+    //    `@Strategy('Quiet') greeters`. Under define semantics TS reports every one of
+    //    those as TS2612 "will overwrite the base property". The overwrite is the point,
+    //    and the container assigns those fields after construction anyway. The
+    //    alternative TS offers - a `declare` modifier - would stop the test from
+    //    modelling the code a user actually writes, so the tests are left as they are
+    //    and the option is set to match the runtime instead.
+    "useDefineForClassFields": false
+  },
+  "include": ["index.ts", "lib/**/*.ts", "test/**/*.ts"],
+  "exclude": ["node_modules", "dist"]
+}

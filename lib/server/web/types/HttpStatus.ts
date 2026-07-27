@@ -76,11 +76,7 @@ export enum ServerErrorStatusCode {
 }
 
 export type HttpStatusCode =
-  | InfoStatusCode
-  | SuccessStatusCode
-  | RedirectStatusCode
-  | ClientErrorStatusCode
-  | ServerErrorStatusCode;
+  InfoStatusCode | SuccessStatusCode | RedirectStatusCode | ClientErrorStatusCode | ServerErrorStatusCode;
 
 // Type-safe status code helpers
 export const isInformational = (status: number): status is InfoStatusCode => status >= 100 && status < 200;

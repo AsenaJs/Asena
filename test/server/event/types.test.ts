@@ -81,11 +81,13 @@ describe('Event System Types', () => {
       const metadata: EventHandlerMetadata = {
         pattern: 'download.*',
         methodName: 'handleDownload',
+        prefix: true,
         skip: false,
       };
 
       expect(metadata.pattern).toBe('download.*');
       expect(metadata.methodName).toBe('handleDownload');
+      expect(metadata.prefix).toBe(true);
       expect(metadata.skip).toBe(false);
     });
   });

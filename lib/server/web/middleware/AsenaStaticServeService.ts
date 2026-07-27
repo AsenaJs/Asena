@@ -9,6 +9,10 @@ import type { Class } from '../../types';
  * @template C - Type extending AsenaContext for request/response handling
  * @template E - Type for additional configuration options
  */
+// The interface below is merged into this class on purpose (see its own doc comment). A merged
+// class and interface must declare identical type parameter lists, so each half necessarily
+// leaves one of them unused - the class uses E, the interface uses C.
+/* eslint-disable-next-line @typescript-eslint/no-unsafe-declaration-merging, @typescript-eslint/no-unused-vars */
 export abstract class AsenaStaticServeService<C extends AsenaContext<any, any>, E = any> {
   /**
    * Additional configuration options specific to the implementation
@@ -21,32 +25,44 @@ export abstract class AsenaStaticServeService<C extends AsenaContext<any, any>, 
    * @protected
    */
   protected root?: string;
+}
 
+/**
+ * Optional lifecycle hooks, declared through interface merging rather than as
+ * `abstract` members.
+ *
+ * They are genuinely optional - the framework guards each one with a presence check
+ * before calling it (see PrepareStaticServeConfigService) - but `abstract onFound?()`
+ * would still force every subclass to implement it, and declaring them as class
+ * properties would clash with subclasses that implement them as methods (TS2425).
+ * Merging optional method signatures in an interface gives the intended semantics:
+ * override what you need, omit the rest.
+ */
+/* eslint-disable-next-line @typescript-eslint/no-unused-vars */
+export interface AsenaStaticServeService<C extends AsenaContext<any, any>, E = any> {
   /**
-   * Function to rewrite incoming request paths before serving files
+   * Rewrite an incoming request path before the file lookup
+   *
    * @param {string} path - The original request path
    * @returns {string} The rewritten path to use for file lookup
-   * @protected
    */
-  public abstract rewriteRequestPath?(path: string): string;
+  rewriteRequestPath?(path: string): string;
 
   /**
    * Callback triggered when a requested static file is successfully found
    * @param {string} path - The path of the found file
    * @param {C} c - The request context
    * @returns {void | Promise<void>} Optional Promise for asynchronous operations
-   * @abstract
    */
-  public abstract onFound?(path: string, c: C): void | Promise<void>;
+  onFound?(path: string, c: C): void | Promise<void>;
 
   /**
    * Callback triggered when a requested static file cannot be found
    * @param {string} path - The path of the file that was not found
    * @param {C} c - The request context
    * @returns {void | Promise<void>} Optional Promise for asynchronous operations
-   * @abstract
    */
-  public abstract onNotFound?(path: string, c: C): void | Promise<void>;
+  onNotFound?(path: string, c: C): void | Promise<void>;
 }
 
 /**

@@ -168,7 +168,12 @@ export interface AsenaContext<R, S extends Response> {
    * @param value - The value to store
    */
   setValue<K extends keyof AsenaVariables>(key: K, value: AsenaVariables[K]): void;
-  setValue(key: string, value: any): void;
+  // The fallback deliberately excludes augmented keys. Written as a plain `(key: string, value:
+  // any)` it won overload resolution for *every* call, so a wrong value on a declared key type-
+  // checked fine and the promise above was not kept - `setValue('user', 42)` compiled. Resolving
+  // the key to `never` for a known key forces such a call back onto the typed overload, where it
+  // fails. Unaugmented, `keyof AsenaVariables` is `never`, so this branch is inert.
+  setValue<K extends string>(key: K extends keyof AsenaVariables ? never : K, value: any): void;
 
   /**
    * Stores a value specifically for WebSocket communication.

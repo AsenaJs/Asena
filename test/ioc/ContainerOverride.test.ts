@@ -60,7 +60,7 @@ describe('Container.overrideInstance', () => {
     container.overrideInstance('UserService', double);
     await container.register('UserService', UserService, true);
 
-    expect(await container.resolve('UserService')).toBe(double);
+    expect(await container.resolve<typeof double>('UserService')).toBe(double);
   });
 
   test('should make later register() calls a no-op instead of building an array', async () => {
@@ -91,7 +91,7 @@ describe('Container.overrideInstance', () => {
 
     container.overrideInstance('TrackedService', double);
 
-    expect(await container.resolve('TrackedService')).toBe(double);
+    expect(await container.resolve<typeof double>('TrackedService')).toBe(double);
   });
 
   test('should be captured by dependents registered afterwards', async () => {
@@ -137,7 +137,7 @@ describe('IocEngine registration with overrides', () => {
 
     await iocEngine.searchAndRegister([{ Class: StripeGateway, interface: 'IPaymentGateway' }]);
 
-    expect(await iocEngine.container.resolve('PaymentGateway')).toBe(double);
+    expect(await iocEngine.container.resolve<typeof double>('PaymentGateway')).toBe(double);
     // Registering under the interface key would have constructed the real class anyway
     expect(iocEngine.container.has('IPaymentGateway')).toBe(false);
   });
@@ -151,6 +151,11 @@ describe('IocEngine registration with overrides', () => {
     await iocEngine.searchAndRegister([{ Class: StripeGateway, interface: 'IPaymentGateway' }]);
 
     expect(iocEngine.container.has('IPaymentGateway')).toBe(true);
-    expect((await iocEngine.container.resolve<StripeGateway>('IPaymentGateway')).charge()).toBe('stripe');
+    const gateway = await iocEngine.container.resolve<StripeGateway>('IPaymentGateway');
+
+    // resolve() is typed `T | T[] | null`; narrow instead of casting (see FactoryOverrides).
+    if (gateway === null || Array.isArray(gateway)) throw new Error('expected a single StripeGateway instance');
+
+    expect(gateway.charge()).toBe('stripe');
   });
 });

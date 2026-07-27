@@ -61,6 +61,11 @@ describe('AsenaServerFactory overrides', () => {
     const server = await createServer({ MailService: double });
     const signup = await server.coreContainer.container.resolve<SignupService>('SignupService');
 
+    // resolve() is typed `T | T[] | null` - a key can hold several @Implements candidates.
+    // Narrowed rather than cast: a plain @Service must come back as exactly one instance, and
+    // if that ever stops being true this throws instead of reading `.signup` off an array.
+    if (signup === null || Array.isArray(signup)) throw new Error('expected a single SignupService instance');
+
     expect(await signup.signup('ada@example.com')).toBe('sent by double');
     expect(double.send).toHaveBeenCalledWith('ada@example.com');
   });
@@ -87,7 +92,9 @@ describe('AsenaServerFactory overrides', () => {
   test('should not register an overridden component under its @Implements interface', async () => {
     const server = await createServer({ PaymentGateway: { charge: () => 'double' } }, [StripeGateway]);
 
-    expect(await server.coreContainer.container.resolve('PaymentGateway')).toEqual({ charge: expect.any(Function) });
+    expect(await server.coreContainer.container.resolve<{ charge: () => string }>('PaymentGateway')).toEqual({
+      charge: expect.any(Function),
+    });
     expect(server.coreContainer.container.has('IPaymentGateway')).toBe(false);
   });
 

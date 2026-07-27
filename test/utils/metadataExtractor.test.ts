@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { Controller, Service, Middleware } from '../../lib/server/decorators';
+import { Get } from '../../lib/server/web/decorators';
 import {
   isController,
   isService,
@@ -33,6 +34,23 @@ class TestValidator {
 
 @Service('CustomName')
 class NamedService {}
+
+abstract class RouteCarryingBase {
+  @Get('/live')
+  live() {}
+}
+
+@Controller('/inheriting')
+class InheritingController extends RouteCarryingBase {
+  @Get('/own')
+  own() {}
+}
+
+@Controller('/overriding')
+class OverridingRouteController extends RouteCarryingBase {
+  @Get('/subclass-live')
+  override live() {}
+}
 
 describe('isController', () => {
   test('@Controller class returns true', () => {
@@ -121,6 +139,31 @@ describe('extractControllerRouteInfo', () => {
 
     expect(info.basePath).toBe('/api');
     expect(info.description).toBe('');
+  });
+
+  // @asenajs/asena-openapi builds its schema from this function. If it reported a different
+  // route set than AsenaServer registers, the published schema would silently omit every
+  // inherited endpoint.
+  describe('inheritance', () => {
+    test('reports routes declared on a base class', () => {
+      const info = extractControllerRouteInfo(new InheritingController());
+
+      expect(Object.keys(info.routes).sort()).toEqual(['live', 'own']);
+      expect(info.basePath).toBe('/inheriting');
+    });
+
+    test('the subclass route wins for a shared method name', () => {
+      const info = extractControllerRouteInfo(new OverridingRouteController());
+
+      expect(Object.keys(info.routes)).toEqual(['live']);
+      expect(info.routes['live'].path).toBe('subclass-live');
+    });
+
+    test('reports an empty route map for a controller with no routes anywhere', () => {
+      const info = extractControllerRouteInfo(new TestController());
+
+      expect(info.routes).toEqual({});
+    });
   });
 });
 

@@ -2,6 +2,7 @@ import type {
   AsenaContext,
   AsenaSSEStreamWriter,
   AsenaStreamWriter,
+  AsenaVariables,
   CookieExtra,
   SendOptions,
 } from '../../lib/adapter';
@@ -10,6 +11,11 @@ import type {
  * Minimal AsenaContext implementation for testing.
  * Only implements setValue/getValue with real logic.
  * Used to test AsenaVariables augmentation without adapter dependency.
+ *
+ * getValue/setValue carry the same overload pair as {@link AsenaContext}. They have to:
+ * AsenaVariables.test.ts exists to prove the module-augmentation overloads work, and a
+ * stub that collapsed them to `getValue<T = any>(key: string)` would answer every one of
+ * those questions with `any` - which is what it did until this was fixed.
  */
 export class TestContextWrapper implements AsenaContext<Request, Response> {
   public req: Request;
@@ -34,10 +40,14 @@ export class TestContextWrapper implements AsenaContext<Request, Response> {
     throw new Error('Method not implemented.');
   }
 
-  public getValue<T = any>(key: string): T {
-    return this.values.get(key) as T;
+  public getValue<K extends keyof AsenaVariables>(key: K): AsenaVariables[K];
+  public getValue<T = any>(key: string): T;
+  public getValue(key: string): any {
+    return this.values.get(key);
   }
 
+  public setValue<K extends keyof AsenaVariables>(key: K, value: AsenaVariables[K]): void;
+  public setValue<K extends string>(key: K extends keyof AsenaVariables ? never : K, value: any): void;
   public setValue(key: string, value: any): void {
     this.values.set(key, value);
   }

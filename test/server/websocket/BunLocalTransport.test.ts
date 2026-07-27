@@ -1,5 +1,6 @@
 import { describe, expect, mock, test } from 'bun:test';
 import { BunLocalTransport } from '../../../lib/server/web/websocket';
+import type { WebSocketTransport } from '../../../lib/server/web/websocket';
 
 describe('BunLocalTransport', () => {
   test('should store server reference on init', async () => {
@@ -44,7 +45,11 @@ describe('BunLocalTransport', () => {
   });
 
   test('should not have destroy method requirement', async () => {
-    const transport = new BunLocalTransport();
+    // Typed as the interface on purpose: `destroy` is declared optional there, so reading it
+    // is a real property access. Reading it off the concrete class is a reference to a member
+    // that does not exist, which yields `undefined` and makes toBeUndefined() pass for the
+    // wrong reason - the assertion would keep passing even if the interface dropped `destroy`.
+    const transport: WebSocketTransport = new BunLocalTransport();
 
     // destroy is optional in the interface - BunLocalTransport doesn't implement it
     // Just verify it doesn't break anything

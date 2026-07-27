@@ -7,13 +7,15 @@ import type { Route } from '../../../../lib/adapter';
 
 describe('HttpMethod.ALL', () => {
   test('should exist in HttpMethod enum', () => {
-    expect(HttpMethod.ALL).toBe('all');
+    // expect<string>: the assertion is about the enum member's *runtime* string, and
+    // TypeScript will not compare an enum member with a bare string literal without it.
+    expect<string>(HttpMethod.ALL).toBe('all');
   });
 
   test('should be distinct from other methods', () => {
     const methods = Object.values(HttpMethod);
 
-    expect(methods).toContain('all');
+    expect<string[]>(methods).toContain('all');
     expect(new Set(methods).size).toBe(methods.length);
   });
 });
