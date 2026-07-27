@@ -1,6 +1,7 @@
 import { mock } from 'bun:test';
 import type { AsenaContext, CookieExtra, SendOptions } from '../../lib/adapter';
 import type { GlobalMiddlewareRouteConfig } from '../../lib/server/config';
+import type { ServerLogger } from '../../lib/logger';
 import { shouldApplyMiddleware } from '../../lib/utils';
 
 export const createMockContext = () =>
@@ -49,10 +50,13 @@ export const createMockContext = () =>
   }) as unknown as AsenaContext<Request, Response>;
 
 export const createMockAdapter = () => {
-  const mockLogger = {
+  // Must stay a full ServerLogger: `profile` is required by the interface and the framework
+  // calls it during bootstrap. It was missing here, which nothing noticed.
+  const mockLogger: ServerLogger = {
     info: mock((message: string) => console.log(`[INFO] ${message}`)),
     warn: mock((message: string) => console.warn(`[WARN] ${message}`)),
     error: mock((message: string) => console.error(`[ERROR] ${message}`)),
+    profile: mock((_message: string) => {}),
     debug: mock((message: string) => console.debug(`[DEBUG] ${message}`)),
   };
 

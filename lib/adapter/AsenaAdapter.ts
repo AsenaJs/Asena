@@ -3,6 +3,7 @@ import type {
   AsenaStartOptions,
   BaseMiddleware,
   ErrorHandler,
+  NotFoundHandler,
   RouteParams,
   WebsocketRouteParams,
 } from './types';
@@ -125,6 +126,17 @@ export abstract class AsenaAdapter<C extends AsenaContext<any, any>, VS> {
    * @param errorHandler - Error handler implementation
    */
   public abstract onError(errorHandler: ErrorHandler<C>): Promise<void> | void;
+
+  /**
+   * Sets up handling for requests that match no route.
+   *
+   * Optional rather than abstract: an adapter that predates this hook still compiles, and
+   * AsenaServer warns at start-up when a config declares `onNotFound()` but the adapter in use
+   * cannot honour it - a silent no-op would be worse than a missing feature.
+   *
+   * @param notFoundHandler - Handler that produces the 404 response
+   */
+  public onNotFound?(notFoundHandler: NotFoundHandler<C>): Promise<void> | void;
 
   /**
    * Configures server options.

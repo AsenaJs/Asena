@@ -5,6 +5,10 @@ import { ComponentConstants } from '../../../../lib/ioc';
 import { getOwnTypedMetadata } from '../../../../lib/utils/typedMetadata';
 import type { Route as RouteType } from '../../../../lib/adapter';
 
+// `Route.method` is typed `HttpMethod`, but the whole point of @Route is methods the enum
+// does not carry - PURGE, LINK. The runtime value is the lowercased string, so the method
+// assertions read it as a string. See the note in the report about tightening Route.method.
+
 describe('@Route decorator', () => {
   test('should register custom HTTP method as lowercase', () => {
     class TestController {
@@ -16,7 +20,7 @@ describe('@Route decorator', () => {
 
     expect(routes).toBeDefined();
     expect(routes!['purgeCache']).toBeDefined();
-    expect(routes!['purgeCache'].method).toBe('purge');
+    expect<string>(routes!['purgeCache'].method).toBe('purge');
     expect(routes!['purgeCache'].path).toBe('cache');
   });
 
@@ -28,7 +32,7 @@ describe('@Route decorator', () => {
 
     const routes = getOwnTypedMetadata<RouteType>(ComponentConstants.RouteKey, TestController);
 
-    expect(routes!['linkResource'].method).toBe('link');
+    expect<string>(routes!['linkResource'].method).toBe('link');
     expect(routes!['linkResource'].path).toBe('resource');
     expect(routes!['linkResource'].description).toBe('Link resource');
   });
@@ -89,7 +93,7 @@ describe('@Route decorator', () => {
 
     const routes = getOwnTypedMetadata<RouteType>(ComponentConstants.RouteKey, TestController);
 
-    expect(routes!['purgeAll'].method).toBe('purge');
+    expect<string>(routes!['purgeAll'].method).toBe('purge');
     expect(routes!['purgeAll'].path).toBe('');
   });
 
@@ -106,7 +110,7 @@ describe('@Route decorator', () => {
 
     expect(routes!['purgeCache']).toBeDefined();
     expect(routes!['linkResource']).toBeDefined();
-    expect(routes!['purgeCache'].method).toBe('purge');
-    expect(routes!['linkResource'].method).toBe('link');
+    expect<string>(routes!['purgeCache'].method).toBe('purge');
+    expect<string>(routes!['linkResource'].method).toBe('link');
   });
 });

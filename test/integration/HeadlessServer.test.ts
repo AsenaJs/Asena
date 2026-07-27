@@ -163,9 +163,51 @@ describe('Headless Server Integration', () => {
     expect(warnings.some((message) => message.includes('HttpController'))).toBe(true);
   });
 
+  /**
+   * KNOWN BUG (0.9.0, unfixed at the time of writing) - see the audit report.
+   *
+   * `warnAdapterlessComponents` reads the component-type marker with the chained
+   * `getTypedMetadata`. Component type is own-only everywhere else - `Container.filterServices`,
+   * `IocEngine.isValidComponent`, `isController`, `createWebTest` - so this one reader answers
+   * CONTROLLER for a @Service whose base happens to be one, and the startup warning names a
+   * class that is not a controller and is not being ignored.
+   *
+   * Log-only, but it is a startup warning that tells the user to go fix something that is not
+   * broken, and it disagrees with the container it is describing.
+   */
+  test('should not report a @Service extending a @Controller as an HTTP-only component', async () => {
+    const { HeadlessConfig, OrderHandler } = defineApp();
+
+    @Controller('/base')
+    class BaseHttpController {
+      @Get({ path: '/' })
+      public get() {}
+    }
+
+    @Service('DerivedDomainService')
+    class DerivedDomainService extends BaseHttpController {}
+
+    server = await AsenaServerFactory.create({
+      headless: true,
+      logger: mockLogger,
+      components: [HeadlessConfig, OrderHandler, BaseHttpController, DerivedDomainService],
+    });
+
+    await server.start();
+
+    const headlessWarning = warnings.find((message) => message.includes('require an HTTP adapter'));
+
+    expect(headlessWarning).toContain('BaseHttpController');
+    expect(headlessWarning).not.toContain('DerivedDomainService');
+  });
+
   test('should serve health endpoint reporting transport state', async () => {
     const { HeadlessConfig, OrderHandler, transport } = defineApp();
-    const healthPort = Math.floor(Math.random() * 55000) + 10000;
+    // 10000-31999: above the well-known range and below the kernel's ephemeral floor
+    // (net.ipv4.ip_local_port_range, 32768-60999). Drawing a *server* port from the
+    // ephemeral range collides with the outbound sockets the suite itself holds open -
+    // including their 60s TIME_WAIT - and Bun.serve then fails with EADDRINUSE.
+    const healthPort = 10000 + Math.floor(Math.random() * 22000);
 
     server = await AsenaServerFactory.create({
       headless: true,
@@ -204,9 +246,15 @@ describe('Headless Server Integration', () => {
     const { adapter, logger } = createMockAdapter();
 
     server = await AsenaServerFactory.create({
-      adapter,
+      // createMockAdapter() is deliberately partial - it implements only the AsenaAdapter
+      // members the bootstrap path calls, so tests can assert on `adapter.registerRoute.mock`.
+      // Widening it here is the same suppression the sibling suites already use
+      // (FactoryOverrides, DuplicateRouteDetection, createWebTest). It hides a missing
+      // *declaration*, never a missing implementation: anything the framework calls that the
+      // mock does not have still throws at runtime.
+      adapter: adapter as unknown as Parameters<typeof AsenaServerFactory.create>[0]['adapter'],
       logger,
-      port: Math.floor(Math.random() * 55000) + 10000,
+      port: 10000 + Math.floor(Math.random() * 22000),
       components: [HeadlessConfig, OrderHandler],
     });
 
@@ -218,6 +266,9 @@ describe('Headless Server Integration', () => {
     // Microservice messaging works in hybrid mode too
     const broker = await server.coreContainer.resolve<Ulak>(ICoreServiceNames.__ULAK__);
 
-    expect(await broker.send('order.create', { total: 1 })).toEqual({ id: 1, total: 1 });
+    expect(await broker.send<{ id: number; total: number }>('order.create', { total: 1 })).toEqual({
+      id: 1,
+      total: 1,
+    });
   });
 });

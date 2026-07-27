@@ -1,4 +1,5 @@
 import { mock } from 'bun:test';
+import { getPrototypeChainOf } from '../../utils';
 
 /**
  * Detects all methods in a class (excluding constructor)
@@ -14,21 +15,23 @@ function detectClassMethods(classType: any): string[] {
   }
 
   const methods: string[] = [];
-  const prototype = classType.prototype;
 
-  // Get all property names from prototype
-  const propertyNames = Object.getOwnPropertyNames(prototype);
+  // Walk the prototype chain, not just the own prototype. A service that inherits `findById`
+  // from a shared base would otherwise be mocked without it, and the controller under test
+  // died with "findById is not a function" *inside the harness* - pointing the user at their
+  // own code rather than at the double.
+  for (const prototype of getPrototypeChainOf(classType.prototype)) {
+    for (const name of Object.getOwnPropertyNames(prototype)) {
+      // Skip constructor, and anything a nearer class already contributed
+      if (name === 'constructor' || methods.includes(name)) {
+        continue;
+      }
 
-  for (const name of propertyNames) {
-    // Skip constructor
-    if (name === 'constructor') {
-      continue;
-    }
+      const descriptor = Object.getOwnPropertyDescriptor(prototype, name);
 
-    // Check if it's a function
-    const descriptor = Object.getOwnPropertyDescriptor(prototype, name);
-    if (descriptor && typeof descriptor.value === 'function') {
-      methods.push(name);
+      if (descriptor && typeof descriptor.value === 'function') {
+        methods.push(name);
+      }
     }
   }
 

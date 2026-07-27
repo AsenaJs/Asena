@@ -1,4 +1,4 @@
-import { getOwnTypedMetadata, getTypedMetadata } from '../../../utils/typedMetadata';
+import { getChainedTypedMetadataList, getOwnTypedMetadata } from '../../../utils/typedMetadata';
 import type { AsenaStaticServeService, StaticServeClass } from '../../web/middleware';
 import type { BaseStaticServeParams } from '../../../adapter';
 import { ComponentConstants, type Container, CoreService, type ICoreService, ICoreServiceNames } from '../../../ioc';
@@ -34,7 +34,10 @@ export class PrepareStaticServeConfigService implements ICoreService {
       throw new Error('Static serve service cannot be array');
     }
 
-    const overrides: string[] = getTypedMetadata<string[]>(ComponentConstants.OverrideKey, staticServeServiceInstance);
+    const overrides: string[] = getChainedTypedMetadataList<string>(
+      ComponentConstants.OverrideKey,
+      staticServeServiceInstance,
+    );
 
     const baseStaticServeParams: BaseStaticServeParams = {
       extra: undefined,

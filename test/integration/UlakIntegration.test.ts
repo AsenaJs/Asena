@@ -73,8 +73,13 @@ describe('Ulak Integration Tests', () => {
 
       // Verify services were registered
       expect(services.length).toBe(2);
-      expect(services).toContain(chatWebSocket);
-      expect(services).toContain(notificationsWebSocket);
+      // `prepare()` is declared `Promise<AsenaWebSocketService<WebSocketData>[]>`, but T on
+      // AsenaWebSocketService is documented as the `ws.data.values` payload - what a real
+      // service passes (`AsenaWebSocketService<{ userId: string }>`), not the envelope. The two
+      // are therefore never assignable. Compared at the default `T = any` so the membership
+      // assertion still runs; the lib-side mismatch is flagged in the report.
+      expect<AsenaWebSocketService[]>(services).toContain(chatWebSocket);
+      expect<AsenaWebSocketService[]>(services).toContain(notificationsWebSocket);
 
       // Verify namespace property was set (decorator removes leading '/')
       expect(chatWebSocket.namespace).toBe('chat');

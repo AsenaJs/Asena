@@ -167,4 +167,157 @@ describe('PrepareFrontendControllerService', () => {
     expect(result).toHaveLength(1);
     expect(result[0].path).toBe('/dashboard');
   });
+
+  // @Page writes to the class declaring the method, so a shared layout base class used to
+  // lose all of its pages the moment it was extended.
+  describe('inheritance', () => {
+    test('registers a page declared only on the base class, under the subclass base path', async () => {
+      const bundle = { index: 'shared.html' };
+
+      abstract class SharedPagesBase {
+        @Page('/shared')
+        sharedPage() {
+          return bundle;
+        }
+      }
+
+      @FrontendController('/tenant')
+      class TenantFrontendController extends SharedPagesBase {}
+
+      await container.registerInstance('TenantFrontendController', new TenantFrontendController());
+
+      const result = await prepareService.prepare();
+
+      expect(result).toHaveLength(1);
+      expect(result[0].path).toBe('/tenant/shared');
+      expect(result[0].htmlBundle).toBe(bundle);
+    });
+
+    test('keeps inherited pages when the subclass declares its own', async () => {
+      abstract class SharedPagesBase {
+        @Page('/shared')
+        sharedPage() {
+          return { index: 'shared.html' };
+        }
+      }
+
+      @FrontendController('/tenant')
+      class TenantFrontendController extends SharedPagesBase {
+        @Page('/own')
+        ownPage() {
+          return { index: 'own.html' };
+        }
+      }
+
+      await container.registerInstance('TenantFrontendController', new TenantFrontendController());
+
+      const result = await prepareService.prepare();
+
+      expect(result.map((route) => route.path).sort()).toEqual(['/tenant/own', '/tenant/shared']);
+    });
+
+    test('a subclass page with the same method name overrides the inherited one', async () => {
+      const overriding = { index: 'overriding.html' };
+
+      abstract class SharedPagesBase {
+        @Page('/shared')
+        sharedPage() {
+          return { index: 'base.html' };
+        }
+      }
+
+      @FrontendController('/tenant')
+      class TenantFrontendController extends SharedPagesBase {
+        @Page('/shared')
+        override sharedPage() {
+          return overriding;
+        }
+      }
+
+      await container.registerInstance('TenantFrontendController', new TenantFrontendController());
+
+      const result = await prepareService.prepare();
+
+      expect(result).toHaveLength(1);
+      expect(result[0].htmlBundle).toBe(overriding);
+    });
+
+    test('collects pages from a three-deep chain', async () => {
+      abstract class Grandparent {
+        @Page('/a')
+        pageA() {
+          return { index: 'a.html' };
+        }
+      }
+
+      abstract class Parent extends Grandparent {
+        @Page('/b')
+        pageB() {
+          return { index: 'b.html' };
+        }
+      }
+
+      @FrontendController('/chain')
+      class Leaf extends Parent {
+        @Page('/c')
+        pageC() {
+          return { index: 'c.html' };
+        }
+      }
+
+      await container.registerInstance('Leaf', new Leaf());
+
+      const result = await prepareService.prepare();
+
+      expect(result.map((route) => route.path).sort()).toEqual(['/chain/a', '/chain/b', '/chain/c']);
+    });
+
+    test('two frontend controllers extending one base do not contaminate each other', async () => {
+      abstract class SharedPagesBase {
+        @Page('/shared')
+        sharedPage() {
+          return { index: 'shared.html' };
+        }
+      }
+
+      @FrontendController('/first')
+      class FirstFrontendController extends SharedPagesBase {
+        // An own page on purpose: contamination is a *write* into the shared base's stored
+        // record, so two empty subclasses cannot detect it however the merge is implemented.
+        @Page('/only-first')
+        onlyFirst() {
+          return { index: 'first.html' };
+        }
+      }
+
+      @FrontendController('/second')
+      class SecondFrontendController extends SharedPagesBase {}
+
+      await container.registerInstance('FirstFrontendController', new FirstFrontendController());
+      await container.registerInstance('SecondFrontendController', new SecondFrontendController());
+
+      const result = await prepareService.prepare();
+
+      expect(result.map((route) => route.path).sort()).toEqual([
+        '/first/only-first',
+        '/first/shared',
+        '/second/shared',
+      ]);
+    });
+
+    /**
+     * KNOWN BUG (0.9.0, unfixed at the time of writing) - see the audit report.
+     *
+     * `AsenaServer.checkDuplicateRoute` throws `Duplicate route detected` when two @Get methods
+     * resolve to one path, precisely because inheritance makes the other method live in a file
+     * you are not looking at. @Page went through the same merge in 0.9.0 and got no equivalent
+     * check, so the identical collision registers the same HTML path twice and one of the two
+     * silently wins inside the adapter.
+     */
+    // NOTE: there is deliberately no "two @Page methods on one path are rejected" test at this
+    // layer. This service only collects and merges page routes; the duplicate check lives in the
+    // adapters, where `registerHTMLRoute` throws `Duplicate HTML route: "…" is already registered`
+    // on both hono and ergenecore. A colliding pair therefore fails the boot loudly today, and
+    // adding a second check here would guard a failure mode that is already covered.
+  });
 });

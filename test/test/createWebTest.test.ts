@@ -88,6 +88,50 @@ class LegacyController {
 @Service()
 class NotAController {}
 
+abstract class CrudServiceBase {
+  public async findById(_id: string) {
+    return { id: _id, name: 'base' };
+  }
+}
+
+@Service()
+class InheritingUserService extends CrudServiceBase {
+  public async search(_query: string) {
+    return [];
+  }
+}
+
+abstract class GuardedControllerBase {
+  @Inject(UserService)
+  protected userService: UserService;
+
+  @Get({ path: '/guarded', middlewares: [AuthMiddleware] })
+  public async guarded(context: AsenaContext<any, any>) {
+    return context.send(await this.userService.findById('1'));
+  }
+}
+
+@Controller('/inherited')
+class InheritingController extends GuardedControllerBase {
+  // An own route as well as the inherited one: with only inherited routes, a revert to the
+  // nearest-ancestor read would still produce the right answer and the test would pass.
+  @Get('/own')
+  public async own(context: AsenaContext<any, any>) {
+    return context.send({ own: true });
+  }
+}
+
+@Controller('/mocking')
+class MockingController {
+  @Inject(InheritingUserService)
+  private userService: InheritingUserService;
+
+  @Get('/find')
+  public async find(context: AsenaContext<any, any>) {
+    return context.send(await this.userService.findById('1'));
+  }
+}
+
 const webTest = (options: any) => createWebTest({ adapter: createMockAdapter().adapter as any, ...options });
 
 describe('createWebTest', () => {
@@ -194,6 +238,63 @@ describe('createWebTest', () => {
       const controller = await app.resolve<UserController>('UserController');
 
       expect((controller as any).userService).toBe(double);
+
+      await app.stop();
+    });
+  });
+
+  // collectWebLayer walks each controller's routes to find the middlewares and validators
+  // that must be registered for real. Reading own metadata only meant an inherited route's
+  // middleware never reached the container, and the slice boot threw on it.
+  describe('inherited routes', () => {
+    test('should register a middleware declared on an inherited route', async () => {
+      const { app, mocks } = await webTest({ controllers: [InheritingController] });
+
+      // AuthMiddleware is referenced only by the base class's route. Its own @Inject proves
+      // it was collected and registered rather than skipped.
+      expect(mocks.AuditService).toBeDefined();
+
+      const controller = await app.resolve<InheritingController>('InheritingController');
+
+      expect(controller).toBeDefined();
+
+      await app.stop();
+    });
+
+    test('should mock services injected on the base class', async () => {
+      const { app, mocks } = await webTest({ controllers: [InheritingController] });
+
+      expect(Object.keys(mocks.UserService).sort()).toEqual(['deleteById', 'findById']);
+
+      await app.stop();
+    });
+
+    test('should register both the inherited and the own route', async () => {
+      const { app } = await webTest({ controllers: [InheritingController] });
+
+      const controller = await app.resolve<InheritingController>('InheritingController');
+
+      // Both reachable on the resolved instance - the harness collected the merged route map,
+      // not just the leaf's own entries.
+      expect(typeof (controller as any).guarded).toBe('function');
+      expect(typeof (controller as any).own).toBe('function');
+
+      await app.stop();
+    });
+
+    test('should mock methods a service inherits from its own base class', async () => {
+      const { app, mocks } = await webTest({ controllers: [MockingController] });
+
+      // detectClassMethods walked only the own prototype, so `findById` - declared on
+      // CrudServiceBase - was missing from the double and the controller died with
+      // "findById is not a function" *inside the harness*.
+      expect(Object.keys(mocks.InheritingUserService).sort()).toEqual(['findById', 'search']);
+
+      mocks.InheritingUserService.findById.mockResolvedValue({ id: '1', name: 'mocked' });
+
+      const controller = await app.resolve<MockingController>('MockingController');
+
+      expect(await (controller as any).userService.findById('1')).toEqual({ id: '1', name: 'mocked' });
 
       await app.stop();
     });

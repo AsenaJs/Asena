@@ -1,12 +1,14 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
 import { AsenaServerFactory } from '../../lib/server';
-import { Controller, Service } from '../../lib/server/decorators';
+import { Controller, Middleware, Service, WebSocket } from '../../lib/server/decorators';
+import { AsenaWebSocketService } from '../../lib/server/web/websocket';
 import { Get } from '../../lib/server/web/decorators';
 import { Inject, Scope } from '../../lib/ioc/component';
 import type { AsenaContext } from '../../lib/adapter';
 import { Container } from '../../lib/ioc';
 import { ComponentConstants } from '../../lib/ioc/constants';
-import { getTypedMetadata } from '../../lib/utils/typedMetadata';
+import { getChainedTypedMetadataList, getTypedMetadata } from '../../lib/utils/typedMetadata';
+import { extractControllerRouteInfo, isValidator } from '../../lib/utils/metadataExtractor';
 import { createMockAdapter } from '../utils/createMockContext';
 import { defineMetadata } from 'reflect-metadata/no-conflict';
 import type { AsenaMiddlewareService } from '../../lib/server/web/middleware';
@@ -127,26 +129,29 @@ describe('Symbol Security E2E Integration', () => {
 
     const instance = await container.resolve<TestController>('TestController');
 
-    // Verify route metadata wasn't changed
-    const method = getTypedMetadata(ComponentConstants.MethodKey, TestController);
-    const path = getTypedMetadata(ComponentConstants.RoutePathKey, TestController);
+    // The decorator's own values survive: a string key cannot reach a Symbol-keyed record.
+    // Asserting the real keys rather than unused ones is the point - this used to read
+    // MethodKey/RoutePathKey, which no decorator ever wrote, so it passed no matter what.
+    const path = getTypedMetadata(ComponentConstants.PathKey, TestController);
+    const routes = getTypedMetadata<Record<string, any>>(ComponentConstants.RouteKey, TestController);
 
-    // These should be undefined because they're not set by decorators
-    expect(method).toBeUndefined();
-    expect(path).toBeUndefined();
+    expect(path).toBe('/api'); // Not '/hacked'
+    expect(routes?.getUsers?.path).toBe('users');
+    expect(routes?.getUsers?.method).toBe('get'); // Not 'POST'
     expect(instance).toBeInstanceOf(TestController);
   });
 
   test('should prevent external manipulation of WebSocket metadata', async () => {
-    class TestWebSocket {
+    @WebSocket('/ws/test')
+    class TestWebSocket extends AsenaWebSocketService<any> {
       public onOpen(ws: any) {
         ws.send('connected');
       }
     }
 
     // Try to manipulate WebSocket metadata with string keys
-    defineMetadata('websocket:path', '/hacked', TestWebSocket);
-    defineMetadata('websocket:middlewares', ['HackedMiddleware'], TestWebSocket);
+    defineMetadata('component:path', '/hacked', TestWebSocket);
+    defineMetadata('middleware:middlewares', ['HackedMiddleware'], TestWebSocket);
 
     const container = new Container();
 
@@ -154,12 +159,11 @@ describe('Symbol Security E2E Integration', () => {
 
     const instance = await container.resolve<TestWebSocket>('TestWebSocket');
 
-    // Verify WebSocket metadata wasn't changed
-    const path = getTypedMetadata(ComponentConstants.WebSocketPathKey, TestWebSocket);
-    const middlewares = getTypedMetadata(ComponentConstants.WebSocketMiddlewaresKey, TestWebSocket);
+    const path = getTypedMetadata(ComponentConstants.PathKey, TestWebSocket);
+    const middlewares = getTypedMetadata(ComponentConstants.MiddlewaresKey, TestWebSocket);
 
-    expect(path).toBeUndefined(); // Not '/hacked'
-    expect(middlewares).toBeUndefined(); // Not ['HackedMiddleware']
+    expect(path).toBe('ws/test'); // @WebSocket strips the leading slash. Not '/hacked'.
+    expect(middlewares).toEqual([]); // Not ['HackedMiddleware']
     expect(instance).toBeInstanceOf(TestWebSocket);
   });
 
@@ -367,8 +371,13 @@ describe('Symbol Security E2E Integration', () => {
     expect(instance).toBeInstanceOf(TestService);
   });
 
-  test('should prevent external manipulation of controller config metadata', async () => {
-    @Controller('/test')
+  // The attack has to be mounted against the description of the *real* key. Both of these
+  // tests used to read keys 0.9.0 deleted (`ControllerConfigKey`, `RouteMiddlewaresKey`,
+  // `RouteValidatorKey`), which made the expression `undefined`, `getMetadata(undefined, …)`
+  // `undefined`, and the assertion unconditionally green. Nothing typechecks this directory,
+  // so a reference to a deleted static member never surfaced.
+  test('should prevent external manipulation of controller description metadata', async () => {
+    @Controller({ path: '/test', description: 'the real description' })
     class TestController {
       @Get({ path: '/' })
       public test(context: AsenaContext<any, any>) {
@@ -376,8 +385,9 @@ describe('Symbol Security E2E Integration', () => {
       }
     }
 
-    // Try to manipulate controller config metadata with string keys
-    defineMetadata('controller:config', { hacked: true }, TestController);
+    // The string is exactly the Symbol's description - the whole point of Symbol keys is that
+    // this is still a different key.
+    defineMetadata('controller:description', 'hacked', TestController);
 
     const container = new Container();
 
@@ -385,15 +395,19 @@ describe('Symbol Security E2E Integration', () => {
 
     const instance = await container.resolve<TestController>('TestController');
 
-    // Verify controller config metadata wasn't changed
-    const config = getTypedMetadata(ComponentConstants.ControllerConfigKey, TestController);
+    const description = getTypedMetadata(ComponentConstants.ControllerDescriptionKey, TestController);
 
-    expect(config).toBeUndefined(); // Not { hacked: true }
-    expect(instance).toBeInstanceOf(TestController);
+    expect(description).toBe('the real description');
+    expect(extractControllerRouteInfo(instance).description).toBe('the real description');
   });
 
-  test('should prevent external manipulation of route middlewares metadata', async () => {
-    @Controller('/test')
+  test('should prevent external manipulation of controller middlewares and route metadata', async () => {
+    @Middleware()
+    class RealMiddleware {
+      public handle() {}
+    }
+
+    @Controller({ path: '/test', middlewares: [RealMiddleware] })
     class TestController {
       @Get({ path: '/' })
       public test(context: AsenaContext<any, any>) {
@@ -401,9 +415,14 @@ describe('Symbol Security E2E Integration', () => {
       }
     }
 
-    // Try to manipulate route middlewares metadata with string keys
-    defineMetadata('route:middlewares', ['HackedMiddleware'], TestController);
-    defineMetadata('route:validator', 'HackedValidator', TestController);
+    class HackedMiddleware {
+      public handle() {}
+    }
+
+    // Same descriptions as the Symbols the framework actually writes
+    defineMetadata('middleware:middlewares', [HackedMiddleware], TestController);
+    defineMetadata('middleware:validator', 'HackedValidator', TestController);
+    defineMetadata('controller:route', { hacked: { path: '/hacked', method: 'get' } }, TestController);
 
     const container = new Container();
 
@@ -411,13 +430,15 @@ describe('Symbol Security E2E Integration', () => {
 
     const instance = await container.resolve<TestController>('TestController');
 
-    // Verify route middlewares metadata wasn't changed
-    const middlewares = getTypedMetadata(ComponentConstants.RouteMiddlewaresKey, TestController);
-    const validator = getTypedMetadata(ComponentConstants.RouteValidatorKey, TestController);
+    // Identity, not length: the real guard has to still be the one in the list.
+    const middlewares = getChainedTypedMetadataList(ComponentConstants.MiddlewaresKey, TestController);
 
-    expect(middlewares).toBeUndefined(); // Not ['HackedMiddleware']
-    expect(validator).toBeUndefined(); // Not 'HackedValidator'
-    expect(instance).toBeInstanceOf(TestController);
+    expect(middlewares).toEqual([RealMiddleware]);
+    // @Middleware({ validator: true }) was never applied, so this stays false rather than
+    // becoming the attacker's string
+    expect(isValidator(TestController)).toBe(false);
+    // The merged route map is what AsenaServer registers - `hacked` must not be in it
+    expect(Object.keys(extractControllerRouteInfo(instance).routes)).toEqual(['test']);
   });
 
   test('should prevent external manipulation in factory pattern', async () => {

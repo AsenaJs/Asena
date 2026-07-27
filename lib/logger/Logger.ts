@@ -24,8 +24,19 @@ export interface ServerLogger {
   error: (message: string, meta?: any) => void;
 
   /**
-   * Logs a debug message.
-   * @param message - The message to log.
+   * Starts or stops a profiling timer for the given id.
+   * @param message - The profile id. Call once to start, again to stop and log the elapsed time.
    */
   profile: (message: string) => void;
+
+  /**
+   * Logs a debug message.
+   *
+   * Optional so that existing ServerLogger implementations keep compiling. Callers must
+   * fall back when it is absent - see the level selection in the adapters' error handlers.
+   *
+   * @param message - The message to log.
+   * @param meta - Optional metadata to include with the log.
+   */
+  debug?: (message: string, meta?: any) => void;
 }

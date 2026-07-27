@@ -1,4 +1,4 @@
-import type { AsenaContext, AsenaServeOptions } from '../../adapter';
+import type { AsenaContext, AsenaServeOptions, NotFoundRequest } from '../../adapter';
 import type { WebSocketTransport } from '../web/websocket';
 
 import type { MiddlewareClass } from '../web/middleware';
@@ -159,6 +159,31 @@ export interface AsenaConfig<C extends AsenaContext<any, any> = AsenaContext<any
   onError?(error: Error, context: C): Response | Promise<Response>;
 
   /**
+   * Answers a request that matched no route.
+   *
+   * Kept separate from {@link onError} on purpose: a missing route is a routing outcome, not
+   * a thrown error, so `onError` never sees one and never has to discriminate. `request` is
+   * normalised by the adapter, which is what lets the same body work on either adapter.
+   *
+   * When no handler is declared, both adapters answer `{ "error": "Not Found" }` with a 404.
+   *
+   * @param context - The current Asena context
+   * @param request - The unmatched request's path and method
+   * @returns Response object or a Promise that resolves to a Response
+   *
+   * @example
+   * ```typescript
+   * public onNotFound(context: Context, request: NotFoundRequest) {
+   *   return context.send(
+   *     { type: 'about:blank', title: 'Not Found', status: 404, instance: request.path },
+   *     404,
+   *   );
+   * }
+   * ```
+   */
+  onNotFound?(context: C, request: NotFoundRequest): Response | Promise<Response>;
+
+  /**
    * Configuration options for the server
    * @returns AsenaServeOptions object containing server configuration
    */
@@ -259,4 +284,30 @@ export interface AsenaConfig<C extends AsenaContext<any, any> = AsenaContext<any
   transport?(): WebSocketTransport | AsenaTransportConfig | Promise<WebSocketTransport | AsenaTransportConfig>;
 }
 
-export type AsenaConfigFunctions = 'onError' | 'serveOptions' | 'globalMiddlewares' | 'transport';
+export type AsenaConfigFunctions = 'onError' | 'onNotFound' | 'serveOptions' | 'globalMiddlewares' | 'transport';
+
+/**
+ * Every hook the framework reads off a @Config class. Anything else on the class is
+ * ignored, so this list doubles as the allowlist used by the startup misuse check.
+ */
+export const ASENA_CONFIG_FUNCTIONS: readonly AsenaConfigFunctions[] = [
+  'onError',
+  'onNotFound',
+  'serveOptions',
+  'globalMiddlewares',
+  'transport',
+];
+
+/**
+ * Property names that look like a hook but are not one, mapped to the hook they were
+ * probably meant to be.
+ *
+ * The type system cannot catch these - an extra property on a subclass is always legal -
+ * yet the framework never reads them, so the configuration silently does nothing. The
+ * startup check only fires when the value is an array, so an injected dependency that
+ * happens to be named `middleware` is not mistaken for a misconfigured hook.
+ */
+export const ASENA_CONFIG_HOOK_ALIASES: Readonly<Record<string, AsenaConfigFunctions>> = {
+  middlewares: 'globalMiddlewares',
+  middleware: 'globalMiddlewares',
+};

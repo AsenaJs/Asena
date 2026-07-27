@@ -74,7 +74,7 @@ describe('PrepareWebsocketService', () => {
   it('should throw error when duplicate websocket paths found', async () => {
     mockContainer.resolveAll = mock(() => [[mockWebSocket2, mockWebSocketDuplicate]]);
 
-    expect(service.prepare()).rejects.toThrow('Duplicate WebSocket path found: ws2');
+    await expect(service.prepare()).rejects.toThrow('Duplicate WebSocket path found: ws2');
   });
 
   it('should correctly prepare websockets', async () => {

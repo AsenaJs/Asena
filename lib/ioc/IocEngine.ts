@@ -75,7 +75,7 @@ export class IocEngine implements ICoreService {
 
       // Resolve only actual PostProcessor instances (not their dependencies) and activate them
       for (const cls of postProcessorClasses) {
-        const isPostProcessor = getTypedMetadata<boolean>(ComponentType.POST_PROCESSOR, cls);
+        const isPostProcessor = getOwnTypedMetadata<boolean>(ComponentType.POST_PROCESSOR, cls);
 
         if (isPostProcessor) {
           const name = getTypedMetadata<string>(ComponentConstants.NameKey, cls) || cls.name;
@@ -94,7 +94,22 @@ export class IocEngine implements ICoreService {
 
   private async loadComponents(components?: InjectableComponent[]): Promise<void> {
     if (components?.length) {
-      this.injectables = components;
+      // Explicitly listed components go through the same identity check as scanned ones.
+      // They used to bypass it entirely, so the own-only rule held for `sourceFolder` apps and
+      // not for `components: [...]` ones - and on that path an undecorated subclass still
+      // registered under its base's name, overwriting it.
+      this.injectables = this.dedupeInjectables(
+        components.filter((component) => {
+          if (this.isValidComponent(component.Class)) {
+            return true;
+          }
+
+          this.warnAboutUndecoratedSubclass(component.Class);
+
+          return false;
+        }),
+      );
+
       return;
     }
 
@@ -212,13 +227,21 @@ export class IocEngine implements ICoreService {
       const claimed = byName.get(name);
 
       if (claimed && claimed !== component.Class) {
-        this.logger.warn(
-          `[IocEngine] Two different classes resolve to the component name '${name}'. ` +
-            'Only one of them will be registered - give one an explicit name to disambiguate.',
+        // A component name is an identity, so two classes claiming one is a conflict, not a
+        // preference. It used to be a warning, and the resolution was silent and arbitrary:
+        // `initializeGraph` keyed classes by name in a Map, so whichever came last in scan order
+        // won and the other was never registered. A route naming the loser ran the winner's
+        // handler, and `@Inject(Loser)` returned an instance of the winner - the same failure the
+        // duplicate-route check exists to prevent, one layer down. On the explicit
+        // `components: [...]` path there was not even a warning.
+        throw new Error(
+          `Duplicate component name detected: '${name}' is claimed by both ` +
+            `${claimed.name} and ${component.Class.name}. A component name must be unique - ` +
+            "give one of them an explicit name, e.g. @Service({ name: '...' }).",
         );
-      } else {
-        byName.set(name, component.Class);
       }
+
+      byName.set(name, component.Class);
 
       unique.push(component);
     }
@@ -311,15 +334,74 @@ export class IocEngine implements ICoreService {
   }
 
   private processComponents(components: any[]): InjectableComponent[] {
-    return components
-      .filter((component) => this.isValidComponent(component))
+    const valid: any[] = [];
+
+    for (const component of components) {
+      if (this.isValidComponent(component)) {
+        valid.push(component);
+        continue;
+      }
+
+      this.warnAboutUndecoratedSubclass(component);
+    }
+
+    return valid
       .map((component) => this.createComponentObject(component))
       .filter((component): component is InjectableComponent => component !== null);
   }
 
+  /**
+   * Reports a class that extends a component but carries no decorator of its own.
+   *
+   * Component identity is read own-only, so such a class is simply skipped. Before 0.9.0 it
+   * was registered under its *base's* name and blew up on first inject - ugly, but at least
+   * detectable. Skipping it silently is worse: with `@Schedule` the cron never fires and
+   * nothing anywhere says so, which is the exact class of failure this release set out to
+   * eliminate.
+   *
+   * Only fires when an ancestor carries the marker, so an ordinary undecorated helper class in
+   * the scan folder stays quiet. A decorator that returns a wrapper subclass (`@Repository`,
+   * `@Database`, `@Redis`, `@Kafka`) applies `@Service` to the wrapper, so the wrapper has its
+   * own marker and never reaches here.
+   */
+  private warnAboutUndecoratedSubclass(component: any): void {
+    if (typeof component !== 'function') {
+      return;
+    }
+
+    try {
+      if (!getTypedMetadata<boolean>(ComponentConstants.IOCObjectKey, component)) {
+        return;
+      }
+    } catch {
+      return;
+    }
+
+    let ancestor = Object.getPrototypeOf(component);
+
+    while (typeof ancestor === 'function' && ancestor !== Function.prototype) {
+      if (getOwnTypedMetadata<boolean>(ComponentConstants.IOCObjectKey, ancestor)) {
+        break;
+      }
+
+      ancestor = Object.getPrototypeOf(ancestor);
+    }
+
+    this.logger.warn(
+      `[IocEngine] '${component.name}' extends the component '${
+        typeof ancestor === 'function' ? ancestor.name : 'unknown'
+      }' but carries no decorator of its own, so it was NOT registered. ` +
+        'Decorate it (@Service, @Controller, @Schedule, ...) or remove it from the scan folder.',
+    );
+  }
+
   private isValidComponent(component: any): boolean {
     try {
-      return !!getTypedMetadata<boolean>(ComponentConstants.IOCObjectKey, component);
+      // Own-only. A class is whatever its OWN decorator says it is - component identity is not
+      // inherited. Reading this off the chain made an *undecorated* subclass a component, and
+      // since NameKey is read the same way it registered under its base's name: the container
+      // promoted the entry to an array and every @Inject(Base) started returning [Base, Sub].
+      return !!getOwnTypedMetadata<boolean>(ComponentConstants.IOCObjectKey, component);
     } catch {
       return false;
     }
@@ -476,7 +558,7 @@ export class IocEngine implements ICoreService {
 
     // Identify PostProcessor classes
     for (const cls of classes) {
-      if (getTypedMetadata<boolean>(ComponentType.POST_PROCESSOR, cls)) {
+      if (getOwnTypedMetadata<boolean>(ComponentType.POST_PROCESSOR, cls)) {
         postProcessorSet.add(cls);
       }
     }
@@ -498,7 +580,7 @@ export class IocEngine implements ICoreService {
           closureSet.add(depClass);
 
           // Log warning for non-PostProcessor dependencies pulled into Phase A
-          if (!getTypedMetadata<boolean>(ComponentType.POST_PROCESSOR, depClass)) {
+          if (!getOwnTypedMetadata<boolean>(ComponentType.POST_PROCESSOR, depClass)) {
             const ppName = getTypedMetadata<string>(ComponentConstants.NameKey, cls) || cls.name;
 
             this.logger.warn(
@@ -552,13 +634,21 @@ export class IocEngine implements ICoreService {
       ) {
         const parentDependencies = this.getDependencies(parentClass);
         const parentName = getTypedMetadata<string>(ComponentConstants.NameKey, parentClass) || parentClass.name;
+        const selfName = getTypedMetadata<string>(ComponentConstants.NameKey, component) || component.name;
+
+        // A decorator may return a subclass of the class it decorates and register the
+        // subclass under the decorated class's own name (@Repository does exactly this).
+        // The parent then resolves to the component's own name, which is not a cycle -
+        // reporting it as one made the component unresolvable.
+        const parentEntry = parentName && parentName !== selfName ? [parentName] : [];
 
         return [
           ...new Set([
             ...directDependencies,
             ...parentDependencies,
             ...softDependencies,
-            parentName, // We are adding parent class as soft dep so extenden classes will be created after parent class generete
+            // Parent is registered as a soft dep so subclasses are created after it
+            ...parentEntry,
           ]),
         ];
       }
@@ -577,8 +667,13 @@ export class IocEngine implements ICoreService {
 
       const parentClass = Object.getPrototypeOf(component);
 
-      if (parentClass && parentClass !== Object.prototype) {
-        const parentStrategies = this.getStrategyDependencies(parentClass.constructor, injectables);
+      // Recurse on the parent class itself. This used to recurse on
+      // `parentClass.constructor`, which for a class is always `Function` - so the walk
+      // stopped at the first level and a @Strategy field declared on a base class was
+      // missing from the dependency graph. The component then resolved before the
+      // implementations it needed were registered ("<interface> is not registered").
+      if (typeof parentClass === 'function' && parentClass !== Function.prototype) {
+        const parentStrategies = this.getStrategyDependencies(parentClass, injectables);
 
         return [...new Set([...directStrategies, ...parentStrategies])];
       }

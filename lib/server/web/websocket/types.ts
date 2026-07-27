@@ -54,7 +54,7 @@ export interface WSOptions {
    */
   heartbeatInterval?: number;
 
-  perMessageDeflate:
+  perMessageDeflate?:
     | boolean
     | {
         compress?: WebSocketCompressor | boolean;

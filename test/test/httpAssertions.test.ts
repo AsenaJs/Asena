@@ -183,7 +183,7 @@ describe('TestHttpCall', () => {
 
       expect(response).toBeInstanceOf(TestHttpResponse);
       expect(response.text()).toBe(response.text());
-      expect(response.json()).toEqual({ id: '1', name: 'Ada', role: 'admin' });
+      expect(response.json<Record<string, string>>()).toEqual({ id: '1', name: 'Ada', role: 'admin' });
       expect(response.status).toBe(200);
       expect(response.raw).toBeInstanceOf(Response);
     });

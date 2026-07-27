@@ -11,3 +11,6 @@ roadmaps
 /docs
 # packed tarballs
 *.tgz
+
+# Local release tooling - deliberately not committed before 1.0
+scripts/

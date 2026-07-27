@@ -1,6 +1,6 @@
-import { ComponentConstants } from '../ioc/constants';
-import { ComponentType } from '../ioc/types';
-import { getOwnTypedMetadata, getTypedMetadata } from './typedMetadata';
+import { ComponentConstants } from '../ioc';
+import { ComponentType } from '../ioc';
+import { getChainedTypedMetadata, getOwnTypedMetadata, getTypedMetadata } from './typedMetadata';
 import type { Route } from '../adapter';
 
 /**
@@ -41,7 +41,9 @@ export function extractControllerRouteInfo(controller: any): ControllerRouteInfo
     basePath: getOwnTypedMetadata<string>(ComponentConstants.PathKey, constructor) || '',
     controllerName: getTypedMetadata<string>(ComponentConstants.NameKey, constructor) || '',
     description: getOwnTypedMetadata<string>(ComponentConstants.ControllerDescriptionKey, constructor) || '',
-    routes: getOwnTypedMetadata<Route>(ComponentConstants.RouteKey, constructor) || {},
+    // Chained: routes declared on a base class belong to the concrete controller too, and
+    // the OpenAPI schema must list exactly what AsenaServer registers at runtime.
+    routes: getChainedTypedMetadata<Route>(ComponentConstants.RouteKey, constructor),
   };
 }
 

@@ -73,7 +73,7 @@ describe('createTestApp', () => {
 
     await using app = await boot({ UserService: double });
 
-    expect(await app.resolve('UserService')).toBe(double);
+    expect(await app.resolve<typeof double>('UserService')).toBe(double);
   });
 
   test('should hand the override to dependents that inject it', async () => {
@@ -111,6 +111,77 @@ describe('createTestApp', () => {
     await app.stop();
 
     expect(stopSpy).toHaveBeenCalledTimes(1);
+  });
+
+  // createTestApp forwards `components` straight to AsenaServerFactory, so it is the harness
+  // face of the explicit-components path - the one that used to bypass the component-identity
+  // check entirely, because every inheritance fixture in the suite went through the file scan.
+  describe('inheritance through the explicit components path', () => {
+    test('should register routes a controller inherits from its base class', async () => {
+      abstract class HealthBase {
+        @Get('/live')
+        public live(context: AsenaContext<any, any>) {
+          return context.send({ probe: 'live' });
+        }
+      }
+
+      @Controller('/harness')
+      class HarnessController extends HealthBase {
+        @Get('/own')
+        public own(context: AsenaContext<any, any>) {
+          return context.send({ probe: 'own' });
+        }
+      }
+
+      const { adapter } = createMockAdapter();
+
+      await using app = await createTestApp({
+        adapter: adapter as any,
+        logger: silentLogger,
+        components: [HarnessController],
+      });
+
+      const registered = adapter.registerRoute.mock.calls
+        .map(([route]: any[]) => `${route.method} ${route.path}`)
+        .sort();
+
+      // The harness has to report exactly what the running server registers - the whole point
+      // of the merge being applied in one place.
+      expect(registered).toEqual(['get /harness/live', 'get /harness/own']);
+      expect(app.container.has('HarnessController')).toBe(true);
+    });
+
+    test('should not register an undecorated subclass under its base class name', async () => {
+      @Service('BaseAudit')
+      class BaseAudit {
+        public record() {
+          return 'base';
+        }
+      }
+
+      // The decorator was forgotten. Passed explicitly rather than found by the scan.
+      class TenantAudit extends BaseAudit {
+        public override record() {
+          return 'tenant';
+        }
+      }
+
+      await using app = await createTestApp({
+        adapter: createMockAdapter().adapter as any,
+        logger: silentLogger,
+        components: [BaseAudit, TenantAudit],
+      });
+
+      const resolved: any = await app.resolve('BaseAudit');
+
+      // Under the chained identity read both classes registered as 'BaseAudit', the container
+      // promoted the entry to an array, and `audit.record()` threw far from the cause.
+      expect(Array.isArray(resolved)).toBe(false);
+      // Identity, not membership: a TenantAudit instance is also `instanceof BaseAudit`, so the
+      // last-write-wins form of the bug reads identical to the correct answer.
+      expect(resolved.constructor).toBe(BaseAudit);
+      expect(resolved.record()).toBe('base');
+    });
   });
 
   test('should stop the server through await using', async () => {

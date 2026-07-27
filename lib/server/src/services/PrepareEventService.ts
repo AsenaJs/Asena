@@ -1,7 +1,8 @@
 import type { Container, ICoreService } from '../../../ioc';
 import { ComponentConstants, ComponentType, CoreService, ICoreServiceNames } from '../../../ioc';
 import { Inject } from '../../../ioc/component';
-import { getTypedMetadata } from '../../../utils';
+import { getChainedTypedMetadata, getOwnTypedMetadata, getTypedMetadata } from '../../../utils';
+import { type ServerLogger, yellow } from '../../../logger';
 import type { EventHandlerMetadata, EventDispatchService } from '../../event';
 
 /**
@@ -32,6 +33,31 @@ export class PrepareEventService implements ICoreService {
   @Inject(ICoreServiceNames.EVENT_DISPATCH_SERVICE)
   private dispatchService!: EventDispatchService;
 
+  @Inject(ICoreServiceNames.SERVER_LOGGER)
+  private logger!: ServerLogger;
+
+  /**
+   * Report @On handlers an event service picked up from its base classes
+   *
+   * Inherited handlers are invisible in the source of the class you are reading, so the
+   * resolved set is logged. Silent when the service declares all of its own handlers.
+   */
+  private logInheritedHandlers(service: any, handlers: Record<string, EventHandlerMetadata>): void {
+    const own = getOwnTypedMetadata<Record<string, EventHandlerMetadata>>(
+      ComponentConstants.EventHandlersKey,
+      service.constructor,
+    );
+    const inherited = Object.keys(handlers).filter((methodName) => !(methodName in (own || {})));
+
+    if (inherited.length === 0) {
+      return;
+    }
+
+    const name = getTypedMetadata<string>(ComponentConstants.NameKey, service.constructor) || service.constructor.name;
+
+    this.logger.info(`EventService ${yellow(name)} inherits handlers: ${inherited.join(', ')}`);
+  }
+
   /**
    * Prepare event handlers - Called during bootstrap
    */
@@ -57,16 +83,20 @@ export class PrepareEventService implements ICoreService {
     // Extract prefix metadata
     const prefix = getTypedMetadata<string>(ComponentConstants.EventPrefixKey, service.constructor) || '';
 
-    // Extract handlers metadata
-    const handlers = getTypedMetadata<Record<string, EventHandlerMetadata>>(
+    // Chained, not plain getTypedMetadata: @On writes to the class declaring the method, and
+    // reading the nearest ancestor's record whole meant one @On on the subclass shadowed
+    // every handler it inherited.
+    const handlers = getChainedTypedMetadata<Record<string, EventHandlerMetadata>>(
       ComponentConstants.EventHandlersKey,
       service.constructor,
     );
 
-    if (!handlers) {
+    if (Object.keys(handlers).length === 0) {
       // No @On methods - skip
       return;
     }
+
+    this.logInheritedHandlers(service, handlers);
 
     // Register each handler
     for (const [methodName, metadata] of Object.entries(handlers)) {

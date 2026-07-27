@@ -4,9 +4,13 @@ import type { Socket } from './AsenaSocket';
 /**
  * A service class for handling WebSocket connections.
  *
+ * Defaults to `any` so that `extends AsenaWebSocketService` compiles without an explicit
+ * type argument - matching `Socket<T = any>` and the code `asena generate websocket`
+ * emits. Pass the argument to get typed `ws.data.values`.
+ *
  * @template T - The type of data expected in the WebSocket object.
  */
-export class AsenaWebSocketService<T> {
+export class AsenaWebSocketService<T = any> {
   /**
    * The WebSocket server instance.
    */

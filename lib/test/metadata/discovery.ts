@@ -1,7 +1,7 @@
 import type { DependencyClasses, Dependencies, Expressions } from '../../ioc';
 import type { FieldMetadata } from '../types';
 import { ComponentConstants } from '../../ioc';
-import { getTypedMetadata, getOwnTypedMetadata } from '../../utils';
+import { getOwnTypedMetadata } from '../../utils';
 
 /**
  * Discovers all fields with @Inject decorator in a component
@@ -108,8 +108,7 @@ export function discoverInjectedFieldsFromClass(ComponentClass: any): FieldMetad
  * ```
  */
 export function hasInjectedFields(ComponentClass: new (...args: any[]) => any): boolean {
-  const dependencies = getTypedMetadata<Dependencies>(ComponentConstants.DependencyKey, ComponentClass);
-  return dependencies !== undefined && Object.keys(dependencies).length > 0;
+  return discoverInjectedFieldsFromClass(ComponentClass).length > 0;
 }
 
 /**
@@ -125,8 +124,7 @@ export function getFieldServiceName(
   ComponentClass: new (...args: any[]) => any,
   fieldName: string,
 ): string | undefined {
-  const dependencies = getTypedMetadata<Dependencies>(ComponentConstants.DependencyKey, ComponentClass);
-  return dependencies?.[fieldName];
+  return discoverInjectedFieldsFromClass(ComponentClass).find((field) => field.fieldName === fieldName)?.serviceName;
 }
 
 /**
@@ -142,6 +140,5 @@ export function getFieldExpression(
   ComponentClass: new (...args: any[]) => any,
   fieldName: string,
 ): ((service: any) => any) | undefined {
-  const expressions = getTypedMetadata<Expressions>(ComponentConstants.ExpressionKey, ComponentClass);
-  return expressions?.[fieldName];
+  return discoverInjectedFieldsFromClass(ComponentClass).find((field) => field.fieldName === fieldName)?.expression;
 }

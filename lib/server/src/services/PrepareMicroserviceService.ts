@@ -1,13 +1,13 @@
 import type { Container, ICoreService } from '../../../ioc';
 import { ComponentConstants, ComponentType, CoreService, ICoreServiceNames } from '../../../ioc';
 import { Inject } from '../../../ioc/component';
-import { getTypedMetadata } from '../../../utils';
+import { getChainedTypedMetadata, getOwnTypedMetadata, getTypedMetadata } from '../../../utils';
 import { blue, type ServerLogger, yellow } from '../../../logger';
-import { DEFAULT_TRANSPORT_NAME } from '../../microservice/types';
-import { composeOnReceive } from '../../microservice/interceptorChain';
-import type { Ulak } from '../../messaging/Ulak';
-import type { MessageHandlerMetadata, MessagingInterceptor } from '../../microservice/types';
-import type { DestroyOptions, MessageContext, MicroserviceTransport } from '../../microservice/MicroserviceTransport';
+import { DEFAULT_TRANSPORT_NAME } from '../../microservice';
+import { composeOnReceive } from '../../microservice';
+import type { Ulak } from '../../messaging';
+import type { MessageHandlerMetadata, MessagingInterceptor } from '../../microservice';
+import type { DestroyOptions, MessageContext, MicroserviceTransport } from '../../microservice';
 
 /**
  * @description PrepareMicroserviceService - Registers microservice message handlers during bootstrap
@@ -73,8 +73,12 @@ export class PrepareMicroserviceService implements ICoreService {
     this.transports = transports;
 
     if (hasControllers) {
+      // Shared across controllers: two @MessageControllers can resolve to the same
+      // request/response pattern on the same transport just as easily as one can.
+      const registeredMessagePatterns = new Map<string, { controllerName: string; handlerName: string }>();
+
       for (const controller of controllers) {
-        this.registerController(controller, interceptors);
+        this.registerController(controller, interceptors, registeredMessagePatterns);
       }
     }
 
@@ -106,9 +110,38 @@ export class PrepareMicroserviceService implements ICoreService {
   }
 
   /**
+   * Report handlers a message controller picked up from its base classes
+   *
+   * Worth a line of its own: an inherited @EventPattern opens a real broker subscription,
+   * and that is not visible in the source of the controller you are reading. Silent when the
+   * controller declares all of its own handlers.
+   */
+  private logInheritedHandlers(
+    controller: any,
+    controllerName: string,
+    handlers: Record<string, MessageHandlerMetadata>,
+  ): void {
+    const own = getOwnTypedMetadata<Record<string, MessageHandlerMetadata>>(
+      ComponentConstants.MessageHandlersKey,
+      controller.constructor,
+    );
+    const inherited = Object.keys(handlers).filter((methodName) => !(methodName in (own || {})));
+
+    if (inherited.length === 0) {
+      return;
+    }
+
+    this.logger.info(`${blue('[Microservice]')} ${controllerName} inherits handlers: ${inherited.join(', ')}`);
+  }
+
+  /**
    * Register all handlers from a single message controller
    */
-  private registerController(controller: any, interceptors: MessagingInterceptor[]): void {
+  private registerController(
+    controller: any,
+    interceptors: MessagingInterceptor[],
+    registeredMessagePatterns: Map<string, { controllerName: string; handlerName: string }>,
+  ): void {
     const prefix = getTypedMetadata<string>(ComponentConstants.MessagePrefixKey, controller.constructor) || '';
 
     const transportName =
@@ -125,15 +158,22 @@ export class PrepareMicroserviceService implements ICoreService {
       );
     }
 
-    const handlers = getTypedMetadata<Record<string, MessageHandlerMetadata>>(
+    // Chained, not plain getTypedMetadata: the pattern decorators write to the class
+    // declaring the method, and reading the nearest ancestor's record whole meant one
+    // @MessagePattern on the subclass shadowed every handler it inherited.
+    const handlers = getChainedTypedMetadata<Record<string, MessageHandlerMetadata>>(
       ComponentConstants.MessageHandlersKey,
       controller.constructor,
     );
 
-    if (!handlers) {
+    if (Object.keys(handlers).length === 0) {
       // No @MessagePattern/@EventPattern methods - skip
       return;
     }
+
+    const controllerName = controller.constructor.name;
+
+    this.logInheritedHandlers(controller, controllerName, handlers);
 
     const resolved: { kind: 'msg' | 'evt'; pattern: string }[] = [];
 
@@ -165,6 +205,22 @@ export class PrepareMicroserviceService implements ICoreService {
       const finalPattern = this.buildPattern(prefix, metadata.pattern, applyPrefix);
 
       if (metadata.type === 'message') {
+        // Request/response: a second handler on the same pattern is ambiguous - nothing
+        // decides which one produces the reply. Events are exempt, where several
+        // subscribers on one pattern is the point.
+        const patternKey = `${transportName} ${finalPattern}`;
+        const existing = registeredMessagePatterns.get(patternKey);
+
+        if (existing) {
+          throw new Error(
+            `Duplicate message pattern detected: "${finalPattern}" on transport "${transportName}" — ` +
+              `already registered by ${existing.controllerName}.${existing.handlerName}(), ` +
+              `conflicts with ${controllerName}.${methodName}()`,
+          );
+        }
+
+        registeredMessagePatterns.set(patternKey, { controllerName, handlerName: methodName });
+
         transport.registerMessageHandler(finalPattern, wrapped);
         resolved.push({ kind: 'msg', pattern: finalPattern });
       } else {
@@ -173,7 +229,7 @@ export class PrepareMicroserviceService implements ICoreService {
       }
     }
 
-    this.logResolved(controller.constructor.name, transportName, prefix, resolved);
+    this.logResolved(controllerName, transportName, prefix, resolved);
   }
 
   /**

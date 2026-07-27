@@ -6,8 +6,6 @@ export class ComponentConstants {
   // Component metadata keys - Symbol based for uniqueness
   public static readonly NameKey = Symbol('component:name');
 
-  public static readonly TypeKey = Symbol('component:type');
-
   public static readonly ScopeKey = Symbol('component:scope');
 
   public static readonly PathKey = Symbol('component:path');
@@ -33,8 +31,6 @@ export class ComponentConstants {
   public static readonly CronKey = Symbol('component:cron');
 
   // Controller specific
-  public static readonly ControllerConfigKey = Symbol('controller:config');
-
   public static readonly ControllerDescriptionKey = Symbol('controller:description');
 
   public static readonly RouteKey = Symbol('controller:route');
@@ -43,20 +39,6 @@ export class ComponentConstants {
   public static readonly MiddlewaresKey = Symbol('middleware:middlewares');
 
   public static readonly ValidatorKey = Symbol('middleware:validator');
-
-  // Route specific
-  public static readonly MethodKey = Symbol('route:method');
-
-  public static readonly RoutePathKey = Symbol('route:path');
-
-  public static readonly RouteMiddlewaresKey = Symbol('route:middlewares');
-
-  public static readonly RouteValidatorKey = Symbol('route:validator');
-
-  // WebSocket specific
-  public static readonly WebSocketPathKey = Symbol('websocket:path');
-
-  public static readonly WebSocketMiddlewaresKey = Symbol('websocket:middlewares');
 
   // Static Serve specific
   public static readonly StaticServeRootKey = Symbol('staticServe:root');
