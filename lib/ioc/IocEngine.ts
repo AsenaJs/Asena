@@ -64,6 +64,8 @@ export class IocEngine implements ICoreService {
     // load components
     await this.loadComponents(components);
 
+    this.reportEmptyStrategyKeys();
+
     const injectableClasses = this.injectables.map((c) => c.Class);
 
     // Two-phase registration for PostProcessor support
@@ -656,6 +658,78 @@ export class IocEngine implements ICoreService {
       return [...new Set([...directDependencies, ...softDependencies])];
     } catch {
       return [];
+    }
+  }
+
+  /**
+   * Every strategy key a component consumes, keyed by the field that declares it. Walks the
+   * prototype chain like getStrategyDependencies does - a @Strategy field on a base class is
+   * injected into the subclass too, so it has to be reported against the subclass. Own class
+   * first, so a field redeclared in a subclass wins the same way injection resolves it.
+   */
+  private collectStrategyFields(component: Class): Map<string, string> {
+    const fields = new Map<string, string>();
+
+    const own = getOwnTypedMetadata<Strategies>(ComponentConstants.StrategyKey, component);
+
+    for (const [field, key] of Object.entries(own ?? {})) {
+      if (typeof key === 'string' && key) {
+        fields.set(field, key);
+      }
+    }
+
+    const parent = Object.getPrototypeOf(component);
+
+    if (typeof parent === 'function' && parent !== Function.prototype) {
+      for (const [field, key] of this.collectStrategyFields(parent)) {
+        if (!fields.has(field)) {
+          fields.set(field, key);
+        }
+      }
+    }
+
+    return fields;
+  }
+
+  /**
+   * Reports strategy keys nothing implements, once per injection site, at boot.
+   *
+   * An empty key is a legitimate plugin point and is injected as `[]`, which means a *typo'd*
+   * interface name no longer fails at boot either - it surfaces much later as a collection
+   * that is silently always empty. This line is what keeps the two apart.
+   *
+   * `debug` with no fallback to `info`, deliberately unlike the adapters' error handlers
+   * (`Ergenecore.respondToError`, `HonoAdapter`): there the line must not disappear, here a
+   * deliberate plugin point should stay quiet unless someone is looking.
+   */
+  private reportEmptyStrategyKeys(): void {
+    // Optional twice over: `debug` is optional on ServerLogger, and `logger` itself is absent
+    // whenever an IocEngine is built directly instead of through DI - which several suites do.
+    // A diagnostic must not be the thing that decides whether registration runs. The warn/error
+    // paths elsewhere stay unguarded, so genuinely broken wiring still fails loudly.
+    const debug = this.logger?.debug;
+
+    if (!debug) {
+      return;
+    }
+
+    const implemented = new Set(this.injectables.map((injectable) => injectable.interface).filter(Boolean));
+
+    for (const { Class: component } of this.injectables) {
+      const name = getTypedMetadata<string>(ComponentConstants.NameKey, component) || component.name;
+
+      for (const [field, key] of this.collectStrategyFields(component)) {
+        // A double seeded through `overrides` is a real implementation of that key - warning
+        // here would fire on every slice test that mocks a plugin point
+        if (implemented.has(key) || this._container.isOverridden(key)) {
+          continue;
+        }
+
+        debug.call(
+          this.logger,
+          `[IocEngine] Strategy key '${key}' has no implementations - ${name}.${field} will be injected as []`,
+        );
+      }
     }
   }
 

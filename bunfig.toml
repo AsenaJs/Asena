@@ -1,7 +1,5 @@
 [test]
 
-coverage = true
-
 coverageSkipTestFiles = true
 
 coveragePathIgnorePatterns = [

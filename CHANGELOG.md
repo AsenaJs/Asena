@@ -1,5 +1,47 @@
 # @asenajs/asena
 
+## 0.9.1
+
+### Patch Changes
+
+- `@Strategy` now behaves the same at every cardinality
+
+  `@Strategy` is multi-valued by construction — that is the whole difference from `@Inject`. It was
+  correct at exactly one cardinality:
+
+  | implementations       | before                                                   | now                      |
+  | --------------------- | -------------------------------------------------------- | ------------------------ |
+  | 0                     | boot aborted with `<key> is not registered`              | injected as `[]`         |
+  | 1                     | field held a **bare instance**, not `[instance]`         | injected as `[instance]` |
+  | 1, with an expression | reading the field threw `strategy.map is not a function` | expression applied       |
+  | 2+                    | correct                                                  | unchanged                |
+
+  One root cause. `Container.register()` stores a key's first registration as a bare
+  `ContainerService` and only converts to an array on the second, so `_services[key]` has three
+  shapes — absent, object, array — which `resolve()` maps to throw / `T` / `T[]`. That is right for
+  `@Inject`, whose dependency is single-valued: it is either there or the component is broken.
+  `resolveStrategy` was a cast over that same lookup, so it declared `T[]` for all three.
+
+  The single-implementation case was the more dangerous half. Zero died loudly at boot; one passed
+  boot and failed later at the first `.length`, `for...of` or `.map()`, far from the cause. And
+  because the bug disappears as implementations are added — write the registry (boot dies), add the
+  first plugin (silently wrong), add the second (suddenly works) — it tends to get "fixed" by
+  accident and never diagnosed.
+
+  A strategy key with no implementations is a plugin point before its first plugin, which is the
+  ordinary starting condition of one, not a misconfiguration. This also fixes mocking a strategy key
+  through `createTestApp`'s `overrides`, which produced the same single-implementation shape.
+
+  **API note:** `Container.resolveStrategy` is now `Promise<T[]>` instead of `Promise<T[] | null>`.
+  The `null` half was never reachable — `resolve()` threw instead — so this narrows the type to what
+  the method actually did.
+
+  **New diagnostic:** because an empty key is now silently `[]`, a typo'd interface name no longer
+  fails at boot; it surfaces later as a collection that is always empty. `IocEngine` therefore logs
+  `Strategy key '<key>' has no implementations - <Component>.<field> will be injected as []` once per
+  injection site at boot, at `debug` level, so a deliberate plugin point stays quiet. Keys supplied
+  through `overrides` are not reported.
+
 ## 0.9.0
 
 ### Minor Changes
