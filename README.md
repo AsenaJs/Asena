@@ -4,7 +4,7 @@
 
 # Asena
 
-[![Version](https://img.shields.io/badge/version-0.9.0-blue.svg)](https://asena.sh)
+[![Version](https://img.shields.io/badge/version-0.9.1-blue.svg)](https://asena.sh)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
 [![Bun Version](https://img.shields.io/badge/Bun-1.3.12%2B-blueviolet)](https://bun.sh)
 

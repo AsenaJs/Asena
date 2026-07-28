@@ -139,8 +139,42 @@ export class Container {
     return this._services[key] !== undefined;
   }
 
-  public resolveStrategy<T>(key: string): Promise<T[] | null> {
-    return this.resolve<T>(key) as Promise<T[] | null>;
+  /**
+   * @description Resolve every implementation registered under a strategy key.
+   *
+   * Cardinality is normalized here rather than borrowed from resolve(). `_services[key]` has
+   * three shapes - absent, a bare ContainerService, an array - and resolve() maps them to
+   * throw / T / T[]. That is right for @Inject, whose dependency is single-valued: it is
+   * either there or the component is broken. @Strategy is multi-valued by construction, so
+   * zero is a cardinality it has to be able to take (a plugin point before its first plugin)
+   * and one has to arrive as a one-element array like any other count.
+   *
+   * This used to be a cast over resolve(), which made it correct at exactly one cardinality:
+   * an empty key aborted the boot, and a single implementation was injected as a bare
+   * instance whose first `.length` / `for...of` / `.map()` failed at runtime.
+   *
+   * @param {string} key - Strategy (interface) key
+   * @returns {Promise<T[]>} Every implementation, empty when the key has none
+   */
+  public async resolveStrategy<T>(key: string): Promise<T[]> {
+    // Kept from resolve(): a cycle running through a strategy key must still be reported
+    // rather than recursing until the stack overflows
+    this.circularDetector.checkCircular(key);
+    this.circularDetector.push(key);
+
+    try {
+      const service = this._services[key];
+
+      if (!service) {
+        return [];
+      }
+
+      return Array.isArray(service)
+        ? await this.resolveMultipleContainerService<T>(service)
+        : [await this.resolveContainerService<T>(service)];
+    } finally {
+      this.circularDetector.pop(key);
+    }
   }
 
   /**
