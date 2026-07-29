@@ -121,6 +121,13 @@ describe('@PostConstruct inheritance', () => {
 
   const register = async (classes: Class[]) => {
     await engine.searchAndRegister(classes.map((Class) => ({ Class, interface: null }) as InjectableComponent));
+
+    // Start hooks are deferred to server.start(), which these tests do not go through - they
+    // are about which hooks the inheritance chain yields, not about when they fire. Drive them
+    // the way LifecycleService does.
+    for (const component of engine.container.lifecycle) {
+      await engine.container.executeStartHooks(component.instance, component.Class);
+    }
   };
 
   test('runs hooks from every level of the chain', async () => {

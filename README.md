@@ -40,6 +40,42 @@ asena dev start
 
 Visit [asena.sh/docs/get-started](https://asena.sh/docs/get-started) for detailed setup instructions.
 
+## Component Lifecycle
+
+A component can take part in the server's start and stop:
+
+```typescript
+@Service()
+export class OutboxWorker {
+  @OnStart()
+  public start(): void {
+    // Runs during server.start(), after every component is constructed and after the
+    // microservice transports are connected - but before the HTTP socket binds, so no
+    // request can reach a component that has not run yet.
+    this.running = true;
+    this.loop = this.run(); // start it and return; do not block here
+  }
+
+  @OnStop()
+  public async stop(): Promise<void> {
+    // Runs during server.stop(), in the reverse order, so this component still has its
+    // dependencies while it lets go of its own.
+    this.running = false;
+    await this.loop;
+  }
+}
+```
+
+`@OnStart` is the new name for `@PostConstruct`, which remains as a deprecated alias writing the
+same metadata — existing code keeps working. Hooks run in registration order, which is the
+topological order the container computed, so dependencies start first and stop last. A failing
+`@OnStart` aborts the boot and rolls back what had already started; a failing or hanging `@OnStop`
+is logged and skipped so the rest of the shutdown still runs.
+
+`SIGTERM`, `SIGINT` and `SIGHUP` are handled by default and translated into `server.stop()`, so a
+rolling deploy drains rather than kills. See
+[asena.sh/docs/concepts/lifecycle](https://asena.sh/docs/concepts/lifecycle).
+
 ## Performance
 
 Built on Bun runtime for exceptional performance:

@@ -5,12 +5,27 @@ import type {
   ContainerService,
   Dependencies,
   Expressions,
+  LifecycleComponent,
+  StartHookMode,
   Strategies,
 } from './types';
 import { ComponentConstants } from './constants';
 import { getOwnTypedMetadata, getTypedMetadata } from '../utils';
 import { CircularDependencyDetector } from './CircularDependencyDetector';
 import { CORE_SERVICE } from './decorators';
+
+/**
+ * The message behind an assignment to a wired field.
+ *
+ * Injected fields are installed as accessors with no setter, so assigning to one throws the
+ * engine's own `TypeError: Attempted to assign to readonly property.` - no field name, no class,
+ * no hint at what to do instead. Everybody reaches for `Object.assign(instance, {dep: fake})`
+ * once; this turns that minute into a sentence.
+ */
+const injectedFieldMessage = (Class: Class, field: string, decorator: string): string =>
+  `Cannot assign to '${field}' on ${Class.name}: fields wired by ${decorator} are read-only. ` +
+  "To swap a dependency in a test, use the 'overrides' option of createTestApp()/createWebTest(), " +
+  'or mockComponent().';
 
 export class Container {
   private _services: { [key: string]: ContainerService | ContainerService[] } = {};
@@ -20,6 +35,26 @@ export class Container {
   private postProcessors: ComponentPostProcessor[] = [];
 
   private overriddenKeys = new Set<string>();
+
+  /**
+   * Whether construction runs start hooks itself.
+   *
+   * `immediate` is the original behaviour and stays that way for core services, for the
+   * post-processor closure the IoC engine registers ahead of everything else, and for every
+   * transient. `deferred` holds the hooks back so `LifecycleService` can run them from
+   * `server.start()`, once the whole graph exists.
+   */
+  private startHookMode: StartHookMode = 'immediate';
+
+  /**
+   * Every singleton built by `register()`, in registration order - which the IoC engine has
+   * already topologically sorted, so dependencies come before dependents. Start hooks walk it
+   * forwards, stop hooks backwards.
+   *
+   * Instances handed in through `registerInstance()` are deliberately absent: nothing ever ran
+   * a start hook on them, so there is no started/stopped pair to keep symmetric.
+   */
+  private lifecycleComponents: LifecycleComponent[] = [];
 
   public constructor(services?: { [key: string]: ContainerService | ContainerService[] }) {
     this._services = services || {};
@@ -33,22 +68,47 @@ export class Container {
       return;
     }
 
+    const instance = singleton ? await this.prepareInstance(Class) : null;
+
+    if (singleton) {
+      this.trackLifecycle(key, instance, Class);
+    }
+
     if (this._services[key]) {
       if (Array.isArray(this._services[key])) {
-        this._services[key].push({ Class, instance: singleton ? await this.prepareInstance(Class) : null, singleton });
+        this._services[key].push({ Class, instance, singleton });
 
         return;
       }
 
-      this._services[key] = [
-        this._services[key],
-        { Class, instance: singleton ? await this.prepareInstance(Class) : null, singleton },
-      ];
+      this._services[key] = [this._services[key], { Class, instance, singleton }];
 
       return;
     }
 
-    this._services[key] = { Class, instance: singleton ? await this.prepareInstance(Class) : null, singleton };
+    this._services[key] = { Class, instance, singleton };
+  }
+
+  /**
+   * @description Record a singleton for the start/stop lifecycle.
+   *
+   * `started` reflects what already happened rather than what is planned: a component built in
+   * immediate mode has run its start hooks by the time it gets here, so it is stoppable at once.
+   * A deferred one is not started until `LifecycleService` says so - and a component that never
+   * started must never be stopped.
+   *
+   * @param {string} key - Service identifier
+   * @param {unknown} instance - The post-processed instance
+   * @param {Class} Class - The class it was built from
+   * @returns {void}
+   */
+  private trackLifecycle(key: string, instance: unknown, Class: Class): void {
+    this.lifecycleComponents.push({
+      key,
+      instance,
+      Class,
+      started: this.startHookMode === 'immediate',
+    });
   }
 
   /**
@@ -245,14 +305,34 @@ export class Container {
     this.postProcessors.push(processor);
   }
 
+  /**
+   * @description Choose whether construction runs start hooks or hands them to LifecycleService.
+   *
+   * The IoC engine switches to `deferred` around user components only. Post-processors keep
+   * running theirs at construction because `postProcess()` reads state a start hook sets - defer
+   * that and every component the processor wraps is built against an uninitialised processor.
+   *
+   * @param {StartHookMode} mode - immediate (default) or deferred
+   * @returns {void}
+   */
+  public setStartHookMode(mode: StartHookMode): void {
+    this.startHookMode = mode;
+  }
+
+  /**
+   * @description Singletons in registration order, for the start/stop lifecycle.
+   * @returns {LifecycleComponent[]} The live list - LifecycleService flips `started` on it
+   */
+  public get lifecycle(): LifecycleComponent[] {
+    return this.lifecycleComponents;
+  }
+
   private async prepareInstance<T>(Class: Class) {
     const newInstance = new Class();
 
     await this.injectDependencies(newInstance, Class); // dependency injection
 
     await this.injectStrategies(newInstance, Class); // strategy injection
-
-    await this.executePostConstructs(newInstance, Class); // post construct
 
     // Post-processing (skipped when postProcessors is empty - zero overhead)
     let processed: any = newInstance;
@@ -261,43 +341,92 @@ export class Container {
       processed = (await processor.postProcess(processed, Class)) ?? processed;
     }
 
+    // Deferred mode leaves the start hooks to LifecycleService. The hook runs against the
+    // *processed* instance either way - a post-processor may have returned a proxy, and the
+    // hook has to see the same object every other component was injected with.
+    if (this.startHookMode === 'immediate') {
+      await this.executeStartHooks(processed, Class);
+    }
+
     return processed as T;
   }
 
   /**
-   * @description Executes PostConstruct methods on the instance.
-   * Prevents duplicate execution of inherited methods by tracking executed method names.
-   * @param {any} newInstance - The instance to execute PostConstructs on
+   * @description Run every @OnStart (and its @PostConstruct alias) method on an instance.
+   *
+   * Walks the prototype chain ancestors-first and runs each method name once, so a hook
+   * inherited by three classes still fires once.
+   *
+   * A failure used to `process.exit(1)` here, which turned one broken component into a suite
+   * reporting `0 pass / 1 fail` with no indication of why. It now throws, naming the hook, with
+   * the original error as `cause` - the boot fails, the process decides what to do about it.
+   *
+   * @param {any} instance - The instance to run hooks on
    * @param {Class} Class - The class of the instance
    * @returns {Promise<void>}
    */
-  private async executePostConstructs(newInstance: any, Class: Class): Promise<void> {
+  public async executeStartHooks(instance: any, Class: Class): Promise<void> {
+    for (const hook of this.collectHookMethods(Class, ComponentConstants.PostConstructKey)) {
+      try {
+        await instance[hook]();
+      } catch (error) {
+        throw new Error(`@OnStart hook '${Class.name}.${hook}()' failed`, { cause: error });
+      }
+    }
+  }
+
+  /**
+   * @description The @OnStop method names for a class, in the order they should run.
+   *
+   * Reversed relative to the start hooks so a component tears down in the opposite order it
+   * was brought up, matching how LifecycleService walks the components themselves.
+   *
+   * @param {Class} Class - The class to inspect
+   * @returns {string[]} Method names, empty when the class declares none
+   */
+  public getStopHooks(Class: Class): string[] {
+    return this.collectHookMethods(Class, ComponentConstants.OnStopKey).reverse();
+  }
+
+  /**
+   * @description The @OnStart method names for a class, in the order they run.
+   * @param {Class} Class - The class to inspect
+   * @returns {string[]} Method names, empty when the class declares none
+   */
+  public getStartHooks(Class: Class): string[] {
+    return this.collectHookMethods(Class, ComponentConstants.PostConstructKey);
+  }
+
+  /**
+   * @description Collect decorated method names across the prototype chain, de-duplicated.
+   * @param {Class} Class - The class to inspect
+   * @param {symbol} metadataKey - Which hook list to read
+   * @returns {string[]} Method names, ancestors first
+   */
+  private collectHookMethods(Class: Class, metadataKey: symbol): string[] {
     const prototypeChain = this.getPrototypeChain(Class);
-    const executedMethods = new Set<string>();
+    const methods: string[] = [];
+    const seen = new Set<string>();
 
     for (const classInChain of prototypeChain.reverse()) {
-      const postConstructs: string[] = getOwnTypedMetadata<string[]>(ComponentConstants.PostConstructKey, classInChain);
+      const hooks: string[] = getOwnTypedMetadata<string[]>(metadataKey, classInChain);
 
-      if (!postConstructs) {
+      if (!hooks) {
         continue;
       }
 
-      for (const postConstruct of postConstructs) {
-        // Skip if already executed (prevents duplicate execution in inheritance chain)
-        if (executedMethods.has(postConstruct)) {
+      for (const hook of hooks) {
+        // Skip if already collected (prevents duplicate execution in inheritance chain)
+        if (seen.has(hook)) {
           continue;
         }
 
-        try {
-          await newInstance[postConstruct]();
-          executedMethods.add(postConstruct);
-        } catch (error) {
-          console.log('Error in post construct, exiting process');
-          console.error(error);
-          process.exit(1);
-        }
+        seen.add(hook);
+        methods.push(hook);
       }
     }
+
+    return methods;
   }
 
   private async injectStrategies(newInstance: any, Class: Class) {
@@ -337,6 +466,9 @@ export class Container {
         Object.defineProperty(newInstance, propertyKey, {
           get() {
             return expression?.[propertyKey] ? strategy.map((s) => expression[propertyKey](s)) : strategy;
+          },
+          set: () => {
+            throw new TypeError(injectedFieldMessage(Class, propertyKey, '@Strategy'));
           },
           enumerable: true,
           configurable: true,
@@ -378,6 +510,9 @@ export class Container {
         Object.defineProperty(newInstance, k, {
           get: () => {
             return expression?.[k] ? expression[k](instance) : instance;
+          },
+          set: () => {
+            throw new TypeError(injectedFieldMessage(Class, k, '@Inject'));
           },
           enumerable: true,
           configurable: true,

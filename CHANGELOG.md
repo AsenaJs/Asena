@@ -1,5 +1,101 @@
 # @asenajs/asena
 
+## 0.10.0
+
+### Minor Changes
+
+- Component lifecycle: `@OnStart` and `@OnStop`, run by the server rather than the container
+
+  `@PostConstruct` used to run inside `Container.register()`, in the middle of the component scan.
+  That put a component's initialisation in a half-built graph, before the microservice transports
+  existed — and it had no counterpart, so nothing the hook acquired was ever released. Every
+  framework package that opens a connection leaked it past `server.stop()`.
+
+  Both halves now live in a `LifecycleService` driven by `start()` and `stop()`.
+
+  **`@OnStart`** is the new name for `@PostConstruct`, which remains as a deprecated alias writing
+  the same metadata key — no migration needed beyond the import. It runs during `server.start()`,
+  after every component is constructed and after application setup, but **before the HTTP socket
+  binds**: a hook can now publish through `ulak`, and no request can reach a component whose hook
+  has not run. Hooks run in registration order, which is the topological order the IoC engine
+  computed, so dependencies start first.
+
+  **`@OnStop`** is new. It runs during `server.stop()` in the reverse order, with the HTTP surface
+  already down and the transports still up, so a component can finish in-flight work and publish a
+  last message. A hook that throws or exceeds its timeout is logged and skipped — one component
+  failing to let go must not strand the rest. Only components whose start hook completed are
+  stopped.
+
+  **Breaking:**
+
+  - Start hooks no longer run during registration. A component resolved from a server that was
+    created but never started is no longer initialised.
+  - A failing start hook no longer calls `process.exit(1)`. It throws, naming the hook, with the
+    original error as `cause`, and `start()` rejects. That is what turned one broken component
+    into a suite reporting `0 pass / 1 fail` with no indication of why.
+  - `SIGTERM`, `SIGINT` and `SIGHUP` are handled by default and translated into `stop()`. Pass
+    `shutdown: { signals: false }` to own them yourself.
+
+  `@PostProcessor` components keep the old construction-time timing, because `postProcess()` reads
+  what their own start hook sets up.
+
+  Also in this release:
+
+  - `stop()` takes `{ closeActiveConnections, drainTimeout, hookTimeout }`; the boolean form still
+    works. `drainTimeout` was previously unreachable from `stop()` even though both broker
+    transports supported it. The sequence is contained step by step, so one failure cannot strand
+    the steps behind it, and `ulak.dispose()` is now called for you.
+  - `shutdown` and `keepAlive` options on the factory. `keepAlive` holds the event loop open for a
+    headless process, so a worker component can start its loop in `@OnStart`, return, and have the
+    process stay alive — the entry file no longer has to block on it.
+  - `server.resolve(name)`, the same signature the test harness exposes as `app.resolve()`.
+  - The headless health endpoint now serves `{path}/live` and `{path}/ready` alongside `{path}`.
+    Readiness is wired to the lifecycle state and the health server outlives the drain, so
+    `/ready` answers 503 for the whole shutdown rather than for the instant before the process
+    exits.
+  - Assigning to an `@Inject` or `@Strategy` field now names the field and the class and points at
+    `overrides` / `mockComponent()`, instead of the engine's bare "Attempted to assign to readonly
+    property."
+
+### Patch Changes
+
+- Add `HttpException` to `@asenajs/asena/adapter`, so both adapters throw one class
+
+  Until now each adapter declared its own. `@asenajs/ergenecore` exported an `HttpException` taking
+  `(status, body, options)`; `@asenajs/hono-adapter` re-exported `HTTPException` from
+  `hono/http-exception`, taking `(status, { message })`. Two classes, two constructors, two response
+  bodies for the same intent - so an application could not move between adapters, and the
+  documentation could not show one example.
+
+  The class now lives in core and both adapters accept it:
+
+  ```typescript
+  import { HttpException } from '@asenajs/asena/adapter';
+
+  throw new HttpException(404, { error: 'User not found' });
+  ```
+
+  `import { HttpException } from '@asenajs/ergenecore'` still works and resolves to the _same class
+  object_, so nothing breaks. `@asenajs/hono-adapter` deliberately does not re-export it - it
+  already exports hono's `HTTPException`, and two throwable classes differing by the case of two
+  letters is a trap for autocomplete. Hono's `HTTPException` remains fully supported, so
+  `hono/basic-auth`, `hono/bearer-auth`, `hono/jwt` and hono's own validator are unaffected.
+
+  `HttpExceptionLike` gains an optional `getResponse?: () => Response`. The brand only ever
+  guaranteed `status`, and both adapters called `getResponse()` on anything branded - a foreign
+  exception carrying only the brand threw a `TypeError` from inside the error path, where nothing
+  can catch it. Declaring the member optional makes the capability check type-safe.
+
+  **Branch on `isHttpException`, not `instanceof`.** This release makes that advice stronger rather
+  than weaker: `@asenajs/asena` is a peer dependency of every adapter, so two resolved copies now
+  produce two `HttpException` classes exactly as two adapter copies used to. The registered-symbol
+  brand crosses copies; `instanceof` does not.
+
+  Released as a patch on purpose. A new export would ordinarily be a minor, but eight packages
+  declare `@asenajs/asena: ^0.9.0` - a caret range on a 0.x version does not cross to `0.10.0`, and
+  core is published first, so a minor would make every one of them uninstallable the moment it hit
+  npm.
+
 ## 0.9.1
 
 ### Patch Changes

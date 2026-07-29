@@ -31,6 +31,9 @@ export enum ICoreServiceNames {
   // Schedule Services (Phase 5)
   CRON_RUNNER = 'CronRunner',
 
+  // Lifecycle Services (Phase 5)
+  LIFECYCLE_SERVICE = 'LifecycleService',
+
   // Factory Services (Phase 6+)
   CORE_CONTAINER = 'CoreContainer',
   ASENA_SERVER = 'AsenaServer',

@@ -61,6 +61,12 @@ export async function createTestApp<A extends AsenaAdapter<any, any> = AsenaAdap
     overrides,
     // Port 0 lets Bun assign a free ephemeral port, which removes the random-port race
     port: options.port ?? 0,
+    // A test process boots many servers and owns its own signal handling; installing a handler
+    // per app would leave a listener behind for every one of them. Also keeps a stray Ctrl+C
+    // from being intercepted by whichever test app happened to be running.
+    shutdown: { signals: false },
+    // Nothing here should hold the event loop open once the suite is done.
+    keepAlive: false,
   });
 
   await server.start(socketPath ? { unix: socketPath } : undefined);
