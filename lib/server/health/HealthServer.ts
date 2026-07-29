@@ -2,18 +2,22 @@ import * as bun from 'bun';
 import { blue, type ServerLogger } from '../../logger';
 import type { HealthOptions } from '../AsenaServerFactory';
 import type { Ulak } from '../messaging/Ulak';
+import { LifecycleState } from '../lifecycle';
 
 /**
  * @description Minimal zero-dependency health endpoint for headless/hybrid deployments.
  *
- * Serves a single endpoint (default GET /healthz) reporting process liveness and
- * per-microservice-transport connection state - built for Kubernetes probes on
- * headless services that have no HTTP adapter.
+ * Three paths, because liveness and readiness answer different questions and a probe that
+ * conflates them restarts a pod that was only busy starting up:
  *
- * Responses:
- * - No microservice transports configured → 200 { status: 'up', uptime }
- * - All transports connected → 200 { status: 'up', uptime, transports: { name: 'connected' } }
- * - Any transport disconnected → 503 { status: 'degraded', ... }
+ * - `GET {path}/live` - is the process alive? Never touches a dependency, so it stays 200 for
+ *   as long as the event loop turns. This is what a restart policy should point at.
+ * - `GET {path}/ready` - should traffic come here? 503 while starting, while stopping, and
+ *   whenever a microservice transport is disconnected.
+ * - `GET {path}` - the original endpoint, same body as `/ready`, kept for compatibility.
+ *
+ * Ready reports 503 the moment shutdown begins, which is the point: a load balancer drops the
+ * instance while it drains rather than after it has already stopped answering.
  */
 export class HealthServer {
   private server?: bun.Server<any>;
@@ -24,6 +28,8 @@ export class HealthServer {
     private readonly options: HealthOptions,
     private readonly ulak: Ulak,
     private readonly logger: ServerLogger,
+    /** Reads the server's runtime state; absent in tests that only exercise transports. */
+    private readonly lifecycleState?: () => LifecycleState,
   ) {}
 
   public start(): void {
@@ -34,17 +40,21 @@ export class HealthServer {
     this.server = bun.serve({
       port: this.options.port,
       fetch: (request: Request) => {
-        const url = new URL(request.url);
+        const { pathname } = new URL(request.url);
 
-        if (url.pathname !== path) {
-          return new Response('Not Found', { status: 404 });
+        if (pathname === `${path}/live`) {
+          return Response.json({ status: 'up', uptime: this.uptime() });
         }
 
-        return this.buildHealthResponse();
+        if (pathname === path || pathname === `${path}/ready`) {
+          return this.buildReadinessResponse();
+        }
+
+        return new Response('Not Found', { status: 404 });
       },
     });
 
-    this.logger.info(`${blue('[Health]')} Health endpoint ready at :${this.options.port}${path}`);
+    this.logger.info(`${blue('[Health]')} Health endpoint ready at :${this.options.port}${path} (+ /live, /ready)`);
   }
 
   public stop(): void {
@@ -52,10 +62,21 @@ export class HealthServer {
     this.server = undefined;
   }
 
-  private buildHealthResponse(): Response {
-    const transports = this.ulak.getMicroserviceTransports();
+  private uptime(): number {
+    return Math.round((Date.now() - this.startedAt) / 1000);
+  }
 
-    const uptime = Math.round((Date.now() - this.startedAt) / 1000);
+  private buildReadinessResponse(): Response {
+    const uptime = this.uptime();
+    const state = this.lifecycleState?.();
+
+    // Draining or not up yet. Reported before the transport check because it is the more
+    // specific answer: a stopping instance is not ready even if every transport is healthy.
+    if (state && state !== LifecycleState.STARTED) {
+      return Response.json({ status: 'not_ready', state, uptime }, { status: 503 });
+    }
+
+    const transports = this.ulak.getMicroserviceTransports();
 
     if (transports.size === 0) {
       return Response.json({ status: 'up', uptime });

@@ -47,6 +47,17 @@ import type { PrepareMicroserviceService } from './src/services/PrepareMicroserv
 import type { CronRunner } from './schedule';
 import type { MessagingInterceptor } from './microservice';
 import type { MicroserviceTransport } from './microservice';
+import type { LifecycleService } from './lifecycle';
+import type { AsenaStopOptions, ShutdownOptions } from './types';
+
+/**
+ * Whatever a catch block or a signal handler received, in a shape safe to put in a log line.
+ *
+ * `String(value)` is not safe here: a rejection can carry any value, and a plain object
+ * stringifies to `[object Object]` - which is exactly the log line nobody can act on.
+ */
+const describeError = (error: unknown): string =>
+  error instanceof Error ? (error.stack ?? error.message) : bun.inspect(error);
 
 /**
  * @description AsenaServer - Main server class for Asena framework
@@ -102,6 +113,9 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
   @Inject(ICoreServiceNames.CRON_RUNNER)
   private cronRunner: CronRunner;
 
+  @Inject(ICoreServiceNames.LIFECYCLE_SERVICE)
+  private lifecycleService: LifecycleService;
+
   // Instance state
   private _port!: number;
 
@@ -118,6 +132,22 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
   private _health?: HealthOptions;
 
   private healthServer?: HealthServer;
+
+  private _shutdown?: ShutdownOptions;
+
+  private _keepAlive?: boolean;
+
+  // The shutdown, once started. Set for the life of the instance rather than for the duration
+  // of the teardown, so it answers both a concurrent stop() and a later one.
+  private stopping?: Promise<void>;
+
+  private signalHandlers = new Map<NodeJS.Signals, () => void>();
+
+  private unhandledErrorHandler?: (error: unknown) => void;
+
+  // Headless processes have no listening socket to hold the event loop open, so a worker whose
+  // @OnStart returned would otherwise exit the moment start() resolved.
+  private keepAliveTimer?: Timer;
 
   // The Bun server returned by the adapter - exposes the actually bound port, which is
   // what a caller needs when starting on port 0 or on a unix socket
@@ -156,6 +186,22 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
 
     this._logger.info('All components registered and ready to use');
 
+    // Component start hooks, before application setup rather than after it.
+    //
+    // A @Config's hooks are not all closures the framework merely holds on to. `serveOptions()`,
+    // `globalMiddlewares()` and `transport()` are *called* during setup, and prepareMicroservices()
+    // goes on to init() and listen() whatever transport() returned. Every one of those runs
+    // against the components the config injects - so a config that builds a transport from an
+    // injected service, which is the documented pattern in the redis and kafka packages, reaches
+    // for a connection whose @OnStart has not opened it and takes the boot down with it.
+    //
+    // Running the hooks first costs the ability to publish through ulak from an @OnStart, since
+    // the transports are not wired until the next line. That is a real loss and it is the reason
+    // this used to sit further down; it is worth less than a config that cannot use its own
+    // dependencies. `onError()` and `onNotFound()` were always safe either way - the framework
+    // binds those and calls them per request, long after this point.
+    await this.lifecycleService.start();
+
     // Phase 7: Application setup
     this._coreContainer.setPhase(CoreBootstrapPhase.APPLICATION_SETUP);
     await this.prepareConfigs();
@@ -180,9 +226,12 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
     this.cronRunner.startAll();
 
     if (this._health) {
-      this.healthServer = new HealthServer(this._health, this._ulak, this._logger);
+      this.healthServer = new HealthServer(this._health, this._ulak, this._logger, () => this.lifecycleService.state);
       this.healthServer.start();
     }
+
+    this.installShutdownHandlers();
+    this.installKeepAlive();
 
     if (this._gc) {
       bun.gc(true);
@@ -191,16 +240,94 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
 
   /**
    * @description Stop the server and release resources
-   * @param {boolean} closeActiveConnections - Whether to close active connections immediately
+   *
+   * The order is what makes a shutdown graceful rather than merely quick:
+   * 1. stop taking new work - cron, health, then the HTTP surface
+   * 2. run the components' @OnStop hooks, so they can finish in flight work and publish a last
+   *    message while the transports are still up
+   * 3. only then take the transports down
+   *
+   * Runs once. Concurrent callers await the same teardown, and a later call is a no-op that
+   * returns the original outcome - including its failure, if it had one. Every step was
+   * attempted the first time, so there is nothing a retry could pick up.
+   *
+   * Safe on a server that never started. Note the rule is per component and not "nothing runs":
+   * a component whose start hook already ran gets its stop hook, and post-processors (with the
+   * closure they depend on) run theirs at construction. So a boot that failed before `start()`
+   * still releases what a post-processor acquired - which is the point, since that is where the
+   * telemetry providers live.
+   *
+   * @param {boolean | AsenaStopOptions} options - Legacy boolean is `closeActiveConnections`
    * @returns {Promise<void>}
    */
-  public async stop(closeActiveConnections = true): Promise<void> {
-    this.cronRunner.stopAll();
-    this.healthServer?.stop();
-    // Adapter first: in-flight HTTP handlers may still call ulak.send(), so
+  public async stop(options: boolean | AsenaStopOptions = true): Promise<void> {
+    const {
+      closeActiveConnections = true,
+      drainTimeout,
+      hookTimeout,
+    } = typeof options === 'boolean' ? { closeActiveConnections: options } : options;
+
+    // Latched, not cleared when the teardown settles. Clearing it would make this a guard
+    // against *concurrent* stops only, and a later sequential stop() would walk the whole
+    // sequence again: the component hooks would correctly find nothing to do, but the adapter,
+    // the cron runner and the transports are not self-guarding, so a stopped server would stop
+    // itself a second time and log a second round of teardown errors.
+    this.stopping ??= this.runStop(closeActiveConnections, drainTimeout, hookTimeout);
+
+    return this.stopping;
+  }
+
+  /**
+   * @description The shutdown sequence itself, wrapped by stop()'s idempotence guard.
+   * @param {boolean} closeActiveConnections - Whether to close active connections immediately
+   * @param {number | undefined} drainTimeout - How long transports may drain
+   * @param {number | undefined} hookTimeout - Per-@OnStop ceiling
+   * @returns {Promise<void>}
+   */
+  private async runStop(closeActiveConnections: boolean, drainTimeout?: number, hookTimeout?: number): Promise<void> {
+    this.removeShutdownHandlers();
+    this.clearKeepAlive();
+
+    // First thing, before anything is torn down: the readiness probe has to start answering
+    // 503 while there is still something to drain, or a load balancer keeps sending traffic
+    // right up to the moment the socket closes.
+    this.lifecycleService.markStopping();
+
+    // Every step is contained, for the same reason a failing @OnStop hook does not abort the
+    // rest: the steps are independent, and an adapter that cannot close its socket is no reason
+    // to leave a database pool, a cron timer and a broker subscription behind it. Failures are
+    // collected and raised together at the end, so a caller still learns the shutdown was not
+    // clean - it just learns it after everything that could be released has been.
+    const failures: Error[] = [];
+
+    const release = async (step: string, run: () => unknown): Promise<void> => {
+      try {
+        await run();
+      } catch (error) {
+        this._logger.error(`${yellow('[AsenaServer]')} ${step} failed during shutdown: ${describeError(error)}`);
+        failures.push(error instanceof Error ? error : new Error(`${step}: ${describeError(error)}`));
+      }
+    };
+
+    await release('cron runner', () => this.cronRunner.stopAll());
+    // Adapter before the hooks: in-flight HTTP handlers may still call ulak.send(), so
     // transports must outlive the HTTP surface that uses them
-    await this._adapter?.stop(closeActiveConnections);
-    await this.prepareMicroserviceService.destroy();
+    await release('adapter', () => this._adapter?.stop(closeActiveConnections));
+
+    await release('component stop hooks', () => this.lifecycleService.stop(hookTimeout ?? this._shutdown?.timeout));
+
+    await release('microservice transports', () =>
+      this.prepareMicroserviceService.destroy(drainTimeout === undefined ? undefined : { drainTimeout }),
+    );
+
+    await release('ulak', () => this._ulak.dispose());
+
+    // Last: the probe outlives the drain it is reporting on.
+    await release('health server', () => this.healthServer?.stop());
+
+    if (failures.length > 0) {
+      throw new AggregateError(failures, `Server shutdown completed with ${failures.length} failure(s)`);
+    }
   }
 
   /**
@@ -223,6 +350,198 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
   public health(options: HealthOptions): this {
     this._health = options;
     return this;
+  }
+
+  /**
+   * @description Configure signal handling and shutdown timeouts
+   * Builder pattern for API compatibility
+   * @param {ShutdownOptions} options - Shutdown options
+   * @returns {this}
+   */
+  public shutdown(options: ShutdownOptions): this {
+    this._shutdown = options;
+    return this;
+  }
+
+  /**
+   * @description Hold the event loop open while the server runs
+   * Builder pattern for API compatibility
+   * @param {boolean} enabled - Defaults to true in headless mode, false otherwise
+   * @returns {this}
+   */
+  public keepAlive(enabled: boolean): this {
+    this._keepAlive = enabled;
+    return this;
+  }
+
+  /**
+   * @description Resolve a component from the container by name.
+   *
+   * The same signature the test harness exposes as `app.resolve()`. Reaching through
+   * `server.coreContainer.container.resolve()` worked and was what everybody found instead.
+   *
+   * @param {string} name - Component name
+   * @returns {Promise<T>} The component
+   */
+  public async resolve<T>(name: string): Promise<T> {
+    return (await this._coreContainer.container.resolve<T>(name)) as T;
+  }
+
+  /**
+   * @description Translate process signals into a graceful shutdown.
+   *
+   * Handlers are installed here rather than at construction so a server that is created but
+   * never started leaves the process's signal handling alone, and they are removed again in
+   * stop() so a suite that boots twenty servers does not accumulate twenty listeners - the
+   * leak the otel package's own SIGTERM hook has today.
+   *
+   * @returns {void}
+   */
+  private installShutdownHandlers(): void {
+    for (const signal of this.resolveSignals()) {
+      const handler = (): void => this.onShutdownSignal(signal);
+
+      this.signalHandlers.set(signal, handler);
+      process.on(signal, handler);
+    }
+
+    if (this._shutdown?.onUnhandledError) {
+      this.unhandledErrorHandler = (error: unknown): void => {
+        this._logger.error(`${yellow('[AsenaServer]')} unhandled error, shutting down: ${describeError(error)}`);
+        this.shutdownThenExit(1);
+      };
+
+      process.on('uncaughtException', this.unhandledErrorHandler);
+      process.on('unhandledRejection', this.unhandledErrorHandler);
+    }
+  }
+
+  /**
+   * @description Which signals to listen for.
+   * @returns {NodeJS.Signals[]} Empty when signal handling is switched off
+   */
+  private resolveSignals(): NodeJS.Signals[] {
+    const configured = this._shutdown?.signals ?? true;
+
+    if (configured === false) {
+      return [];
+    }
+
+    return configured === true ? ['SIGTERM', 'SIGINT', 'SIGHUP'] : configured;
+  }
+
+  /**
+   * @description Remove every handler installed by installShutdownHandlers().
+   * @returns {void}
+   */
+  private removeShutdownHandlers(): void {
+    for (const [signal, handler] of this.signalHandlers) {
+      process.off(signal, handler);
+    }
+
+    this.signalHandlers.clear();
+
+    if (this.unhandledErrorHandler) {
+      process.off('uncaughtException', this.unhandledErrorHandler);
+      process.off('unhandledRejection', this.unhandledErrorHandler);
+      this.unhandledErrorHandler = undefined;
+    }
+  }
+
+  /**
+   * @description React to a shutdown signal.
+   *
+   * A second signal while a shutdown is already running is a person pressing Ctrl+C again
+   * because the first one looked stuck; take them at their word and go.
+   *
+   * @param {NodeJS.Signals} signal - The signal received
+   * @returns {void}
+   */
+  private onShutdownSignal(signal: NodeJS.Signals): void {
+    if (this.stopping !== undefined) {
+      this._logger.warn(`${yellow('[AsenaServer]')} ${signal} received again, exiting immediately`);
+      process.exit(130);
+    }
+
+    this._logger.info(`${blue('[AsenaServer]')} ${signal} received, shutting down`);
+    this.shutdownThenExit(0);
+  }
+
+  /**
+   * @description Run the stop sequence, then let the process go.
+   *
+   * Note the `void`: an async function handed straight to `process.on` returns a promise
+   * nobody holds, so a rejection inside it takes the process down with an unhandled rejection -
+   * exactly how a telemetry flush against an unreachable collector turns Ctrl+C into exit 1.
+   *
+   * @param {number} code - Exit code when a force-exit deadline is configured
+   * @returns {void}
+   */
+  private shutdownThenExit(code: number): void {
+    const forceExitAfter = this._shutdown?.forceExitAfter ?? false;
+    let forceTimer: Timer | undefined;
+
+    if (typeof forceExitAfter === 'number') {
+      forceTimer = setTimeout(() => {
+        this._logger.error(`${yellow('[AsenaServer]')} still alive ${forceExitAfter}ms after shutdown, forcing exit`);
+        process.exit(code === 0 ? 1 : code);
+      }, forceExitAfter);
+
+      // Unref'd, and deliberately never cleared: the deadline is about the *process* exiting,
+      // not about stop() resolving. The case worth protecting against is a stop() that finished
+      // cleanly and left something ref'd behind anyway - a pool that never drained, a timer
+      // nobody owns - because that process now hangs until the orchestrator SIGKILLs it.
+      // Clearing this on stop() completing, which is what it used to do, made it fire only when
+      // stop() itself hung: the one thing that can no longer happen, since every hook is
+      // timeout-bounded and every teardown step is contained.
+      //
+      // Unref means a process that does exit on its own is unaffected - the timer cannot be
+      // what keeps it alive, and never delays a clean exit.
+      forceTimer.unref?.();
+    }
+
+    void this.stop()
+      .catch((error: unknown) => {
+        this._logger.error(`${yellow('[AsenaServer]')} shutdown failed: ${describeError(error)}`);
+      })
+      .finally(() => {
+        if (code !== 0) {
+          process.exit(code);
+        }
+      });
+  }
+
+  /**
+   * @description Hold the event loop open for a headless server.
+   *
+   * A headless process has no listening socket, so once start() resolves there may be nothing
+   * ref'd left and bun exits - taking a perfectly healthy worker with it. The alternative was
+   * for the entry file to block on the component's own loop, which is what made the run loop
+   * live in the entry file's stack frame.
+   *
+   * @returns {void}
+   */
+  private installKeepAlive(): void {
+    const enabled = this._keepAlive ?? !this._adapter;
+
+    if (!enabled || this.keepAliveTimer) {
+      return;
+    }
+
+    // A ref'd timer with nothing to do: the only portable way to hold bun's event loop open
+    // without opening a handle we would then have to own.
+    this.keepAliveTimer = setInterval(() => undefined, 2 ** 30);
+  }
+
+  /**
+   * @description Release the keep-alive handle so the process can exit.
+   * @returns {void}
+   */
+  private clearKeepAlive(): void {
+    if (this.keepAliveTimer) {
+      clearInterval(this.keepAliveTimer);
+      this.keepAliveTimer = undefined;
+    }
   }
 
   /**

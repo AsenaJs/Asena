@@ -89,8 +89,20 @@ export class IocEngine implements ICoreService {
     }
 
     // Phase B: Register remaining components (post-processing is now active)
+    //
+    // Their start hooks are held back for LifecycleService to run from server.start(), so a
+    // hook sees the finished graph - and can reach the microservice transports, which are not
+    // connected until application setup. Phase A deliberately keeps the old timing: a
+    // post-processor's postProcess() reads what its own start hook set up, so deferring it
+    // would wrap every component in Phase B against an uninitialised processor.
     if (remainingClasses.length > 0) {
-      await this.validateAndRegisterComponents(remainingClasses);
+      this._container.setStartHookMode('deferred');
+
+      try {
+        await this.validateAndRegisterComponents(remainingClasses);
+      } finally {
+        this._container.setStartHookMode('immediate');
+      }
     }
   }
 
@@ -263,6 +275,10 @@ export class IocEngine implements ICoreService {
 
       const isSingleton = getTypedMetadata<Scope>(ComponentConstants.ScopeKey, injectable) === Scope.SINGLETON;
 
+      if (!isSingleton) {
+        this.warnAboutTransientLifecycleHooks(name, injectable);
+      }
+
       await this._container.register(name, injectable, isSingleton);
 
       const _interface = getTypedMetadata<string>(ComponentConstants.InterfaceKey, injectable);
@@ -273,6 +289,35 @@ export class IocEngine implements ICoreService {
         await this._container.register(_interface, injectable, isSingleton);
       }
     }
+  }
+
+  /**
+   * @description Warn when a transient declares lifecycle hooks.
+   *
+   * A transient is constructed per resolve and the container keeps no handle on it, so there is
+   * nothing for the server to start or stop. Its @OnStart still runs at construction, but its
+   * @OnStop can never run - and a component that acquires something it never releases is worth
+   * saying out loud rather than leaving to be discovered as a leak.
+   *
+   * @param {string} name - Registered component name
+   * @param {Class} injectable - The component class
+   * @returns {void}
+   */
+  private warnAboutTransientLifecycleHooks(name: string, injectable: Class): void {
+    // The container's own walk, not a metadata read: it is the one that de-duplicates an
+    // inherited hook and stops at native code, so the two can never disagree about what would
+    // have run.
+    const stopHooks = this._container.getStopHooks(injectable);
+
+    if (stopHooks.length === 0) {
+      return;
+    }
+
+    this.logger.warn(
+      `[IocEngine] '${name}' is transient and declares @OnStop (${stopHooks.join(', ')}), which will never ` +
+        'run - the container keeps no handle on a transient instance. Make it a singleton, or release the ' +
+        'resource where it is used.',
+    );
   }
 
   private async getInjectables(files: string[]): Promise<InjectableComponent[]> {

@@ -6,6 +6,7 @@ export * from './decorators/ScheduleParams';
 export * from './IocConfig';
 export * from './InjectableComponent';
 export * from './ContainerService';
+export * from './LifecycleComponent';
 export * from './ICoreService';
 export * from './CoreBootstrapPhase';
 export * from './ComponentPostProcessor';

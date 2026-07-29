@@ -77,9 +77,18 @@ describe('AsenaServerFactory overrides', () => {
   });
 
   test('should construct the real class when it is not overridden', async () => {
-    await createServer();
+    const server = await createServer();
+
+    // create() builds the graph; the start hook belongs to start(). Splitting the assertion is
+    // the point of the change - a component is constructed during the scan but not initialised
+    // until the server actually starts.
+    expect(lifecycle).toEqual(['MailService.constructor']);
+
+    await server.start();
 
     expect(lifecycle).toEqual(['MailService.constructor', 'MailService.connect']);
+
+    await server.stop();
   });
 
   test('should leave non-overridden components untouched', async () => {

@@ -16,6 +16,7 @@ import { Ulak } from '../server/messaging';
 import { EventDispatchService } from '../server/event';
 import { EventEmitter } from '../server/event';
 import { CronRunner } from '../server/schedule';
+import { LifecycleService } from '../server/lifecycle/LifecycleService';
 
 /**
  * @description CoreContainer manages framework-level services
@@ -152,6 +153,9 @@ export class CoreContainer {
       // Schedule system (CronRunner must be registered before PrepareScheduleService)
       { name: ICoreServiceNames.CRON_RUNNER, Class: CronRunner },
       { name: ICoreServiceNames.PREPARE_SCHEDULE_SERVICE, Class: PrepareScheduleService },
+
+      // Component start/stop hooks, driven by AsenaServer.start()/stop()
+      { name: ICoreServiceNames.LIFECYCLE_SERVICE, Class: LifecycleService },
     ];
 
     for (const service of services) {

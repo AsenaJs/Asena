@@ -28,6 +28,12 @@ describe('Inheritance Tests', () => {
 
     await iocEngine.searchAndRegister(components);
 
+    // Start hooks now run from server.start(); this test drives the engine directly, so it has
+    // to run them itself before asserting on what a @PostConstruct set up.
+    for (const component of iocEngine.container.lifecycle) {
+      await iocEngine.container.executeStartHooks(component.instance, component.Class);
+    }
+
     const service1 = (await iocEngine.container.resolve<InheritedService1Test>(
       'InheritedService1Test',
     )) as InheritedService1Test;

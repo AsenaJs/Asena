@@ -3,7 +3,7 @@ import { CoreBootstrapPhase, CoreContainer, ICoreServiceNames } from '../ioc';
 import type { AsenaServer } from './AsenaServer';
 import type { AsenaAdapter } from '../adapter';
 import type { ServerLogger } from '../logger';
-import type { Class } from './types';
+import type { Class, ShutdownOptions } from './types';
 import { readConfigFile } from '../ioc/helper/fileHelper';
 import { ComponentConstants } from '../ioc/constants';
 import { getTypedMetadata } from '../utils/typedMetadata';
@@ -49,6 +49,21 @@ export interface AsenaServerOptions<A extends AsenaAdapter<any, any> = AsenaAdap
   health?: HealthOptions;
 
   /**
+   * Signal handling and shutdown timeouts. Signals are handled by default; pass
+   * `{ signals: false }` to own them yourself.
+   */
+  shutdown?: ShutdownOptions;
+
+  /**
+   * Hold the event loop open while the server runs.
+   *
+   * Defaults to true in headless mode, where there is no listening socket to do it - without
+   * it a worker whose `@OnStart` returned would exit as soon as `start()` resolved. An HTTP
+   * server is held open by its own socket and does not need this.
+   */
+  keepAlive?: boolean;
+
+  /**
    * Replace registered components with pre-created test doubles, keyed by service name
    * (Spring's `@MockBean`).
    *
@@ -72,7 +87,7 @@ export class AsenaServerFactory {
   public static async create<A extends AsenaAdapter<any, any> = AsenaAdapter<any, any>>(
     options: AsenaServerOptions<A>,
   ): Promise<AsenaServer<A>> {
-    const { adapter, logger, port, components, gc, health, overrides } = options;
+    const { adapter, logger, port, components, gc, health, overrides, shutdown, keepAlive } = options;
 
     if (!adapter && !options.headless) {
       throw new Error(
@@ -158,6 +173,10 @@ export class AsenaServerFactory {
     if (port !== undefined) server.port(port);
 
     if (health) server.health(health);
+
+    if (shutdown) server.shutdown(shutdown);
+
+    if (keepAlive !== undefined) server.keepAlive(keepAlive);
 
     if (gc !== undefined) (server as any)._gc = gc;
 
