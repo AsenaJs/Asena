@@ -49,9 +49,9 @@ A component can take part in the server's start and stop:
 export class OutboxWorker {
   @OnStart()
   public start(): void {
-    // Runs during server.start(), after every component is constructed and after the
-    // microservice transports are connected - but before the HTTP socket binds, so no
-    // request can reach a component that has not run yet.
+    // Runs during server.start(), once every component is constructed and before the
+    // application is wired up - so a @Config finds its dependencies started - and long
+    // before the HTTP socket binds, so no request can reach a component that has not run.
     this.running = true;
     this.loop = this.run(); // start it and return; do not block here
   }

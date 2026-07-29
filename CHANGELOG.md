@@ -15,10 +15,15 @@
 
   **`@OnStart`** is the new name for `@PostConstruct`, which remains as a deprecated alias writing
   the same metadata key — no migration needed beyond the import. It runs during `server.start()`,
-  after every component is constructed and after application setup, but **before the HTTP socket
-  binds**: a hook can now publish through `ulak`, and no request can reach a component whose hook
-  has not run. Hooks run in registration order, which is the topological order the IoC engine
-  computed, so dependencies start first.
+  once every component is constructed and **before application setup**, so a `@Config` reading
+  its own injected dependencies — building a microservice transport from an injected service, the
+  pattern the redis and kafka packages document — finds them started. It is also long before the
+  HTTP socket binds, so no request can reach a component whose hook has not run. Hooks run in
+  registration order, which is the topological order the IoC engine computed, so dependencies
+  start first.
+
+  As in `0.9.x`, `ulak.send`/`emit` still cannot be used from a start hook: the transports are
+  wired during application setup, which is after this point.
 
   **`@OnStop`** is new. It runs during `server.stop()` in the reverse order, with the HTTP surface
   already down and the transports still up, so a component can finish in-flight work and publish a

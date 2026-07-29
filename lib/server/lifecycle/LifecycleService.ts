@@ -1,7 +1,6 @@
-import { ComponentType, CoreService, ICoreServiceNames } from '../../ioc';
+import { CoreService, ICoreServiceNames } from '../../ioc';
 import type { Container, ICoreService, LifecycleComponent } from '../../ioc';
 import { Inject } from '../../ioc/component';
-import { getOwnTypedMetadata } from '../../utils';
 import type { ServerLogger } from '../../logger';
 import { LifecycleState } from './LifecycleState';
 
@@ -63,8 +62,6 @@ export class LifecycleService implements ICoreService {
     for (const component of components) {
       if (component.started) continue;
 
-      this.warnIfConfig(component);
-
       try {
         await this.container.executeStartHooks(component.instance, component.Class);
         // Set after the hooks succeed, and regardless of whether the class declared any: it is
@@ -112,32 +109,6 @@ export class LifecycleService implements ICoreService {
     if (stopped > 0) {
       this.logger.debug?.(`[Lifecycle] stopped ${stopped} component(s)`);
     }
-  }
-
-  /**
-   * @description Warn when a @Config component declares a start hook.
-   *
-   * Config classes are read during application setup - `transport()`, `middlewares()`,
-   * `onError()` and friends are all consumed before this point - so a start hook on one runs
-   * after the values it might have been preparing were already taken. The hook still fires;
-   * it just cannot influence the configuration.
-   *
-   * @param {LifecycleComponent} component - The component about to start
-   * @returns {void}
-   */
-  private warnIfConfig(component: LifecycleComponent): void {
-    if (!getOwnTypedMetadata<boolean>(ComponentType.CONFIG, component.Class)) {
-      return;
-    }
-
-    if (this.container.getStartHooks(component.Class).length === 0) {
-      return;
-    }
-
-    this.logger.warn(
-      `[Lifecycle] @Config '${component.key}' declares a start hook, but its config hooks are read during ` +
-        'application setup - before start hooks run. Anything the hook prepares arrives too late to be used.',
-    );
   }
 
   /**

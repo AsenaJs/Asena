@@ -186,6 +186,22 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
 
     this._logger.info('All components registered and ready to use');
 
+    // Component start hooks, before application setup rather than after it.
+    //
+    // A @Config's hooks are not all closures the framework merely holds on to. `serveOptions()`,
+    // `globalMiddlewares()` and `transport()` are *called* during setup, and prepareMicroservices()
+    // goes on to init() and listen() whatever transport() returned. Every one of those runs
+    // against the components the config injects - so a config that builds a transport from an
+    // injected service, which is the documented pattern in the redis and kafka packages, reaches
+    // for a connection whose @OnStart has not opened it and takes the boot down with it.
+    //
+    // Running the hooks first costs the ability to publish through ulak from an @OnStart, since
+    // the transports are not wired until the next line. That is a real loss and it is the reason
+    // this used to sit further down; it is worth less than a config that cannot use its own
+    // dependencies. `onError()` and `onNotFound()` were always safe either way - the framework
+    // binds those and calls them per request, long after this point.
+    await this.lifecycleService.start();
+
     // Phase 7: Application setup
     this._coreContainer.setPhase(CoreBootstrapPhase.APPLICATION_SETUP);
     await this.prepareConfigs();
@@ -198,12 +214,6 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
       await this.prepareFrontendControllers();
       await this.prepareWebSocket();
     }
-
-    // Component start hooks. Deliberately here and not earlier: the transports are connected
-    // and listening by now, so a hook may publish through ulak - and deliberately not later,
-    // because the socket is still closed, so no request can reach a component whose @OnStart
-    // has not run.
-    await this.lifecycleService.start();
 
     // Phase 8: Server ready
     this._coreContainer.setPhase(CoreBootstrapPhase.SERVER_READY);

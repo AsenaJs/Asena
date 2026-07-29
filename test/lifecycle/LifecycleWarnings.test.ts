@@ -56,34 +56,33 @@ describe('lifecycle warnings', () => {
     expect(warnings.filter((message) => message.includes('SingletonWorker'))).toEqual([]);
   });
 
-  test('a @Config with a start hook is called out', async () => {
+  test('a @Config with a start hook is not warned about, because it works', async () => {
+    // There used to be a warning here, and it was right at the time: start hooks ran after
+    // application setup, so a @Config's own hook fired after its config hooks had been read.
+    // Moving the hooks ahead of setup made the warning false - the hook now runs first and can
+    // prepare what transport() or globalMiddlewares() goes on to use.
+    const prepared: string[] = [];
+
     @Config()
     class AppConfig {
       @OnStart()
-      public prepare() {}
+      public prepare() {
+        prepared.push('config:start');
+      }
+
+      public globalMiddlewares() {
+        prepared.push(`config:middlewares(${prepared.includes('config:start') ? 'prepared' : 'cold'})`);
+
+        return [];
+      }
     }
 
     const server = await createServer([AppConfig]);
 
     await server.start();
 
-    const warning = warnings.find((message) => message.includes('AppConfig'));
-
-    expect(warning).toContain('start hook');
-    expect(warning).toContain('application setup');
-
-    await server.stop();
-  });
-
-  test('a @Config without one is not', async () => {
-    @Config()
-    class QuietConfig {}
-
-    const server = await createServer([QuietConfig]);
-
-    await server.start();
-
-    expect(warnings.filter((message) => message.includes('QuietConfig'))).toEqual([]);
+    expect(warnings.filter((message) => message.includes('AppConfig'))).toEqual([]);
+    expect(prepared).toEqual(['config:start', 'config:middlewares(prepared)']);
 
     await server.stop();
   });
