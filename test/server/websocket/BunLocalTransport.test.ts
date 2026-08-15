@@ -44,6 +44,28 @@ describe('BunLocalTransport', () => {
     expect(() => transport.publish('topic', 'data')).toThrow();
   });
 
+  test('publishRemote should be a no-op that never touches server.publish', async () => {
+    const mockServer: any = { publish: mock(() => {}) };
+    const transport = new BunLocalTransport();
+
+    await transport.init(mockServer);
+
+    transport.publishRemote('chat.room-1', 'hello');
+
+    // There is no other pod to reach, and local delivery is the caller's ws.publish(). Publishing
+    // here would duplicate the message locally and put it back on the socket that sent it.
+    expect(mockServer.publish).not.toHaveBeenCalled();
+  });
+
+  test('publishRemote should be declared, not merely absent', () => {
+    // What marks a transport as legacy is the *absence* of this method: AsenaSocket then falls
+    // back to publish() for local delivery and includes the sender. Declaring it is how the
+    // default transport opts into the sender-excluded path, so this is not a redundant assertion.
+    const transport: WebSocketTransport = new BunLocalTransport();
+
+    expect(typeof transport.publishRemote).toBe('function');
+  });
+
   test('should not have destroy method requirement', async () => {
     // Typed as the interface on purpose: `destroy` is declared optional there, so reading it
     // is a real property access. Reading it off the concrete class is a reference to a member
