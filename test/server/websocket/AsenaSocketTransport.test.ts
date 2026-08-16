@@ -27,26 +27,55 @@ function createMockWs(namespace = 'chat') {
   } as any;
 }
 
-function createMockTransport(): WebSocketTransport & { publish: ReturnType<typeof mock> } {
+/**
+ * A transport on the current contract: `publish()` for full fan-out, `publishRemote()` for the
+ * cross-pod wire alone.
+ */
+function createMockTransport(): WebSocketTransport & {
+  publish: ReturnType<typeof mock>;
+  publishRemote: ReturnType<typeof mock>;
+} {
+  return {
+    publish: mock(() => {}),
+    publishRemote: mock(() => {}),
+  };
+}
+
+/**
+ * A transport written before `publishRemote()` existed. Kept as a fixture because the fallback
+ * branch it exercises is the one thing standing between such a transport and silent loss of every
+ * cross-pod message.
+ */
+function createLegacyMockTransport(): WebSocketTransport & { publish: ReturnType<typeof mock> } {
   return {
     publish: mock(() => {}),
   };
 }
 
 describe('AsenaSocket - Transport Routing', () => {
+  /**
+   * The load-bearing rule: `socket.publish()` delivers locally through Bun's socket-level
+   * `ws.publish()`, which is the only primitive that leaves the publishing socket out, and the
+   * transport only adds the other pods on top. Routing local delivery through the transport
+   * instead - which ends in `server.publish()`, and cannot exclude anything - meant configuring a
+   * transport silently changed *who* received a message, not just how far it travelled. That
+   * surfaced in production as every frame arriving twice after a Redis transport was added, with
+   * no application change to point at.
+   */
   describe('publish with transport', () => {
-    test('should route publish through transport when transport is set', () => {
+    test('should deliver locally via ws.publish and forward to other pods', () => {
       const ws = createMockWs();
       const transport = createMockTransport();
       const socket = new AsenaSocket(ws, 'chat', transport);
 
       socket.publish('room-1', 'hello');
 
-      expect(transport.publish).toHaveBeenCalledWith('chat.room-1', 'hello');
-      expect(ws.publish).not.toHaveBeenCalled();
+      expect(ws.publish).toHaveBeenCalledWith('chat.room-1', 'hello', undefined);
+      expect(transport.publishRemote).toHaveBeenCalledWith('chat.room-1', 'hello');
+      expect(transport.publish).not.toHaveBeenCalled();
     });
 
-    test('should fallback to ws.publish when no transport', () => {
+    test('should use ws.publish when no transport', () => {
       const ws = createMockWs();
       const socket = new AsenaSocket(ws, 'chat'); // no transport
 
@@ -55,18 +84,19 @@ describe('AsenaSocket - Transport Routing', () => {
       expect(ws.publish).toHaveBeenCalledWith('chat.room-1', 'hello', undefined);
     });
 
-    test('should route publishText through transport when transport is set', () => {
+    test('should deliver text locally via ws.publishText and forward to other pods', () => {
       const ws = createMockWs();
       const transport = createMockTransport();
       const socket = new AsenaSocket(ws, 'chat', transport);
 
       socket.publishText('room-1', 'hello text');
 
-      expect(transport.publish).toHaveBeenCalledWith('chat.room-1', 'hello text');
-      expect(ws.publishText).not.toHaveBeenCalled();
+      expect(ws.publishText).toHaveBeenCalledWith('chat.room-1', 'hello text', undefined);
+      expect(transport.publishRemote).toHaveBeenCalledWith('chat.room-1', 'hello text');
+      expect(transport.publish).not.toHaveBeenCalled();
     });
 
-    test('should fallback to ws.publishText when no transport', () => {
+    test('should use ws.publishText when no transport', () => {
       const ws = createMockWs();
       const socket = new AsenaSocket(ws, 'chat');
 
@@ -75,7 +105,7 @@ describe('AsenaSocket - Transport Routing', () => {
       expect(ws.publishText).toHaveBeenCalledWith('chat.room-1', 'hello text', undefined);
     });
 
-    test('should route publishBinary through transport when transport is set', () => {
+    test('should deliver binary locally via ws.publishBinary and forward to other pods', () => {
       const ws = createMockWs();
       const transport = createMockTransport();
       const socket = new AsenaSocket(ws, 'chat', transport);
@@ -84,11 +114,12 @@ describe('AsenaSocket - Transport Routing', () => {
 
       socket.publishBinary('room-1', buffer);
 
-      expect(transport.publish).toHaveBeenCalledWith('chat.room-1', buffer);
-      expect(ws.publishBinary).not.toHaveBeenCalled();
+      expect(ws.publishBinary).toHaveBeenCalledWith('chat.room-1', buffer, undefined);
+      expect(transport.publishRemote).toHaveBeenCalledWith('chat.room-1', buffer);
+      expect(transport.publish).not.toHaveBeenCalled();
     });
 
-    test('should fallback to ws.publishBinary when no transport', () => {
+    test('should use ws.publishBinary when no transport', () => {
       const ws = createMockWs();
       const socket = new AsenaSocket(ws, 'chat');
 
@@ -106,7 +137,62 @@ describe('AsenaSocket - Transport Routing', () => {
 
       socket.publish('user-123', 'you have mail');
 
-      expect(transport.publish).toHaveBeenCalledWith('notifications.user-123', 'you have mail');
+      expect(ws.publish).toHaveBeenCalledWith('notifications.user-123', 'you have mail', undefined);
+      expect(transport.publishRemote).toHaveBeenCalledWith('notifications.user-123', 'you have mail');
+    });
+
+    test('should pass compress through to the local publish', () => {
+      const ws = createMockWs();
+      const transport = createMockTransport();
+      const socket = new AsenaSocket(ws, 'chat', transport);
+
+      socket.publish('room-1', 'hello', true);
+
+      expect(ws.publish).toHaveBeenCalledWith('chat.room-1', 'hello', true);
+    });
+  });
+
+  /**
+   * Backwards compatibility for third-party transports written before `publishRemote()`. Their
+   * `publish()` does local delivery itself, so ours must not run as well - the message would
+   * arrive twice locally. The sender is included on this path, which is the old inconsistent
+   * behaviour; the adapter warns once at startup rather than dropping cross-pod delivery in
+   * silence, which is the worse of the two failures. Removed in the next major.
+   */
+  describe('publish with a legacy transport (no publishRemote)', () => {
+    test('should route publish through transport.publish and skip local delivery', () => {
+      const ws = createMockWs();
+      const transport = createLegacyMockTransport();
+      const socket = new AsenaSocket(ws, 'chat', transport);
+
+      socket.publish('room-1', 'hello');
+
+      expect(transport.publish).toHaveBeenCalledWith('chat.room-1', 'hello');
+      expect(ws.publish).not.toHaveBeenCalled();
+    });
+
+    test('should route publishText through transport.publish', () => {
+      const ws = createMockWs();
+      const transport = createLegacyMockTransport();
+      const socket = new AsenaSocket(ws, 'chat', transport);
+
+      socket.publishText('room-1', 'hello text');
+
+      expect(transport.publish).toHaveBeenCalledWith('chat.room-1', 'hello text');
+      expect(ws.publishText).not.toHaveBeenCalled();
+    });
+
+    test('should route publishBinary through transport.publish', () => {
+      const ws = createMockWs();
+      const transport = createLegacyMockTransport();
+      const socket = new AsenaSocket(ws, 'chat', transport);
+
+      const buffer = new ArrayBuffer(8);
+
+      socket.publishBinary('room-1', buffer);
+
+      expect(transport.publish).toHaveBeenCalledWith('chat.room-1', buffer);
+      expect(ws.publishBinary).not.toHaveBeenCalled();
     });
   });
 
