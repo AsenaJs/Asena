@@ -52,15 +52,13 @@ describe('BunLocalTransport', () => {
 
     transport.publishRemote('chat.room-1', 'hello');
 
-    // There is no other pod to reach, and local delivery is the caller's ws.publish(). Publishing
-    // here would duplicate the message locally and put it back on the socket that sent it.
+    // Publishing here would duplicate local delivery and put the message back on the sender.
     expect(mockServer.publish).not.toHaveBeenCalled();
   });
 
   test('publishRemote should be declared, not merely absent', () => {
-    // What marks a transport as legacy is the *absence* of this method: AsenaSocket then falls
-    // back to publish() for local delivery and includes the sender. Declaring it is how the
-    // default transport opts into the sender-excluded path, so this is not a redundant assertion.
+    // Absence of this method is what marks a transport as legacy: AsenaSocket would then fall
+    // back to publish() and include the sender. So the assertion is not redundant with the class.
     const transport: WebSocketTransport = new BunLocalTransport();
 
     expect(typeof transport.publishRemote).toBe('function');

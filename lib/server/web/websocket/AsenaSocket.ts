@@ -190,10 +190,8 @@ export class AsenaSocket<T> {
     }
 
     if (this._transport) {
-      // Legacy transport without publishRemote: its publish() does local delivery too, so we
-      // must not add ours on top. The sender is included here - the divergence this branch
-      // exists to document. Dropping cross-pod delivery instead would be a silent message loss,
-      // which is worse; the adapter warns once at startup. Removed in the next major.
+      // Legacy transport: its publish() already delivers locally, so ours must not run on top.
+      // The sender is included on this path - known divergence, adapters warn once at startup.
       this._transport.publish(fullTopic, data as string | ArrayBuffer | ArrayBufferView);
 
       return;

@@ -72,7 +72,6 @@ describe('AsenaSocket - Transport Routing', () => {
 
       expect(ws.publish).toHaveBeenCalledWith('chat.room-1', 'hello', undefined);
       expect(transport.publishRemote).toHaveBeenCalledWith('chat.room-1', 'hello');
-      // publish() would deliver locally a second time, and to the sender
       expect(transport.publish).not.toHaveBeenCalled();
     });
 

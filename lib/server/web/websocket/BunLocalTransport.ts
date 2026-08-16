@@ -29,6 +29,6 @@ export class BunLocalTransport implements WebSocketTransport {
    * sender, which is the divergence this method exists to remove.
    */
   public publishRemote(_topic: string, _data: string | ArrayBuffer | ArrayBufferView): void {
-    // Single-pod: local delivery is the caller's ws.publish(), nothing to forward.
+    // Single-pod: nothing to forward.
   }
 }
