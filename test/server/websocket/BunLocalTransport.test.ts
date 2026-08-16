@@ -44,6 +44,26 @@ describe('BunLocalTransport', () => {
     expect(() => transport.publish('topic', 'data')).toThrow();
   });
 
+  test('publishRemote should be a no-op that never touches server.publish', async () => {
+    const mockServer: any = { publish: mock(() => {}) };
+    const transport = new BunLocalTransport();
+
+    await transport.init(mockServer);
+
+    transport.publishRemote('chat.room-1', 'hello');
+
+    // Publishing here would duplicate local delivery and put the message back on the sender.
+    expect(mockServer.publish).not.toHaveBeenCalled();
+  });
+
+  test('publishRemote should be declared, not merely absent', () => {
+    // Absence of this method is what marks a transport as legacy: AsenaSocket would then fall
+    // back to publish() and include the sender. So the assertion is not redundant with the class.
+    const transport: WebSocketTransport = new BunLocalTransport();
+
+    expect(typeof transport.publishRemote).toBe('function');
+  });
+
   test('should not have destroy method requirement', async () => {
     // Typed as the interface on purpose: `destroy` is declared optional there, so reading it
     // is a real property access. Reading it off the concrete class is a reference to a member

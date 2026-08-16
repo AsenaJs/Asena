@@ -63,7 +63,7 @@ export class AsenaSocket<T> {
 
   /**
    * Optional transport layer for cross-pod message publishing.
-   * When set, publish operations go through the transport instead of direct ws.publish().
+   * Publishing to other pods rides on this; local delivery stays on `ws.publish()`.
    * @private
    */
   private _transport?: WebSocketTransport;
@@ -160,11 +160,15 @@ export class AsenaSocket<T> {
   }
 
   /**
-   * Publishes data to all clients subscribed to the specified topic.
+   * Publishes data to all clients subscribed to the specified topic, **excluding this socket**.
    * The topic is automatically prefixed with the namespace.
    *
-   * When a transport is configured, messages are routed through the transport
-   * layer for cross-pod delivery. Otherwise, uses Bun's native ws.publish().
+   * Local delivery always goes through Bun's socket-level `ws.publish()`, which is the only
+   * primitive that can leave the publisher out - `server.publish()` has no exclusion. A configured
+   * transport adds the other pods on top of that, it does not replace local delivery. So who
+   * receives a message is the same with or without a transport; only how far it travels changes.
+   *
+   * Use `server.to()` when the sender should receive it too.
    *
    * @param topic - The topic name to publish to (will be prefixed with namespace)
    * @param data - The data to publish (string, ArrayBuffer, TypedArray, or DataView)
@@ -176,43 +180,82 @@ export class AsenaSocket<T> {
    * ```
    */
   public publish(topic: string, data: string | ArrayBufferLike | DataView, compress?: boolean): void {
-    if (this._transport) {
-      this._transport.publish(this.createTopic(topic), data as string | ArrayBuffer | ArrayBufferView);
-    } else {
-      this.ws.publish(this.createTopic(topic), data, compress);
+    const fullTopic = this.createTopic(topic);
+
+    if (this._transport?.publishRemote) {
+      this.ws.publish(fullTopic, data, compress);
+      this._transport.publishRemote(fullTopic, data as string | ArrayBuffer | ArrayBufferView);
+
+      return;
     }
+
+    if (this._transport) {
+      // Legacy transport: its publish() already delivers locally, so ours must not run on top.
+      // The sender is included on this path - known divergence, adapters warn once at startup.
+      this._transport.publish(fullTopic, data as string | ArrayBuffer | ArrayBufferView);
+
+      return;
+    }
+
+    this.ws.publish(fullTopic, data, compress);
   }
 
   /**
-   * Publishes text data to all clients subscribed to the specified topic.
-   * The topic is automatically prefixed with the namespace.
+   * Publishes text data to all clients subscribed to the specified topic, **excluding this
+   * socket**. The topic is automatically prefixed with the namespace.
+   *
+   * Same delivery rule as {@link publish}.
    *
    * @param topic - The topic name to publish to (will be prefixed with namespace)
    * @param data - The text string to publish
    * @param compress - Whether to compress the data (default: false)
    */
   public publishText(topic: string, data: string, compress?: boolean): void {
-    if (this._transport) {
-      this._transport.publish(this.createTopic(topic), data);
-    } else {
-      this.ws.publishText(this.createTopic(topic), data, compress);
+    const fullTopic = this.createTopic(topic);
+
+    if (this._transport?.publishRemote) {
+      this.ws.publishText(fullTopic, data, compress);
+      this._transport.publishRemote(fullTopic, data);
+
+      return;
     }
+
+    if (this._transport) {
+      this._transport.publish(fullTopic, data);
+
+      return;
+    }
+
+    this.ws.publishText(fullTopic, data, compress);
   }
 
   /**
-   * Publishes binary data to all clients subscribed to the specified topic.
-   * The topic is automatically prefixed with the namespace.
+   * Publishes binary data to all clients subscribed to the specified topic, **excluding this
+   * socket**. The topic is automatically prefixed with the namespace.
+   *
+   * Same delivery rule as {@link publish}.
    *
    * @param topic - The topic name to publish to (will be prefixed with namespace)
    * @param data - The binary data to publish (ArrayBuffer, TypedArray, or DataView)
    * @param compress - Whether to compress the data (default: false)
    */
   public publishBinary(topic: string, data: ArrayBufferLike | DataView, compress?: boolean): void {
-    if (this._transport) {
-      this._transport.publish(this.createTopic(topic), data as ArrayBuffer | ArrayBufferView);
-    } else {
-      this.ws.publishBinary(this.createTopic(topic), data, compress);
+    const fullTopic = this.createTopic(topic);
+
+    if (this._transport?.publishRemote) {
+      this.ws.publishBinary(fullTopic, data, compress);
+      this._transport.publishRemote(fullTopic, data as ArrayBuffer | ArrayBufferView);
+
+      return;
     }
+
+    if (this._transport) {
+      this._transport.publish(fullTopic, data as ArrayBuffer | ArrayBufferView);
+
+      return;
+    }
+
+    this.ws.publishBinary(fullTopic, data, compress);
   }
 
   /**

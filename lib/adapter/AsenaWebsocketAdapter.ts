@@ -37,7 +37,8 @@ export abstract class AsenaWebsocketAdapter {
 
   /**
    * Optional WebSocket transport for cross-pod messaging.
-   * When set, publish operations are routed through this transport.
+   * `AsenaWebSocketServer.to()` publishes through it entirely; `socket.publish()` sends only the
+   * cross-pod half here and keeps local delivery on `ws.publish()`, which excludes the sender.
    * @protected
    */
   protected _transport?: WebSocketTransport;
