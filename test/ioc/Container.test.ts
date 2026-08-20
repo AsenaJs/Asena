@@ -324,6 +324,9 @@ describe('Container', () => {
       setTimeout(resolve, 1000);
     });
 
+    // Force a full GC before measuring: bun 1.4 collects more lazily than 1.3, so without
+    // this the test measures collector timing rather than actual retention
+    Bun.gc(true);
     const finalMemory = process.memoryUsage().heapUsed;
 
     console.log('Memory used:', (finalMemory - initialMemory) / 1024);
