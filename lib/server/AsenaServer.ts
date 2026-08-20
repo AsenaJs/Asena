@@ -141,6 +141,10 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
   // of the teardown, so it answers both a concurrent stop() and a later one.
   private stopping?: Promise<void>;
 
+  // What the latched teardown runs with, so a later stop() asking for the opposite draining
+  // mode can be named in a warning instead of being silently swallowed by the latch.
+  private stoppingCloseActive?: boolean;
+
   private signalHandlers = new Map<NodeJS.Signals, () => void>();
 
   private unhandledErrorHandler?: (error: unknown) => void;
@@ -272,7 +276,21 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
     // sequence again: the component hooks would correctly find nothing to do, but the adapter,
     // the cron runner and the transports are not self-guarding, so a stopped server would stop
     // itself a second time and log a second round of teardown errors.
-    this.stopping ??= this.runStop(closeActiveConnections, drainTimeout, hookTimeout);
+    if (
+      this.stopping !== undefined &&
+      this.stoppingCloseActive !== undefined &&
+      this.stoppingCloseActive !== closeActiveConnections
+    ) {
+      this._logger.warn(
+        `${yellow('[AsenaServer]')} stop(closeActiveConnections=${closeActiveConnections}) ignored: a shutdown with ` +
+          `closeActiveConnections=${this.stoppingCloseActive} is already running and the running one wins`,
+      );
+    }
+
+    if (this.stopping === undefined) {
+      this.stoppingCloseActive = closeActiveConnections;
+      this.stopping = this.runStop(closeActiveConnections, drainTimeout, hookTimeout);
+    }
 
     return this.stopping;
   }
@@ -500,7 +518,12 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
       forceTimer.unref?.();
     }
 
-    void this.stop()
+    // A signal means "drain and go" - an explicit stop() keeps its own (force-close) default,
+    // so test suites and programmatic callers see unchanged behavior.
+    void this.stop({
+      closeActiveConnections: this._shutdown?.closeActiveConnections ?? false,
+      drainTimeout: this._shutdown?.drainTimeout,
+    })
       .catch((error: unknown) => {
         this._logger.error(`${yellow('[AsenaServer]')} shutdown failed: ${describeError(error)}`);
       })
