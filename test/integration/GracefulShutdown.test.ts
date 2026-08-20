@@ -121,6 +121,34 @@ describe('graceful shutdown', () => {
     expect(exitCode).toBe(0);
   }, 20_000);
 
+  test('SIGTERM drains an in-flight HTTP request instead of cutting it', async () => {
+    const worker = spawnWorker('signal-drain-server');
+    const stdout = tail(worker.stdout);
+
+    await stdout.waitFor('SERVER_STARTED');
+
+    const port = /SERVER_STARTED port=(\d+)/.exec(stdout.text())![1];
+    const request = fetch(`http://localhost:${port}/slow`);
+
+    // The signal must land while the handler is still asleep, not while the socket opens
+    await Bun.sleep(300);
+
+    worker.kill('SIGTERM');
+
+    // Force-closing active connections severs this socket: the fetch rejects with
+    // ECONNRESET instead of resolving - which is exactly how the bug shipped
+    const response = await request;
+
+    expect(response.status).toBe(200);
+    // The body only exists after the full sleep, so this is also the proof the handler
+    // ran to completion rather than being answered early
+    expect(await response.text()).toBe('drained');
+
+    const exitCode = await worker.exited;
+
+    expect(exitCode).toBe(0);
+  }, 20_000);
+
   test('a throwing stop hook does not strand the components behind it', async () => {
     const worker = spawnWorker('failing-stop-worker');
     const stdout = tail(worker.stdout);
