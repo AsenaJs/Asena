@@ -53,6 +53,23 @@ export interface ShutdownOptions {
    * @default false
    */
   onUnhandledError?: boolean;
+
+  /**
+   * What a signal-triggered shutdown does to in-flight HTTP requests.
+   *
+   * `false` (default) drains them: an orchestrator's SIGTERM means "drain and go", and
+   * `forceExitAfter` already puts an upper bound on how long that may take. Pass `true` to
+   * close active connections immediately instead. Explicit `server.stop()` calls are not
+   * affected - their own default stays `closeActiveConnections: true`.
+   *
+   * @default false
+   */
+  closeActiveConnections?: boolean;
+
+  /**
+   * Drain budget the signal path passes to the microservice transports, in milliseconds.
+   */
+  drainTimeout?: number;
 }
 
 /**
