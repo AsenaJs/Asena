@@ -3,7 +3,7 @@ import { createTestApp } from '../../lib/test/harness/createTestApp';
 import { silentLogger } from '../../lib/test/harness/silentLogger';
 import { Controller, Service } from '../../lib/server/decorators';
 import { Get } from '../../lib/server/web/decorators';
-import { Inject } from '../../lib/ioc/component';
+import { Implements, Inject, Strategy } from '../../lib/ioc/component';
 import type { AsenaContext } from '../../lib/adapter';
 import { createMockAdapter } from '../utils/createMockContext';
 
@@ -334,5 +334,60 @@ describe('createTestApp', () => {
     }
 
     expect(stopped).toBe(true);
+  });
+});
+
+describe('createTestApp dependency closure - interfaces and strategies', () => {
+  @Service()
+  @Implements('Greeter')
+  class EnglishGreeter {
+    public greet(): string {
+      return 'hello';
+    }
+  }
+
+  @Service()
+  class GreetingService {
+    @Inject('Greeter')
+    private greeter: EnglishGreeter;
+
+    public hello(): string {
+      return this.greeter.greet();
+    }
+  }
+
+  @Service()
+  @Implements('Plugin')
+  class PluginA {}
+
+  @Service()
+  class PluginHost {
+    @Strategy('Plugin')
+    private plugins: object[];
+
+    public count(): number {
+      return this.plugins.length;
+    }
+  }
+
+  test('a dependency injected by an @Implements key is provided by the listed implementation', async () => {
+    await using app = await createTestApp({
+      adapter: createMockAdapter().adapter as any,
+      logger: silentLogger,
+      components: [GreetingService, EnglishGreeter],
+    });
+
+    expect((await app.resolve<GreetingService>('GreetingService')).hello()).toBe('hello');
+  });
+
+  test('@Strategy implementations are not walked: an unlisted plugin is injected as []', async () => {
+    await using app = await createTestApp({
+      adapter: createMockAdapter().adapter as any,
+      logger: silentLogger,
+      components: [PluginHost],
+    });
+
+    expect(app.container.has('PluginA')).toBe(false);
+    expect((await app.resolve<PluginHost>('PluginHost')).count()).toBe(0);
   });
 });

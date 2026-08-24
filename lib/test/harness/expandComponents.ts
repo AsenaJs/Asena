@@ -1,14 +1,8 @@
 import type { Class } from '../../server/types';
-import { ComponentConstants, ICoreServiceNames } from '../../ioc';
+import { ComponentConstants } from '../../ioc';
 import { getOwnTypedMetadata, getTypedMetadata } from '../../utils';
 import { discoverInjectedFieldsFromClass } from '../metadata/discovery';
-
-/**
- * The name a component registers under - the same read the IoC engine performs at
- * registration time.
- */
-const componentName = (componentClass: Class): string =>
-  getTypedMetadata<string>(ComponentConstants.NameKey, componentClass) || componentClass.name;
+import { componentName, CORE_SERVICE_NAMES } from './naming';
 
 /**
  * Expands an explicit component list with every class reachable from it through
@@ -34,7 +28,6 @@ const componentName = (componentClass: Class): string =>
  *   unsatisfiable injection as `<Owner>.<field> ...`
  */
 export function expandComponents(components: Class[], overrides: Record<string, object>): Class[] {
-  const coreServiceNames = new Set<string>(Object.values(ICoreServiceNames));
   const providedNames = new Set<string>();
   const seen = new Set<Class>();
   const result: Class[] = [];
@@ -50,6 +43,14 @@ export function expandComponents(components: Class[], overrides: Record<string, 
     result.push(componentClass);
     queue.push(componentClass);
     providedNames.add(componentName(componentClass));
+
+    // The engine registers an @Implements class under its interface key too, so a
+    // dependency injected by that key is provided by the implementation
+    const interfaceKey = getTypedMetadata<string>(ComponentConstants.InterfaceKey, componentClass);
+
+    if (interfaceKey) {
+      providedNames.add(interfaceKey);
+    }
   };
 
   for (const componentClass of components) {
@@ -66,7 +67,7 @@ export function expandComponents(components: Class[], overrides: Record<string, 
 
       if (
         name !== undefined &&
-        (coreServiceNames.has(name) || Object.hasOwn(overrides, name) || providedNames.has(name))
+        (CORE_SERVICE_NAMES.has(name) || Object.hasOwn(overrides, name) || providedNames.has(name))
       ) {
         continue;
       }

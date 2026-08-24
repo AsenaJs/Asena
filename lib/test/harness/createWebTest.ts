@@ -1,27 +1,14 @@
 import type { AsenaAdapter, Route } from '../../adapter';
-import { ComponentConstants, ComponentType, ICoreServiceNames } from '../../ioc';
+import { ComponentConstants, ComponentType } from '../../ioc';
 import type { Class } from '../../server/types';
 import type { MiddlewareClass } from '../../server/web/middleware';
-import {
-  getChainedTypedMetadata,
-  getChainedTypedMetadataList,
-  getOwnTypedMetadata,
-  getTypedMetadata,
-} from '../../utils';
+import { getChainedTypedMetadata, getChainedTypedMetadataList, getOwnTypedMetadata } from '../../utils';
 import { createMockFromClass } from '../factory/mockFactory';
 import { discoverInjectedFieldsFromClass } from '../metadata/discovery';
 import { createTestApp } from './createTestApp';
+import { componentName, CORE_SERVICE_NAMES } from './naming';
 import { silentLogger } from './silentLogger';
 import type { WebTestOptions, WebTestResult } from './types';
-
-/**
- * The registered container name for a component
- *
- * @internal
- */
-function componentName(Class: Class): string {
-  return getTypedMetadata<string>(ComponentConstants.NameKey, Class) || Class.name;
-}
 
 /**
  * Collects the classes the web layer cannot function without.
@@ -124,7 +111,6 @@ export async function createWebTest<A extends AsenaAdapter<any, any> = AsenaAdap
     realNames.add(componentName(component));
   }
 
-  const coreServiceNames = new Set<string>(Object.values(ICoreServiceNames));
   const autoMocks: Record<string, any> = {};
 
   for (const component of realComponents) {
@@ -133,7 +119,7 @@ export async function createWebTest<A extends AsenaAdapter<any, any> = AsenaAdap
 
       // Core services are wired during bootstrap and are always real - mocking them would
       // also trip the factory's core-key guard. ulak(...) lands here.
-      if (coreServiceNames.has(serviceName)) {
+      if (CORE_SERVICE_NAMES.has(serviceName)) {
         continue;
       }
 
