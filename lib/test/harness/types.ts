@@ -26,6 +26,12 @@ export interface TestAppOptions<A extends AsenaAdapter<any, any> = AsenaAdapter<
 
   /**
    * Components to register. Passing this list skips filesystem scanning entirely.
+   *
+   * Classes reachable from the listed ones through `@Inject(Class)` are registered
+   * automatically, so only the roots need listing. A dependency injected by name
+   * (`@Inject('UserService')`) must be listed here or replaced through `overrides` -
+   * otherwise the boot fails before anything starts, with a message naming the component
+   * and field that needed it.
    */
   components: Class[];
 

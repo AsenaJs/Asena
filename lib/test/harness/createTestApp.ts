@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import type { AsenaAdapter } from '../../adapter';
 import { AsenaServerFactory } from '../../server/AsenaServerFactory';
 import { TestHttpCall } from '../http/TestHttpCall';
+import { expandComponents } from './expandComponents';
 import { silentLogger } from './silentLogger';
 import type { TestApp, TestAppOptions } from './types';
 
@@ -23,6 +24,11 @@ function nextSocketPath(): string {
  * Everything runs for real: the IoC container, all bootstrap phases, the adapter and its
  * routing pipeline. Only the components you name are registered, and any of them can be
  * swapped for a double through `overrides`.
+ *
+ * Every class reachable from `components` through `@Inject(Class)` is registered
+ * automatically, so only the roots need listing. A dependency injected by name must be
+ * listed or overridden; when it is missing, the boot fails before anything starts, with a
+ * message naming the component and field that needed it.
  *
  * @param options - Adapter, components and optional overrides
  * @returns A started app with a fluent HTTP client attached
@@ -50,14 +56,19 @@ function nextSocketPath(): string {
 export async function createTestApp<A extends AsenaAdapter<any, any> = AsenaAdapter<any, any>>(
   options: TestAppOptions<A>,
 ): Promise<TestApp> {
-  const { adapter, components, overrides, logger = silentLogger, dispatch = 'server' } = options;
+  const { adapter, components, overrides = {}, logger = silentLogger, dispatch = 'server' } = options;
+
+  // The full injection closure before anything boots: classes reached through @Inject(Class)
+  // are registered for real, and a name-injected dependency nobody provides fails here with
+  // a message naming the dependent - not inside the container after half the app is up.
+  const expandedComponents = expandComponents(components, overrides);
 
   const socketPath = dispatch === 'socket' ? nextSocketPath() : undefined;
 
   const server = await AsenaServerFactory.create({
     adapter,
     logger,
-    components,
+    components: expandedComponents,
     overrides,
     // Port 0 lets Bun assign a free ephemeral port, which removes the random-port race
     port: options.port ?? 0,
