@@ -21,7 +21,7 @@ class DrainFixtureAdapter extends AsenaAdapter<any, any> {
 
   private routes = new Map<string, RouteParams<any, any>>();
 
-  private server?: Bun.Server;
+  private server?: Bun.Server<any>;
 
   public constructor(logger: ServerLogger) {
     super(logger);
@@ -39,7 +39,7 @@ class DrainFixtureAdapter extends AsenaAdapter<any, any> {
     this.routes.set(key, params);
   }
 
-  public async start(): Promise<Bun.Server> {
+  public async start(): Promise<Bun.Server<any>> {
     this.server = Bun.serve({
       port: this.port,
       fetch: async (request) => {
@@ -49,7 +49,7 @@ class DrainFixtureAdapter extends AsenaAdapter<any, any> {
 
         if (!route) return new Response('not found', { status: 404 });
 
-        return new Response(String(await route.handler()));
+        return new Response(String(await (route.handler as () => unknown)()));
       },
     });
 
