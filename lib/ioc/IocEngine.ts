@@ -60,9 +60,9 @@ export class IocEngine implements ICoreService {
     this.config = config;
   }
 
-  public async searchAndRegister(components?: InjectableComponent[]): Promise<void> {
+  public async searchAndRegister(components?: InjectableComponent[], imports?: Class[]): Promise<void> {
     // load components
-    await this.loadComponents(components);
+    await this.loadComponents(components, imports);
 
     this.reportEmptyStrategyKeys();
 
@@ -106,14 +106,16 @@ export class IocEngine implements ICoreService {
     }
   }
 
-  private async loadComponents(components?: InjectableComponent[]): Promise<void> {
+  private async loadComponents(components?: InjectableComponent[], imports?: Class[]): Promise<void> {
+    const importInjectables = this.processImports(imports);
+
     if (components?.length) {
       // Explicitly listed components go through the same identity check as scanned ones.
       // They used to bypass it entirely, so the own-only rule held for `sourceFolder` apps and
       // not for `components: [...]` ones - and on that path an undecorated subclass still
       // registered under its base's name, overwriting it.
-      this.injectables = this.dedupeInjectables(
-        components.filter((component) => {
+      this.injectables = this.dedupeInjectables([
+        ...components.filter((component) => {
           if (this.isValidComponent(component.Class)) {
             return true;
           }
@@ -122,12 +124,21 @@ export class IocEngine implements ICoreService {
 
           return false;
         }),
-      );
+        ...importInjectables,
+      ]);
 
       return;
     }
 
     if (!this.config) {
+      // Imports alone are a valid component source: a package-only app has no sourceFolder
+      // to scan, and silently skipping them would be exactly the failure `imports` prevents
+      if (importInjectables.length) {
+        this.injectables = this.dedupeInjectables(importInjectables);
+
+        return;
+      }
+
       throw new Error('No components or configuration found');
     }
 
@@ -150,7 +161,12 @@ export class IocEngine implements ICoreService {
 
     const declaredInEntry = this.processComponents(entryClasses);
 
-    this.injectables = this.dedupeInjectables([...this.injectables, ...scanned, ...declaredInEntry]);
+    this.injectables = this.dedupeInjectables([
+      ...this.injectables,
+      ...scanned,
+      ...declaredInEntry,
+      ...importInjectables,
+    ]);
 
     if (!this.injectables.length) {
       throw new Error('No components found');
@@ -395,6 +411,50 @@ export class IocEngine implements ICoreService {
     return valid
       .map((component) => this.createComponentObject(component))
       .filter((component): component is InjectableComponent => component !== null);
+  }
+
+  /**
+   * Validates and converts the `imports` list. Unlike scanned or explicitly listed
+   * components, an import that carries no decorator of its own is a hard error, not a
+   * warning: `warnAboutUndecoratedSubclass` stays silent for a class with no marker
+   * anywhere on its chain, and a silently dropped import is exactly the failure the
+   * option exists to prevent.
+   */
+  private processImports(imports?: Class[]): InjectableComponent[] {
+    if (!imports?.length) {
+      return [];
+    }
+
+    const injectables: InjectableComponent[] = [];
+
+    imports.forEach((entry, index) => {
+      let hasOwnMarker = false;
+
+      if (typeof entry === 'function') {
+        try {
+          hasOwnMarker = !!getOwnTypedMetadata<boolean>(ComponentConstants.IOCObjectKey, entry);
+        } catch {
+          hasOwnMarker = false;
+        }
+      }
+
+      if (!hasOwnMarker) {
+        const name = typeof entry === 'function' ? entry.name : String(entry);
+
+        throw new Error(
+          `imports[${index}] (${name}) carries no component decorator - only classes decorated with ` +
+            '@Service, @Controller, ... can be imported',
+        );
+      }
+
+      const component = this.createComponentObject(entry);
+
+      if (component) {
+        injectables.push(component);
+      }
+    });
+
+    return injectables;
   }
 
   /**
