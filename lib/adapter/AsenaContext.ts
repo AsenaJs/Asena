@@ -99,10 +99,13 @@ export interface AsenaContext<R, S extends Response> {
    * Retrieves a single query parameter value.
    * For URL "?name=john", getQuery("name") returns "john".
    *
+   * Returns `undefined` when the parameter is absent - never `''`. A parameter that is
+   * present but empty ("?name=") returns `''`.
+   *
    * @param {string} query - The query parameter name
-   * @returns {Promise<string>} The query parameter value
+   * @returns {Promise<string | undefined>} The query parameter value, or undefined when absent
    */
-  getQuery: (query: string) => Promise<string>;
+  getQuery: (query: string) => Promise<string | undefined>;
 
   /**
    * Retrieves all values for a query parameter that appears multiple times.
@@ -200,12 +203,23 @@ export interface AsenaContext<R, S extends Response> {
   getRequestIp?(): string | null;
 
   /**
-   * Set a response header.
+   * Set a response header, replacing any value already set for that header.
    *
    * @param {string} key - Header name
    * @param {string} value - Header value
    */
   setResponseHeader?(key: string, value: string): void;
+
+  /**
+   * Append a value to a response header, keeping any value(s) already set for it -
+   * the semantics multi-valued headers such as `Vary` and `Link` need. Use
+   * `setResponseHeader` to replace instead; cookies go through `setCookie`, not
+   * through this.
+   *
+   * @param {string} key - Header name
+   * @param {string} value - Header value to append
+   */
+  appendResponseHeader?(key: string, value: string): void;
 
   /**
    * Start a generic binary/text stream.
