@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, spyOn, test } from 'bun:test';
-import { ComponentType, Container } from '../../lib/ioc';
+import { CircularDependencyError, ComponentType, Container } from '../../lib/ioc';
 import { Component } from '../../lib/server/decorators';
 import { Inject, PostConstruct, Strategy } from '../../lib/ioc/component';
 import { ExportedServerService } from '../example-app-structure/database/ExportedServerService.test';
@@ -622,5 +622,97 @@ describe('Container', () => {
     expect(instance1.initTime).toBeGreaterThan(0);
     expect(instance2.initTime).toBeGreaterThan(0);
     expect(instance2.initTime).toBeGreaterThanOrEqual(instance1.initTime);
+  });
+});
+
+// "<key> is not registered" used to report the key only. The key is knowable - who needed it
+// is not, which is why these tests drive the error through a dependent's construction, where
+// injectDependencies can attach the class and field.
+describe('Container dependency resolution errors', () => {
+  test('should name the dependent class and field when a dependency is not registered', async () => {
+    const fresh = new Container();
+
+    @Component()
+    class NeverRegistered {
+      public ping() {
+        return 'pong';
+      }
+    }
+
+    @Component()
+    class Dependent {
+      @Inject(NeverRegistered)
+      private dependency: NeverRegistered;
+
+      public ping() {
+        return this.dependency.ping();
+      }
+    }
+
+    await expect(fresh.register('Dependent', Dependent, true)).rejects.toThrow(
+      "'NeverRegistered' is not registered (injected into Dependent.dependency)",
+    );
+  });
+
+  test('should wrap a nested miss exactly once, naming the innermost dependent', async () => {
+    const fresh = new Container();
+
+    @Component()
+    class Leaf {
+      public ping() {
+        return 'pong';
+      }
+    }
+
+    @Component()
+    class Middle {
+      @Inject(Leaf)
+      private leaf: Leaf;
+    }
+
+    @Component()
+    class Root {
+      @Inject(Middle)
+      private middle: Middle;
+    }
+
+    // Prototypes: neither class is constructed until resolve, so the miss for Leaf happens
+    // two injection frames deep - through Middle, from Root
+    await fresh.register('Middle', Middle, false);
+    await fresh.register('Root', Root, false);
+
+    let error: Error | undefined;
+
+    try {
+      await fresh.resolve('Root');
+    } catch (caught) {
+      error = caught as Error;
+    }
+
+    expect(error).toBeDefined();
+    expect(error!.message).toBe("'Leaf' is not registered (injected into Middle.leaf)");
+    expect(error!.message.match(/\(injected into/g)).toHaveLength(1);
+  });
+
+  test('should let CircularDependencyError through untouched', async () => {
+    const fresh = new Container();
+
+    // String injection: class references would hit the temporal dead zone in a cycle
+    @Component()
+    class LoopA {
+      @Inject('LoopB')
+      public loopB: any;
+    }
+
+    @Component()
+    class LoopB {
+      @Inject('LoopA')
+      public loopA: any;
+    }
+
+    await fresh.register('LoopA', LoopA, false);
+    await fresh.register('LoopB', LoopB, false);
+
+    await expect(fresh.resolve('LoopA')).rejects.toThrow(CircularDependencyError);
   });
 });

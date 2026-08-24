@@ -43,6 +43,58 @@ class UserController {
   }
 }
 
+@Service()
+class LeafService {
+  public async leaf() {
+    return 'leaf';
+  }
+}
+
+@Service()
+class BranchService {
+  @Inject(LeafService)
+  private leafService: LeafService;
+
+  public async branch() {
+    return `branch:${await this.leafService.leaf()}`;
+  }
+}
+
+@Controller('/closure')
+class ClosureController {
+  @Inject(BranchService)
+  private branchService: BranchService;
+
+  @Get('/branch')
+  public async branch(context: AsenaContext<any, any>) {
+    return context.send(await this.branchService.branch());
+  }
+}
+
+@Controller('/broken')
+class BrokenController {
+  @Inject('GhostService')
+  private ghostService: any;
+
+  @Get('/')
+  public async root(context: AsenaContext<any, any>) {
+    return context.send('ok');
+  }
+}
+
+// Deliberately undecorated: @Inject(PlainUndecorated) must be reported, not silently followed
+class PlainUndecorated {
+  public ping() {
+    return 'pong';
+  }
+}
+
+@Service()
+class WantsUndecorated {
+  @Inject(PlainUndecorated)
+  private dependency: PlainUndecorated;
+}
+
 const boot = (overrides?: Record<string, object>) =>
   createTestApp({
     adapter: createMockAdapter().adapter as any,
@@ -111,6 +163,86 @@ describe('createTestApp', () => {
     await app.stop();
 
     expect(stopSpy).toHaveBeenCalledTimes(1);
+  });
+
+  describe('dependency closure', () => {
+    test('should register the transitive injection closure for real', async () => {
+      const { adapter } = createMockAdapter();
+
+      await using app = await createTestApp({
+        adapter: adapter as any,
+        logger: silentLogger,
+        components: [ClosureController],
+      });
+
+      expect(app.container.has('BranchService')).toBe(true);
+      expect(app.container.has('LeafService')).toBe(true);
+
+      const branch = await app.resolve<BranchService>('BranchService');
+
+      expect(await branch.branch()).toBe('branch:leaf');
+
+      // A request that travels controller -> branch -> leaf through the real wiring
+      const response = await adapter.testRequest('get', '/closure/branch');
+
+      expect(response.body).toBe('branch:leaf');
+    });
+
+    test('should reject before boot when a name-injected dependency is missing', async () => {
+      const { adapter } = createMockAdapter();
+
+      await expect(
+        createTestApp({
+          adapter: adapter as any,
+          logger: silentLogger,
+          components: [BrokenController],
+        }),
+      ).rejects.toThrow(
+        /createTestApp: missing dependencies:\nBrokenController\.ghostService injects 'GhostService', which is not in components or overrides/,
+      );
+
+      expect(adapter.start).not.toHaveBeenCalled();
+    });
+
+    test('should not register a dependency for real when its name is overridden', async () => {
+      const double = { leaf: mock(async () => 'mocked leaf') };
+
+      await using app = await createTestApp({
+        adapter: createMockAdapter().adapter as any,
+        logger: silentLogger,
+        components: [BranchService],
+        overrides: { LeafService: double },
+      });
+
+      expect(await app.resolve<typeof double>('LeafService')).toBe(double);
+
+      const branch = await app.resolve<BranchService>('BranchService');
+
+      expect(await branch.branch()).toBe('branch:mocked leaf');
+    });
+
+    test('should not double-register a class listed twice', async () => {
+      await using app = await createTestApp({
+        adapter: createMockAdapter().adapter as any,
+        logger: silentLogger,
+        components: [LeafService, LeafService, BranchService],
+      });
+
+      const resolved = await app.resolve<LeafService>('LeafService');
+
+      expect(Array.isArray(resolved)).toBe(false);
+      expect(resolved.leaf()).resolves.toBe('leaf');
+    });
+
+    test('should report a class injection whose target is not a decorated component', async () => {
+      await expect(
+        createTestApp({
+          adapter: createMockAdapter().adapter as any,
+          logger: silentLogger,
+          components: [WantsUndecorated],
+        }),
+      ).rejects.toThrow('WantsUndecorated.dependency injects PlainUndecorated, which is not a decorated component');
+    });
   });
 
   // createTestApp forwards `components` straight to AsenaServerFactory, so it is the harness
