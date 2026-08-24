@@ -40,6 +40,26 @@ asena dev start
 
 Visit [asena.sh/docs/get-started](https://asena.sh/docs/get-started) for detailed setup instructions.
 
+## Dependency Injection
+
+Components wire their collaborators and configuration with field decorators. `@Inject`
+resolves another component by class, registered name or expression; `@Value` reads a
+configuration entry straight from the environment:
+
+```typescript
+@Service()
+class PoolService {
+  @Inject(DataSource)
+  private dataSource: DataSource;
+
+  @Value('DB_POOL_MAX', { parse: Number, default: 10 })
+  private poolMax: number;
+
+  @Value('JWT_SECRET') // required: no default, boot fails when unset
+  private jwtSecret: string;
+}
+```
+
 ## Performance
 
 Built on Bun runtime for exceptional performance:

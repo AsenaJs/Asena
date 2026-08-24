@@ -1,10 +1,10 @@
-import { describe, expect, mock, test } from 'bun:test';
+import { afterEach, describe, expect, mock, test } from 'bun:test';
 // Imported from lib/ (not the @asenajs/asena/test specifier, which resolves to dist/) so a
 // stale build cannot mask a regression. All four must come from the same tree: metadata keys
 // are Symbols created per module instance, so mixing lib/ and dist/ makes them invisible.
 import { createTestUlakStub, mockComponent, mockComponentAsync } from '../../lib/test';
 import { Component } from '../../lib/server/decorators';
-import { Inject } from '../../lib/ioc/component';
+import { Inject, Value } from '../../lib/ioc/component';
 import { ulak, type Ulak } from '../../lib/server/messaging';
 
 @Component()
@@ -513,6 +513,48 @@ describe('mockComponent', () => {
       expect(mocks['database']).toBeDefined();
       expect((instance as any).logger).toBe(mocks['logger']);
       expect((instance as any).database).toBe(mocks['database']);
+    });
+  });
+
+  describe('@Value fields', () => {
+    const ENV_KEY = 'ASENA_TEST_MOCK_VALUE';
+
+    afterEach(() => {
+      delete process.env[ENV_KEY];
+    });
+
+    @Component()
+    class ServiceWithValue {
+      @Inject(UserService)
+      private userService: UserService;
+
+      @Value(ENV_KEY)
+      private configValue: string;
+
+      public async createUser(name: string, email: string) {
+        await this.userService.createUser(name, email);
+        return this.configValue;
+      }
+    }
+
+    test('applies the env value and keeps it out of mocks', () => {
+      process.env[ENV_KEY] = 'from-env';
+
+      const { instance, mocks } = mockComponent(ServiceWithValue);
+
+      expect((instance as any).configValue).toBe('from-env');
+      expect(mocks['configValue']).toBeUndefined();
+      expect(mocks['userService']).toBeDefined();
+    });
+
+    test('an override wins and the env is not read at all', () => {
+      // ENV_KEY is unset: without the override short-circuiting the env read,
+      // readValue would throw for the missing required value
+      const { instance } = mockComponent(ServiceWithValue, {
+        overrides: { configValue: 'from-override' },
+      });
+
+      expect((instance as any).configValue).toBe('from-override');
     });
   });
 });

@@ -27,3 +27,24 @@ export interface Expressions {
 export interface Strategies {
   [key: string]: string;
 }
+
+/**
+ * Options accepted by the @Value decorator. `default` is applied when the environment
+ * variable is not set; `parse` converts the raw string before it lands on the field.
+ */
+export interface ValueOptions {
+  default?: unknown;
+  parse?: (raw: string) => unknown;
+}
+
+/**
+ * The stored @Value metadata for one field. `default` is only present when the option
+ * was given, so "was a default provided?" stays distinguishable from its value.
+ */
+export interface ValueSpec extends ValueOptions {
+  key: string;
+}
+
+export interface ValueFields {
+  [field: string]: ValueSpec;
+}

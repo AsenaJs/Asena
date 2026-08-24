@@ -1,4 +1,5 @@
 export * from './Inject';
+export * from './Value';
 export * from './Implements';
 export * from '../componentUtils';
 export * from './Strategy';

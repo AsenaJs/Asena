@@ -1,5 +1,6 @@
 import type { MockComponentOptions, MockedComponent } from './types';
-import { discoverInjectedFields } from './metadata/discovery';
+import { discoverInjectedFields, discoverValueFieldsFromClass } from './metadata/discovery';
+import { readValue } from '../ioc/helper/valueResolver';
 import { createMockFromClass } from './factory/mockFactory';
 import { createDeepMock } from './factory/deepMock';
 
@@ -92,6 +93,18 @@ export function mockComponent<T extends object>(
 
   const instance = new ComponentClass();
   const allInjectedFields = discoverInjectedFields(instance);
+
+  // @Value fields resolve before @Inject mocking, mirroring the container's
+  // prepareInstance order. An override is the FINAL value and skips the env read
+  // entirely; resolved values are not mocks and stay out of `mocks`.
+  for (const [field, spec] of Object.entries(discoverValueFieldsFromClass(ComponentClass))) {
+    if (options.overrides && Object.hasOwn(options.overrides, field)) {
+      (instance as any)[field] = options.overrides[field];
+      continue;
+    }
+
+    (instance as any)[field] = readValue(spec, ComponentClass, field);
+  }
 
   const fieldsToMock = options.injections
     ? allInjectedFields.filter((field) => options.injections.includes(field.fieldName))

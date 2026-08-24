@@ -13,6 +13,7 @@ import { ComponentConstants } from './constants';
 import { getOwnTypedMetadata, getTypedMetadata } from '../utils';
 import { CircularDependencyDetector } from './CircularDependencyDetector';
 import { CORE_SERVICE } from './decorators';
+import { collectValueFields, readValue } from './helper/valueResolver';
 
 /**
  * The message behind an assignment to a wired field.
@@ -330,6 +331,8 @@ export class Container {
   private async prepareInstance<T>(Class: Class) {
     const newInstance = new Class();
 
+    this.injectValues(newInstance, Class); // configuration injection
+
     await this.injectDependencies(newInstance, Class); // dependency injection
 
     await this.injectStrategies(newInstance, Class); // strategy injection
@@ -474,6 +477,25 @@ export class Container {
           configurable: true,
         });
       }
+    }
+  }
+
+  /**
+   * @description Assigns every @Value field of the instance from process.env.
+   *
+   * Values land as plain writable properties - unlike @Inject fields they hold no
+   * resolved service to protect, and tests overwrite them freely. The own-property
+   * guard mirrors injectDependencies: a field initializer wins over the environment.
+   *
+   * @param {any} newInstance - The freshly constructed instance
+   * @param {Class} Class - The class of the instance
+   * @returns {void}
+   */
+  private injectValues(newInstance: any, Class: Class): void {
+    for (const [field, spec] of Object.entries(collectValueFields(Class))) {
+      if (Object.getOwnPropertyDescriptor(newInstance, field)?.value !== undefined) continue;
+
+      newInstance[field] = readValue(spec, Class, field);
     }
   }
 
