@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test } from 'bun:test';
 import { Container, type InjectableComponent, IocEngine } from '../../lib/ioc';
+import { getBuildComponents } from '../../lib/ioc/component';
 import { Service } from '../../lib/server/decorators';
 import { createTestApp } from '../../lib/test/harness/createTestApp';
 import { silentLogger } from '../../lib/test/harness/silentLogger';
@@ -83,7 +84,7 @@ describe('IocEngine imports', () => {
     const engine = newEngine();
 
     await expect(engine.searchAndRegister(undefined, [ImportedGreetingService, UndecoratedService])).rejects.toThrow(
-      /imports\[1\] \(UndecoratedService\) carries no component decorator/,
+      /imports entry UndecoratedService carries no component decorator/,
     );
   });
 
@@ -114,6 +115,16 @@ describe('imports and the build-time component list', () => {
     expect(app.container.has('BuildListComponent')).toBe(true);
   });
 
+  test('an empty build list counts as absent and other sources are used', async () => {
+    (globalThis as any)[BUILD_COMPONENTS_KEY] = [];
+
+    expect(getBuildComponents()).toBeUndefined();
+
+    await using app = await bootApp({ imports: [ImportedGreetingService] });
+
+    expect(app.container.has('ImportedGreetingService')).toBe(true);
+  });
+
   test('explicit components win over the build list, imports still merge in', async () => {
     @Service()
     class BuildListComponent {}
@@ -139,6 +150,14 @@ describe('createTestApp imports', () => {
     await using app = await bootApp({ imports: [HarnessImportedService] });
 
     expect(app.container.has('HarnessImportedService')).toBe(true);
+  });
+
+  test('a class listed in both components and imports is registered once', async () => {
+    await using app = await bootApp({ components: [ImportedGreetingService], imports: [ImportedGreetingService] });
+
+    // A second registration under the same name would promote the entry to an array
+    expect(Array.isArray(app.container.services['ImportedGreetingService'])).toBe(false);
+    expect(await app.resolve('ImportedGreetingService')).toBeInstanceOf(ImportedGreetingService);
   });
 
   test('flattens one level of nesting in imports', async () => {

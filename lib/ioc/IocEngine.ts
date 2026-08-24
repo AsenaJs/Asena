@@ -427,22 +427,12 @@ export class IocEngine implements ICoreService {
 
     const injectables: InjectableComponent[] = [];
 
-    imports.forEach((entry, index) => {
-      let hasOwnMarker = false;
-
-      if (typeof entry === 'function') {
-        try {
-          hasOwnMarker = !!getOwnTypedMetadata<boolean>(ComponentConstants.IOCObjectKey, entry);
-        } catch {
-          hasOwnMarker = false;
-        }
-      }
-
-      if (!hasOwnMarker) {
+    for (const entry of imports) {
+      if (!this.isValidComponent(entry)) {
         const name = typeof entry === 'function' ? entry.name : String(entry);
 
         throw new Error(
-          `imports[${index}] (${name}) carries no component decorator - only classes decorated with ` +
+          `imports entry ${name} carries no component decorator - only classes decorated with ` +
             '@Service, @Controller, ... can be imported',
         );
       }
@@ -452,7 +442,7 @@ export class IocEngine implements ICoreService {
       if (component) {
         injectables.push(component);
       }
-    });
+    }
 
     return injectables;
   }
