@@ -155,6 +155,18 @@ describe('@Value configuration injection', () => {
     );
   });
 
+  test('a transient defers the missing-variable error to its first resolve', async () => {
+    setEnv('ASENA_TEST_VALUE_URL', undefined);
+
+    const container = new Container();
+
+    await container.register('UrlService', UrlService, false);
+
+    await expect(container.resolve('UrlService')).rejects.toThrow(
+      "@Value('ASENA_TEST_VALUE_URL') on UrlService.url: environment variable is not set and no default was given",
+    );
+  });
+
   test('a @Value on a base class is applied to the subclass instance', async () => {
     setEnv('ASENA_TEST_VALUE_BASE', 'from-base');
 

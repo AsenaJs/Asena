@@ -94,14 +94,15 @@ export function mockComponent<T extends object>(
   const instance = new ComponentClass();
   const allInjectedFields = discoverInjectedFields(instance);
 
-  // @Value fields resolve before @Inject mocking, mirroring the container's
-  // prepareInstance order. An override is the FINAL value and skips the env read
-  // entirely; resolved values are not mocks and stay out of `mocks`.
+  // Same precedence as the container: override > field initializer > environment.
+  // Resolved values are not mocks and stay out of `mocks`.
   for (const [field, spec] of Object.entries(discoverValueFieldsFromClass(ComponentClass))) {
     if (options.overrides && Object.hasOwn(options.overrides, field)) {
       (instance as any)[field] = options.overrides[field];
       continue;
     }
+
+    if (Object.getOwnPropertyDescriptor(instance, field)?.value !== undefined) continue;
 
     (instance as any)[field] = readValue(spec, ComponentClass, field);
   }

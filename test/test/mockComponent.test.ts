@@ -537,6 +537,24 @@ describe('mockComponent', () => {
       }
     }
 
+    test('a field initializer wins over the environment, as in the container', () => {
+      // ENV_KEY is unset and the field has no default: without the initializer guard
+      // mockComponent would throw where the container builds the class fine
+      @Component()
+      class InitializedService {
+        @Value(ENV_KEY)
+        private configValue = 'from-initializer';
+
+        public get(): string {
+          return this.configValue;
+        }
+      }
+
+      const { instance } = mockComponent(InitializedService);
+
+      expect(instance.get()).toBe('from-initializer');
+    });
+
     test('applies the env value and keeps it out of mocks', () => {
       process.env[ENV_KEY] = 'from-env';
 

@@ -1,40 +1,18 @@
 import type { Class } from '../../server/types';
 import type { ValueFields, ValueSpec } from '../types';
 import { ComponentConstants } from '../constants';
-import { getOwnTypedMetadata } from '../../utils/typedMetadata';
+import { getChainedTypedMetadata } from '../../utils/typedMetadata';
 
 /**
- * Collects the @Value fields of a class as a single record.
- *
- * Same walk and stop rules as the test utilities' discovery: up the constructor chain,
- * halting at `Function.prototype` or a class whose source reads `[native code]`. The
- * chain is merged ancestors-first, so a field redeclared in a subclass overwrites the
- * base class entry - the same subclass-wins rule @Inject fields follow.
+ * Collects the @Value fields of a class as a single record: the whole prototype chain,
+ * ancestors first, so a field redeclared in a subclass overwrites the base class entry -
+ * the same subclass-wins rule @Inject fields follow.
  *
  * @param ComponentClass - Component class to inspect
  * @returns The merged `{ [field]: { key, default?, parse? } }` record
  */
 export function collectValueFields(ComponentClass: any): ValueFields {
-  const chain: any[] = [];
-
-  let currentClass = ComponentClass;
-
-  while (currentClass && currentClass !== Function.prototype) {
-    if (typeof currentClass !== 'function' || currentClass.toString().includes('[native code]')) {
-      break;
-    }
-
-    chain.unshift(currentClass);
-    currentClass = Object.getPrototypeOf(currentClass);
-  }
-
-  const fields: ValueFields = {};
-
-  for (const classInChain of chain) {
-    Object.assign(fields, getOwnTypedMetadata<ValueFields>(ComponentConstants.ValueKey, classInChain) || {});
-  }
-
-  return fields;
+  return getChainedTypedMetadata<ValueFields>(ComponentConstants.ValueKey, ComponentClass);
 }
 
 /**

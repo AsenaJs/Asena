@@ -9,7 +9,8 @@ import { defineTypedMetadata, getOwnTypedMetadata } from '../../../utils/typedMe
  * A `parse` function converts the raw string (`parse: Number` for numbers); `default`
  * is used when the variable is not set, and its *presence* is what counts - `0`, `''`
  * and `null` are honored as defaults. A missing variable on a field without a default
- * fails the component's registration with an error naming the class and the field.
+ * fails the component's construction - at registration for a singleton, at the first
+ * resolve for a transient - with an error naming the class and the field.
  *
  * @param {string} key - Environment variable name
  * @param {ValueOptions} options - Optional `default` and `parse`
