@@ -4,7 +4,7 @@
 
 # Asena
 
-[![Version](https://img.shields.io/badge/version-0.10.2-blue.svg)](https://asena.sh)
+[![Version](https://img.shields.io/badge/version-0.11.0-blue.svg)](https://asena.sh)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
 [![Bun Version](https://img.shields.io/badge/Bun-1.4%2B-blueviolet)](https://bun.sh)
 
@@ -39,6 +39,7 @@ asena dev start
 ```
 
 Visit [asena.sh/docs/get-started](https://asena.sh/docs/get-started) for detailed setup instructions.
+
 ## Performance
 
 Built on Bun runtime for exceptional performance:
