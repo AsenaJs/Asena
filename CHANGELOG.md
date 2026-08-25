@@ -1,5 +1,45 @@
 # @asenajs/asena
 
+## 0.11.0
+
+### Minor Changes
+
+- 153e5b2: Three context-contract changes, each spelled out so adapter authors can implement against them:
+
+  1. `AsenaContext.getQuery` now returns `Promise<string | undefined>`: `undefined` when the parameter is absent (never `''`); a parameter that is present but empty (`?name=`) is `''`. Adapters whose `getQuery` returned `''` for an absent key must return `undefined` instead.
+  2. `setResponseHeader` is documented to _replace_ any existing value for that header, and a new optional `appendResponseHeader(key, value)` member _appends_, keeping existing values - the semantics multi-valued headers such as `Vary` and `Link` need. Cookies still go through `setCookie`, not through either method. Both members are optional, so existing adapters keep compiling; adapters that want append semantics implement `appendResponseHeader`.
+  3. `SSEMessage.data` is now optional and a new optional `comment` field emits `: <line>` lines (one per newline-separated line) that are invisible to `EventSource` clients - for keep-alive pings that must not look like an event. At least one of `data` / `comment` must be set; adapters throw when both are missing. Code that passed `data` as a required field keeps working unchanged.
+
+- 8e636f5: Adds an `imports` option to `AsenaServerFactory.create` (and `createTestApp`) for registering ready-made components handed in by packages, and teaches the factory to consume the build-time component list published by `asena build`.
+
+  `imports` accepts classes (or one-level-nested arrays of them) and registers them **in addition to** whatever the other sources found — the filesystem scan, an explicit `components` list, or the build list — never as a replacement. Every entry must carry its own component decorator (`@Service`, `@Controller`, `@Middleware`, ...); an undecorated entry now throws `imports entry <Name> carries no component decorator ...` instead of being silently dropped. A name collision between an import and a scanned class still fails with the existing `Duplicate component name detected` error.
+
+  The primary component source keeps its precedence: explicit non-empty `components` first, then the list `asena build` publishes on `globalThis[Symbol.for('asena.buildComponents')]` before the entry module evaluates (also readable via the new `getBuildComponents()` export), then the `sourceFolder` scan. Imports alone — no `components`, no build list, no config — are a valid component source and are registered instead of throwing `No components or configuration found`.
+
+  An entry that extends a component but carries no decorator of its own is rejected with a message naming the decorated ancestor — `imports entry <Sub> extends the component <Base> but carries no decorator of its own - component identity is not inherited ...` — because whoever can see `@Service` on the base class reads the generic message as a contradiction.
+
+- 24cab82: `createTestApp` now expands the `components` list with every class reachable through `@Inject(Class)`, so a test only names its roots (typically the controllers) instead of the whole injection closure. Discovered classes are registered for real; a name in `overrides` stops the walk, and core services (`ulak(...)`, the logger, ...) are skipped as before.
+
+  Two failure modes changed shape, both before anything boots:
+
+  - A dependency injected by name that is neither listed nor overridden fails with `createTestApp: missing dependencies:` followed by one `<Owner>.<field> ...` line per problem, instead of the container's bare `<key> is not registered` (or, under `createWebTest`, the adapter's 500 on the first request). If you were matching the old message text, update the matcher.
+  - `@Inject(SomeClass)` where `SomeClass` carries no component decorator is reported as `<Owner>.<field> injects <SomeClass>, which is not a decorated component`, instead of the old `undefined is not registered`.
+
+  `Container`'s missing-registration failure during dependency injection now reads `'<name>' is not registered (injected into <Class>.<field>)`, with the original error attached as `cause`. `CircularDependencyError` is thrown unchanged, and a nested miss (A→B→C with C missing) is wrapped exactly once, naming the innermost dependent.
+
+- 7817e65: Adds a `@Value(key, options?)` property decorator for configuration injection. Fields
+  decorated with `@Value` are resolved from `process.env[key]` when the container builds a
+  component: an optional `parse` function converts the raw string (e.g. `parse: Number`), and
+  an optional `default` is used when the variable is not set — its presence is what counts, so
+  `0`, `''` and `null` are honored. A variable that is not set on a field without a default
+  fails the component's construction (at registration for a singleton, at the first resolve for
+  a transient) with an error naming the class, the field and the key.
+
+  `mockComponent()` applies the same resolution, and a field present in its `overrides`
+  option wins over the environment without reading it. Values land as plain writable
+  properties, and a field initializer keeps precedence over the environment. No breaking
+  changes: existing decorators and container behaviour are untouched.
+
 ## 0.10.2
 
 ### Patch Changes
