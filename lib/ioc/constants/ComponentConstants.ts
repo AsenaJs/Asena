@@ -22,6 +22,8 @@ export class ComponentConstants {
 
   public static readonly ExpressionKey = Symbol('component:expression');
 
+  public static readonly ValueKey = Symbol('component:value');
+
   // Start hooks. The key keeps the old name because @PostConstruct is still a supported alias
   // for @OnStart and both must land in the same list.
   public static readonly PostConstructKey = Symbol('component:postConstruct');

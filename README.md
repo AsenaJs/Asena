@@ -39,7 +39,6 @@ asena dev start
 ```
 
 Visit [asena.sh/docs/get-started](https://asena.sh/docs/get-started) for detailed setup instructions.
-
 ## Performance
 
 Built on Bun runtime for exceptional performance:

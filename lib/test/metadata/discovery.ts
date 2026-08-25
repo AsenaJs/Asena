@@ -1,7 +1,8 @@
-import type { DependencyClasses, Dependencies, Expressions } from '../../ioc';
+import type { DependencyClasses, Dependencies, Expressions, ValueFields } from '../../ioc';
 import type { FieldMetadata } from '../types';
 import { ComponentConstants } from '../../ioc';
 import { getOwnTypedMetadata } from '../../utils';
+import { collectValueFields } from '../../ioc/helper/valueResolver';
 
 /**
  * Discovers all fields with @Inject decorator in a component
@@ -109,6 +110,20 @@ export function discoverInjectedFieldsFromClass(ComponentClass: any): FieldMetad
  */
 export function hasInjectedFields(ComponentClass: new (...args: any[]) => any): boolean {
   return discoverInjectedFieldsFromClass(ComponentClass).length > 0;
+}
+
+/**
+ * Discovers all fields with the @Value decorator in a component class
+ *
+ * Thin re-export of the container's shared walk, so mockComponent and the container
+ * always agree on which value fields a class carries - including inherited ones,
+ * with subclass redeclarations winning.
+ *
+ * @param ComponentClass - Component class to inspect
+ * @returns The merged `{ [field]: { key, default?, parse? } }` record
+ */
+export function discoverValueFieldsFromClass(ComponentClass: any): ValueFields {
+  return collectValueFields(ComponentClass);
 }
 
 /**
