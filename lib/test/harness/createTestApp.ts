@@ -56,7 +56,7 @@ function nextSocketPath(): string {
 export async function createTestApp<A extends AsenaAdapter<any, any> = AsenaAdapter<any, any>>(
   options: TestAppOptions<A>,
 ): Promise<TestApp> {
-  const { adapter, components, overrides = {}, logger = silentLogger, dispatch = 'server' } = options;
+  const { adapter, components, imports, overrides = {}, logger = silentLogger, dispatch = 'server' } = options;
 
   // The full injection closure before anything boots: classes reached through @Inject(Class)
   // are registered for real, and a name-injected dependency nobody provides fails here with
@@ -69,6 +69,7 @@ export async function createTestApp<A extends AsenaAdapter<any, any> = AsenaAdap
     adapter,
     logger,
     components: expandedComponents,
+    imports,
     overrides,
     // Port 0 lets Bun assign a free ephemeral port, which removes the random-port race
     port: options.port ?? 0,

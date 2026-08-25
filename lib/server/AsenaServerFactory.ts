@@ -6,6 +6,7 @@ import type { ServerLogger } from '../logger';
 import type { Class, ShutdownOptions } from './types';
 import { readConfigFile } from '../ioc/helper/fileHelper';
 import { ComponentConstants } from '../ioc/constants';
+import { getBuildComponents } from '../ioc/component';
 import { getTypedMetadata } from '../utils/typedMetadata';
 
 /**
@@ -45,6 +46,19 @@ export interface AsenaServerOptions<A extends AsenaAdapter<any, any> = AsenaAdap
   logger: ServerLogger;
   port?: number;
   components?: Class[];
+
+  /**
+   * Components handed in by packages, in ADDITION to whatever the scan / `components` /
+   * the build found - never a replacement for them. Every entry must carry its own
+   * component decorator (`@Service`, `@Controller`, `@Middleware`, ...); the list is
+   * flattened one level, so a package can export an array of its components.
+   *
+   * @example
+   * ```typescript
+   * imports: [...platformComponents, OtelService]
+   * ```
+   */
+  imports?: (Class | readonly Class[])[];
   gc?: boolean;
   health?: HealthOptions;
 
@@ -87,7 +101,7 @@ export class AsenaServerFactory {
   public static async create<A extends AsenaAdapter<any, any> = AsenaAdapter<any, any>>(
     options: AsenaServerOptions<A>,
   ): Promise<AsenaServer<A>> {
-    const { adapter, logger, port, components, gc, health, overrides, shutdown, keepAlive } = options;
+    const { adapter, logger, port, components, imports, gc, health, overrides, shutdown, keepAlive } = options;
 
     if (!adapter && !options.headless) {
       throw new Error(
@@ -143,8 +157,15 @@ export class AsenaServerFactory {
       }
     }
 
-    if (components?.length) {
-      const injectableComponents: InjectableComponent[] = components.map((comp) => {
+    // `imports` is flattened one level so a package can spread its component list
+    const importClasses = imports?.flatMap((entry) => (Array.isArray(entry) ? entry : [entry]));
+
+    // Primary source: explicit non-empty `components` wins, then the build-time list
+    // published by `asena build`, then the filesystem scan driven by the config file.
+    const primary = components?.length ? components : getBuildComponents();
+
+    if (primary) {
+      const injectableComponents: InjectableComponent[] = primary.map((comp) => {
         const face: string = getTypedMetadata<string>(ComponentConstants.InterfaceKey, comp);
 
         return {
@@ -153,9 +174,9 @@ export class AsenaServerFactory {
         };
       });
 
-      await iocEngine.searchAndRegister(injectableComponents);
-    } else if (config) {
-      await iocEngine.searchAndRegister();
+      await iocEngine.searchAndRegister(injectableComponents, importClasses);
+    } else if (config || importClasses?.length) {
+      await iocEngine.searchAndRegister(undefined, importClasses);
     }
 
     coreContainer.setPhase(CoreBootstrapPhase.USER_COMPONENTS_INIT);

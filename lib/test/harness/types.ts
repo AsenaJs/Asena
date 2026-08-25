@@ -36,6 +36,11 @@ export interface TestAppOptions<A extends AsenaAdapter<any, any> = AsenaAdapter<
   components: Class[];
 
   /**
+   * Package components to register in addition to `components` - each must carry its own decorator.
+   */
+  imports?: (Class | readonly Class[])[];
+
+  /**
    * Replace registered components with test doubles, keyed by service name (`@MockBean`).
    *
    * Override services, not controllers: a plain object mock carries no `@Controller`
