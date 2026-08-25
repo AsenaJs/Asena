@@ -408,9 +408,7 @@ export class IocEngine implements ICoreService {
       this.warnAboutUndecoratedSubclass(component);
     }
 
-    return valid
-      .map((component) => this.createComponentObject(component))
-      .filter((component): component is InjectableComponent => component !== null);
+    return valid.map((component) => this.createComponentObject(component));
   }
 
   /**
@@ -429,22 +427,62 @@ export class IocEngine implements ICoreService {
 
     for (const entry of imports) {
       if (!this.isValidComponent(entry)) {
-        const name = typeof entry === 'function' ? entry.name : String(entry);
-
-        throw new Error(
-          `imports entry ${name} carries no component decorator - only classes decorated with ` +
-            '@Service, @Controller, ... can be imported',
-        );
+        throw new Error(this.describeInvalidImport(entry));
       }
 
-      const component = this.createComponentObject(entry);
-
-      if (component) {
-        injectables.push(component);
-      }
+      injectables.push(this.createComponentObject(entry));
     }
 
     return injectables;
+  }
+
+  /**
+   * The error for an `imports` entry that failed the identity check. A class that extends a
+   * component but carries no decorator of its own is told so explicitly: whoever can see
+   * `@Service` on the base class reads the generic message as a contradiction.
+   * @param {any} entry - The rejected entry
+   * @returns {string} The message to throw
+   */
+  private describeInvalidImport(entry: any): string {
+    const name = typeof entry === 'function' ? entry.name : String(entry);
+    const ancestor = this.findDecoratedAncestor(entry);
+
+    if (ancestor) {
+      return (
+        `imports entry ${name} extends the component ${ancestor.name} but carries no decorator of its own - ` +
+        `component identity is not inherited. Decorate ${name} (@Service, @Controller, ...) or import ` +
+        `${ancestor.name} itself if that is what you meant.`
+      );
+    }
+
+    return (
+      `imports entry ${name} carries no component decorator - only classes decorated with ` +
+      '@Service, @Controller, ... can be imported'
+    );
+  }
+
+  /**
+   * @description The nearest class up the prototype chain that carries its own component
+   * decorator, or undefined when none does.
+   * @param {any} component - A class, or anything else (yields undefined)
+   * @returns {Class | undefined} The decorated ancestor
+   */
+  private findDecoratedAncestor(component: any): Class | undefined {
+    if (typeof component !== 'function') {
+      return undefined;
+    }
+
+    let ancestor = Object.getPrototypeOf(component);
+
+    while (typeof ancestor === 'function' && ancestor !== Function.prototype) {
+      if (getOwnTypedMetadata<boolean>(ComponentConstants.IOCObjectKey, ancestor)) {
+        return ancestor;
+      }
+
+      ancestor = Object.getPrototypeOf(ancestor);
+    }
+
+    return undefined;
   }
 
   /**
@@ -462,33 +500,16 @@ export class IocEngine implements ICoreService {
    * own marker and never reaches here.
    */
   private warnAboutUndecoratedSubclass(component: any): void {
-    if (typeof component !== 'function') {
+    const ancestor = this.findDecoratedAncestor(component);
+
+    if (!ancestor) {
       return;
-    }
-
-    try {
-      if (!getTypedMetadata<boolean>(ComponentConstants.IOCObjectKey, component)) {
-        return;
-      }
-    } catch {
-      return;
-    }
-
-    let ancestor = Object.getPrototypeOf(component);
-
-    while (typeof ancestor === 'function' && ancestor !== Function.prototype) {
-      if (getOwnTypedMetadata<boolean>(ComponentConstants.IOCObjectKey, ancestor)) {
-        break;
-      }
-
-      ancestor = Object.getPrototypeOf(ancestor);
     }
 
     this.logger.warn(
-      `[IocEngine] '${component.name}' extends the component '${
-        typeof ancestor === 'function' ? ancestor.name : 'unknown'
-      }' but carries no decorator of its own, so it was NOT registered. ` +
-        'Decorate it (@Service, @Controller, @Schedule, ...) or remove it from the scan folder.',
+      `[IocEngine] '${component.name}' extends the component '${ancestor.name}' but carries no decorator of ` +
+        'its own, so it was NOT registered. Decorate it (@Service, @Controller, @Schedule, ...) or remove it ' +
+        'from the scan folder.',
     );
   }
 
@@ -504,18 +525,11 @@ export class IocEngine implements ICoreService {
     }
   }
 
-  private createComponentObject(component: Class): InjectableComponent | null {
-    try {
-      const _interface = getTypedMetadata<string>(ComponentConstants.InterfaceKey, component);
-
-      return {
-        Class: component,
-        interface: _interface,
-      };
-    } catch (error) {
-      this.logger.error('[IocEngine] Failed to create component object:', error);
-      return null;
-    }
+  private createComponentObject(component: Class): InjectableComponent {
+    return {
+      Class: component,
+      interface: getTypedMetadata<string>(ComponentConstants.InterfaceKey, component),
+    };
   }
 
   private topologicalSort(classes: Class[], injectables: InjectableComponent[]): Class[] {

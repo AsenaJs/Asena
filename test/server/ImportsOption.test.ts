@@ -88,6 +88,35 @@ describe('IocEngine imports', () => {
     );
   });
 
+  test('rejects an undecorated subclass of a component and names the decorated ancestor', async () => {
+    class TenantGreetingService extends ImportedGreetingService {}
+
+    const engine = newEngine();
+
+    await expect(engine.searchAndRegister(undefined, [TenantGreetingService])).rejects.toThrow(
+      /imports entry TenantGreetingService extends the component ImportedGreetingService but carries no decorator of its own/,
+    );
+  });
+
+  test('rejects a non-class import entry with the validation error, not a metadata TypeError', async () => {
+    const engine = newEngine();
+
+    await expect(engine.searchAndRegister(undefined, ['NotAClass' as any])).rejects.toThrow(
+      /imports entry NotAClass carries no component decorator/,
+    );
+  });
+
+  test('the scan steps over non-class exports without reading metadata from them', async () => {
+    const engine = newEngine();
+
+    engine.setConfig({ sourceFolder: SCAN_FOLDER, rootFile: '' });
+
+    // The folder exports strings, numbers and plain objects next to its components
+    await engine.searchAndRegister(undefined, [ImportedGreetingService]);
+
+    expect(await engine.container.resolve<any>('ScannedGreeterService')).toBeInstanceOf(ScannedGreeterService);
+  });
+
   test('rejects an import whose name collides with a scanned component', async () => {
     const engine = newEngine();
 
