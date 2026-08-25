@@ -18,6 +18,23 @@ import type { Class } from '../../server/types';
  */
 const REGISTRY_KEY = Symbol.for('asena.componentRegistry');
 
+const BUILD_COMPONENTS_KEY = Symbol.for('asena.buildComponents');
+
+/**
+ * @description Component classes collected by `asena build` while scanning the project,
+ * published on the global object before the entry module evaluates - the build no longer
+ * rewrites the entry file with a `components: [...]` list. Stored under `Symbol.for` so a
+ * project that ends up with two copies of `@asenajs/asena` still sees the same list.
+ * @returns {Class[] | undefined} The build-time list, or undefined when absent or empty
+ */
+export const getBuildComponents = (): Class[] | undefined => {
+  const store = globalThis as unknown as Record<symbol, Class[] | undefined>;
+
+  const components = store[BUILD_COMPONENTS_KEY];
+
+  return Array.isArray(components) && components.length > 0 ? components : undefined;
+};
+
 type Registry = Map<Class, string | null>;
 
 const getRegistry = (): Registry => {

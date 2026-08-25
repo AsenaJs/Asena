@@ -28,6 +28,21 @@ const injectedFieldMessage = (Class: Class, field: string, decorator: string): s
   "To swap a dependency in a test, use the 'overrides' option of createTestApp()/createWebTest(), " +
   'or mockComponent().';
 
+/**
+ * Thrown by {@link Container.resolve} when the requested key has no registration.
+ *
+ * Carries no information about who needed the key - `resolve` cannot know that - so
+ * `injectDependencies` catches it and rethrows with the dependent class and field attached.
+ * The subclass identity is what tells an unwrapped miss (wrap it) from any other failure
+ * (rethrow untouched), including an already-wrapped nested miss.
+ */
+export class UnregisteredDependencyError extends Error {
+  public constructor(message: string) {
+    super(message);
+    this.name = 'UnregisteredDependencyError';
+  }
+}
+
 export class Container {
   private _services: { [key: string]: ContainerService | ContainerService[] } = {};
 
@@ -178,7 +193,7 @@ export class Container {
       const service = this._services[key];
 
       if (!service) {
-        throw new Error(key + ' is not registered');
+        throw new UnregisteredDependencyError(key + ' is not registered');
       }
 
       if (Array.isArray(service)) {
@@ -514,7 +529,20 @@ export class Container {
 
         if (property?.value !== undefined) continue;
 
-        const instance: Class | Class[] = await this.resolve<Class>(name);
+        let instance: Class | Class[];
+
+        try {
+          instance = await this.resolve<Class>(name);
+        } catch (error) {
+          // Only the container's own miss, and only once: a nested miss arrives already
+          // wrapped in a plain Error, and anything else - CircularDependencyError, a failed
+          // hook - must reach the caller unchanged.
+          if (error instanceof UnregisteredDependencyError) {
+            throw new Error(`'${name}' is not registered (injected into ${Class.name}.${k})`, { cause: error });
+          }
+
+          throw error;
+        }
 
         if (instance === null) {
           throw new Error('Instance cant be null ' + name);

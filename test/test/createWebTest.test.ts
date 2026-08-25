@@ -27,6 +27,29 @@ class AuditService {
   }
 }
 
+@Service()
+class InvoiceService {
+  @Inject(UserService)
+  private userService: UserService;
+
+  public async total() {
+    const user = await this.userService.findById('1');
+
+    return `total for ${user.name}`;
+  }
+}
+
+@Controller('/billing')
+class BillingController {
+  @Inject(InvoiceService)
+  private invoiceService: InvoiceService;
+
+  @Get('/total')
+  public async total(context: AsenaContext<any, any>) {
+    return context.send(await this.invoiceService.total());
+  }
+}
+
 @Middleware()
 class AuthMiddleware extends AsenaMiddlewareService {
   @Inject(AuditService)
@@ -203,6 +226,19 @@ describe('createWebTest', () => {
       const service = await app.resolve<UserService>('UserService');
 
       expect(await service.findById('9')).toEqual({ id: '9', name: 'real' });
+
+      await app.stop();
+    });
+
+    // createTestApp expands the component list with the injection closure; createWebTest
+    // passes every auto-mocked name through overrides, so the closure must stop there. The
+    // auto-mocked service's own dependencies are nobody's business - registering them for
+    // real would drag the database the mock exists to avoid back into the test.
+    test('should not register the auto-mocked services own dependencies', async () => {
+      const { app, mocks } = await webTest({ controllers: [BillingController] });
+
+      expect(mocks.InvoiceService).toBeDefined();
+      expect(app.container.has('UserService')).toBe(false);
 
       await app.stop();
     });

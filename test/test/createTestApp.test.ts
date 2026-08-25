@@ -3,7 +3,7 @@ import { createTestApp } from '../../lib/test/harness/createTestApp';
 import { silentLogger } from '../../lib/test/harness/silentLogger';
 import { Controller, Service } from '../../lib/server/decorators';
 import { Get } from '../../lib/server/web/decorators';
-import { Inject } from '../../lib/ioc/component';
+import { Implements, Inject, Strategy } from '../../lib/ioc/component';
 import type { AsenaContext } from '../../lib/adapter';
 import { createMockAdapter } from '../utils/createMockContext';
 
@@ -41,6 +41,58 @@ class UserController {
   public async find(context: AsenaContext<any, any>) {
     return context.send(await this.userService.findById('1'));
   }
+}
+
+@Service()
+class LeafService {
+  public async leaf() {
+    return 'leaf';
+  }
+}
+
+@Service()
+class BranchService {
+  @Inject(LeafService)
+  private leafService: LeafService;
+
+  public async branch() {
+    return `branch:${await this.leafService.leaf()}`;
+  }
+}
+
+@Controller('/closure')
+class ClosureController {
+  @Inject(BranchService)
+  private branchService: BranchService;
+
+  @Get('/branch')
+  public async branch(context: AsenaContext<any, any>) {
+    return context.send(await this.branchService.branch());
+  }
+}
+
+@Controller('/broken')
+class BrokenController {
+  @Inject('GhostService')
+  private ghostService: any;
+
+  @Get('/')
+  public async root(context: AsenaContext<any, any>) {
+    return context.send('ok');
+  }
+}
+
+// Deliberately undecorated: @Inject(PlainUndecorated) must be reported, not silently followed
+class PlainUndecorated {
+  public ping() {
+    return 'pong';
+  }
+}
+
+@Service()
+class WantsUndecorated {
+  @Inject(PlainUndecorated)
+  private dependency: PlainUndecorated;
 }
 
 const boot = (overrides?: Record<string, object>) =>
@@ -111,6 +163,86 @@ describe('createTestApp', () => {
     await app.stop();
 
     expect(stopSpy).toHaveBeenCalledTimes(1);
+  });
+
+  describe('dependency closure', () => {
+    test('should register the transitive injection closure for real', async () => {
+      const { adapter } = createMockAdapter();
+
+      await using app = await createTestApp({
+        adapter: adapter as any,
+        logger: silentLogger,
+        components: [ClosureController],
+      });
+
+      expect(app.container.has('BranchService')).toBe(true);
+      expect(app.container.has('LeafService')).toBe(true);
+
+      const branch = await app.resolve<BranchService>('BranchService');
+
+      expect(await branch.branch()).toBe('branch:leaf');
+
+      // A request that travels controller -> branch -> leaf through the real wiring
+      const response = await adapter.testRequest('get', '/closure/branch');
+
+      expect(response.body).toBe('branch:leaf');
+    });
+
+    test('should reject before boot when a name-injected dependency is missing', async () => {
+      const { adapter } = createMockAdapter();
+
+      await expect(
+        createTestApp({
+          adapter: adapter as any,
+          logger: silentLogger,
+          components: [BrokenController],
+        }),
+      ).rejects.toThrow(
+        /createTestApp: missing dependencies:\nBrokenController\.ghostService injects 'GhostService', which is not in components or overrides/,
+      );
+
+      expect(adapter.start).not.toHaveBeenCalled();
+    });
+
+    test('should not register a dependency for real when its name is overridden', async () => {
+      const double = { leaf: mock(async () => 'mocked leaf') };
+
+      await using app = await createTestApp({
+        adapter: createMockAdapter().adapter as any,
+        logger: silentLogger,
+        components: [BranchService],
+        overrides: { LeafService: double },
+      });
+
+      expect(await app.resolve<typeof double>('LeafService')).toBe(double);
+
+      const branch = await app.resolve<BranchService>('BranchService');
+
+      expect(await branch.branch()).toBe('branch:mocked leaf');
+    });
+
+    test('should not double-register a class listed twice', async () => {
+      await using app = await createTestApp({
+        adapter: createMockAdapter().adapter as any,
+        logger: silentLogger,
+        components: [LeafService, LeafService, BranchService],
+      });
+
+      const resolved = await app.resolve<LeafService>('LeafService');
+
+      expect(Array.isArray(resolved)).toBe(false);
+      expect(resolved.leaf()).resolves.toBe('leaf');
+    });
+
+    test('should report a class injection whose target is not a decorated component', async () => {
+      await expect(
+        createTestApp({
+          adapter: createMockAdapter().adapter as any,
+          logger: silentLogger,
+          components: [WantsUndecorated],
+        }),
+      ).rejects.toThrow('WantsUndecorated.dependency injects PlainUndecorated, which is not a decorated component');
+    });
   });
 
   // createTestApp forwards `components` straight to AsenaServerFactory, so it is the harness
@@ -202,5 +334,60 @@ describe('createTestApp', () => {
     }
 
     expect(stopped).toBe(true);
+  });
+});
+
+describe('createTestApp dependency closure - interfaces and strategies', () => {
+  @Service()
+  @Implements('Greeter')
+  class EnglishGreeter {
+    public greet(): string {
+      return 'hello';
+    }
+  }
+
+  @Service()
+  class GreetingService {
+    @Inject('Greeter')
+    private greeter: EnglishGreeter;
+
+    public hello(): string {
+      return this.greeter.greet();
+    }
+  }
+
+  @Service()
+  @Implements('Plugin')
+  class PluginA {}
+
+  @Service()
+  class PluginHost {
+    @Strategy('Plugin')
+    private plugins: object[];
+
+    public count(): number {
+      return this.plugins.length;
+    }
+  }
+
+  test('a dependency injected by an @Implements key is provided by the listed implementation', async () => {
+    await using app = await createTestApp({
+      adapter: createMockAdapter().adapter as any,
+      logger: silentLogger,
+      components: [GreetingService, EnglishGreeter],
+    });
+
+    expect((await app.resolve<GreetingService>('GreetingService')).hello()).toBe('hello');
+  });
+
+  test('@Strategy implementations are not walked: an unlisted plugin is injected as []', async () => {
+    await using app = await createTestApp({
+      adapter: createMockAdapter().adapter as any,
+      logger: silentLogger,
+      components: [PluginHost],
+    });
+
+    expect(app.container.has('PluginA')).toBe(false);
+    expect((await app.resolve<PluginHost>('PluginHost')).count()).toBe(0);
   });
 });
