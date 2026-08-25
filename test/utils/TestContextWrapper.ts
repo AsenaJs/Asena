@@ -65,7 +65,7 @@ export class TestContextWrapper implements AsenaContext<Request, Response> {
 
   public getBody = <U>() => Promise.resolve({} as U);
 
-  public getQuery = (_q: string) => Promise.resolve('');
+  public getQuery = (_q: string) => Promise.resolve<string | undefined>(undefined);
 
   public getQueryAll = (_q: string) => Promise.resolve([] as string[]);
 

@@ -23,7 +23,7 @@ export const createMockContext = () =>
     // @ts-ignore
     getBody: mock(<U>() => Promise.resolve({} satisfies U)),
 
-    getQuery: mock((_query: string) => Promise.resolve('')),
+    getQuery: mock((_query: string) => Promise.resolve<string | undefined>(undefined)),
     getQueryAll: mock((_query: string) => Promise.resolve([])),
 
     getCookie: mock((_name: string, _secret?: string | BufferSource) => Promise.resolve('')),

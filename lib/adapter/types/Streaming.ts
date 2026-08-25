@@ -1,10 +1,18 @@
 /**
  * SSE message format following the Server-Sent Events specification.
+ * At least one of `data` and `comment` must be set; adapters throw when both are
+ * missing, since such a frame would carry nothing at all.
  * @see https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events
  */
 export interface SSEMessage {
   /** The data field. Multi-line strings are automatically split into separate data: lines. */
-  data: string;
+  data?: string;
+  /**
+   * Comment field, emitted as `: <line>` lines - one per newline-separated line -
+   * which are invisible to EventSource clients. Use it for keep-alive pings that
+   * must not look like an event.
+   */
+  comment?: string;
   /** Optional event type name */
   event?: string;
   /** Optional event ID for reconnection */

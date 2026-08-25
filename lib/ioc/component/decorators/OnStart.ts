@@ -4,10 +4,13 @@ import { defineTypedMetadata, getOwnTypedMetadata } from '../../../utils/typedMe
 /**
  * A decorator that marks a method to be called when the server starts.
  *
- * Runs during `server.start()`, after every component has been constructed and after the
- * application setup phase - configs are read, microservice transports are connected and
- * listening, routes are registered - but *before* the HTTP socket is bound. So a hook may
- * publish through `ulak`, and no request can arrive at a component that has not run yet.
+ * Runs during `server.start()`, after every component has been constructed and *before*
+ * the application setup phase - before `@Config` hooks are read, before microservice
+ * transports are connected, before routes are registered, before the HTTP socket is
+ * bound. So a hook cannot publish through `ulak`: the transports are not wired yet, and
+ * `ulak.send()` reports `NO_TRANSPORT`. In exchange, a `@Config` can use its injected
+ * components in `transport()` / `globalMiddlewares()` - their start hooks have already
+ * opened whatever those hooks open.
  *
  * Hooks run in registration order, which is the topological order the IoC engine computed:
  * a component's dependencies have already started when its own hook runs. A throwing hook
