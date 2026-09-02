@@ -656,7 +656,7 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
 
       this.logInheritedRoutes(controller, routes);
 
-      await this.prepareTopMiddlewares({ controller, routePath });
+      const controllerMiddlewares = await this.prepareTopMiddlewares({ controller });
 
       for (const [name, params] of Object.entries(routes)) {
         const lastPath = path.join(`${routePath}/`, params.path).replace(/\\/g, '/');
@@ -665,7 +665,7 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
 
         this.checkDuplicateRoute(registeredRoutes, params.method, lastPath, controllerName, name);
 
-        const middlewares = await this.prepareRouteMiddleware(params);
+        const middlewares = [...controllerMiddlewares, ...(await this.prepareRouteMiddleware(params))];
         const validatorInstance = await this.prepareValidator(params.validator);
 
         await this._adapter.registerRoute({
@@ -784,15 +784,11 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
   }
 
   /**
-   * @description Prepare top-level middlewares for controller or websocket
+   * @description Prepare controller-level middlewares (HTTP controller or WebSocket)
    * @param {PrepareMiddlewareParams} params - Middleware parameters
-   * @param {boolean} websocket - Whether this is for websocket
    * @returns {Promise<BaseMiddleware[]>}
    */
-  private async prepareTopMiddlewares(
-    { controller, routePath }: PrepareMiddlewareParams,
-    websocket = false,
-  ): Promise<BaseMiddleware[]> {
+  private async prepareTopMiddlewares({ controller }: PrepareMiddlewareParams): Promise<BaseMiddleware[]> {
     // Unioned across the chain, not read own-only. @Controller always writes this key - an
     // empty array when no middlewares are declared - so a subclass would otherwise shadow its
     // base's guards while still inheriting the base's routes: the route registers, the guard
@@ -802,19 +798,7 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
       controller.constructor,
     );
 
-    const middlewares = await this.prepareMiddlewares(topMiddlewares);
-
-    if (websocket) {
-      return middlewares;
-    }
-
-    // Register controller-level middlewares with pattern matching
-    // Convert routePath to pattern: /api → /api/*
-    const routePattern = routePath ? `${routePath}/*` : undefined;
-
-    for (const middleware of middlewares) {
-      await this._adapter.use(middleware, routePattern ? { include: [routePattern] } : undefined);
-    }
+    return this.prepareMiddlewares(topMiddlewares);
   }
 
   /**
@@ -879,7 +863,7 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
       // route mounted at the base's path while `namespace` stayed undefined, so the adapter
       // rejected it with a message pointing at a class the user never wrote.
       const path = getOwnTypedMetadata<string>(ComponentConstants.PathKey, websocket.constructor);
-      const middlewares = await this.prepareTopMiddlewares({ controller: websocket as unknown as Class }, true);
+      const middlewares = await this.prepareTopMiddlewares({ controller: websocket as unknown as Class });
 
       await this._adapter.registerWebsocketRoute({
         path: path,
