@@ -1,3 +1,4 @@
+import type { AuthSession } from '../auth/types';
 import type { AsenaSSEStreamWriter, AsenaStreamWriter, CookieExtra, SendOptions } from './types';
 
 /**
@@ -19,7 +20,10 @@ import type { AsenaSSEStreamWriter, AsenaStreamWriter, CookieExtra, SendOptions 
  * ```
  */
 // eslint-disable-next-line
-export interface AsenaVariables {}
+export interface AsenaVariables {
+  /** Set by an auth provider or guard; `undefined` = not resolved, `null` = anonymous */
+  authSession?: AuthSession | null;
+}
 
 /**
  * AsenaContext represents the core context interface for handling HTTP requests and responses in Asena framework.
