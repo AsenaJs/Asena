@@ -15,7 +15,7 @@ export const Controller = (params?: ControllerParams | string): ClassDecorator =
   const _params =
     typeof params === 'string' ? { path: params, name: undefined } : params || { path: '', name: undefined };
 
-  return defineComponent(ComponentType.CONTROLLER, _params, (target) => {
+  const decorate = defineComponent(ComponentType.CONTROLLER, _params, (target) => {
     defineTypedMetadata<string>(ComponentConstants.PathKey, _params.path.replace(/^\/+/, '/') || '/', target);
 
     if (_params.description) {
@@ -30,4 +30,12 @@ export const Controller = (params?: ControllerParams | string): ClassDecorator =
       target,
     );
   });
+
+  return (target) => {
+    if (typeof _params.path !== 'string') {
+      throw new Error(`@Controller on ${target.name}: "path" is required - use path: '/' for root-level routes`);
+    }
+
+    decorate(target);
+  };
 };
