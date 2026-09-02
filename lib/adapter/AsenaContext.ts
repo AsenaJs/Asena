@@ -1,3 +1,4 @@
+import type { AuthSession } from '../auth/types';
 import type { AsenaSSEStreamWriter, AsenaStreamWriter, CookieExtra, SendOptions } from './types';
 
 /**
@@ -18,8 +19,10 @@ import type { AsenaSSEStreamWriter, AsenaStreamWriter, CookieExtra, SendOptions 
  * context.setValue('user', u)  // type-checked
  * ```
  */
-// eslint-disable-next-line
-export interface AsenaVariables {}
+export interface AsenaVariables {
+  /** Set by an auth provider or guard; `undefined` = not resolved, `null` = anonymous */
+  authSession?: AuthSession | null;
+}
 
 /**
  * AsenaContext represents the core context interface for handling HTTP requests and responses in Asena framework.
@@ -175,7 +178,8 @@ export interface AsenaContext<R, S extends Response> {
   // any)` it won overload resolution for *every* call, so a wrong value on a declared key type-
   // checked fine and the promise above was not kept - `setValue('user', 42)` compiled. Resolving
   // the key to `never` for a known key forces such a call back onto the typed overload, where it
-  // fails. Unaugmented, `keyof AsenaVariables` is `never`, so this branch is inert.
+  // fails. Without augmentation the only known key is the built-in `authSession`, so for every
+  // other key this branch is what resolves.
   setValue<K extends string>(key: K extends keyof AsenaVariables ? never : K, value: any): void;
 
   /**
