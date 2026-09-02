@@ -212,4 +212,115 @@ describe('Duplicate Route Detection', () => {
       expect(error.message).toContain('testMethod');
     }
   });
+
+  // Both adapters treat `/api/users` and `/api/users/` as one route - hono normalizes the path,
+  // ergenecore registers both spellings - so a pair that differs only in a trailing slash used to
+  // boot with one handler silently shadowing the other.
+  describe('paths that differ only in spelling', () => {
+    const boot = async (components: any[]) => {
+      const server = await AsenaServerFactory.create({
+        adapter: createMockAdapter() as any,
+        logger: createMockLogger() as any,
+        port: 3000,
+        components,
+      });
+
+      return server.start();
+    };
+
+    test('a controller prefix that swallows the route path conflicts with the split spelling', async () => {
+      @Controller('/api')
+      class ControllerA {
+        @Get('/users')
+        public listUsers(context: AsenaContext<any, any>) {
+          return context.send('A');
+        }
+      }
+
+      @Controller('/api/users')
+      class ControllerB {
+        @Get('/')
+        public index(context: AsenaContext<any, any>) {
+          return context.send('B');
+        }
+      }
+
+      const failure = await boot([SharedService, ControllerA, ControllerB]).then(
+        () => undefined,
+        (error: Error) => error,
+      );
+
+      // Names both sides, in whichever order the container resolved them: the two controllers are
+      // in different files and neither spelling looks like the other at the call site.
+      expect(failure?.message).toMatch(/Duplicate route detected: GET \/api\/users/);
+      expect(failure?.message).toContain('ControllerA.listUsers()');
+      expect(failure?.message).toContain('ControllerB.index()');
+    });
+
+    test('a trailing slash on either the prefix or the route path conflicts', async () => {
+      @Controller('/api/')
+      class SlashPrefixController {
+        @Get('/users')
+        public listUsers(context: AsenaContext<any, any>) {
+          return context.send('prefix');
+        }
+      }
+
+      @Controller('/api')
+      class SlashRouteController {
+        @Get('/users/')
+        public alsoListUsers(context: AsenaContext<any, any>) {
+          return context.send('route');
+        }
+      }
+
+      await expect(boot([SharedService, SlashPrefixController, SlashRouteController])).rejects.toThrow(
+        /Duplicate route detected/,
+      );
+    });
+
+    test('an @All on the swallowed spelling conflicts with a @Get on the split one', async () => {
+      @Controller('/api')
+      class GetSplitController {
+        @Get('/users')
+        public listUsers(context: AsenaContext<any, any>) {
+          return context.send('get');
+        }
+      }
+
+      @Controller('/api/users')
+      class AllSwallowedController {
+        @All('/')
+        public everything(context: AsenaContext<any, any>) {
+          return context.send('all');
+        }
+      }
+
+      const failure = await boot([SharedService, GetSplitController, AllSwallowedController]).then(
+        () => undefined,
+        (error: Error) => error,
+      );
+
+      expect(failure?.message).toMatch(/Duplicate route detected/);
+      expect(failure?.message).toContain('listUsers');
+      expect(failure?.message).toContain('everything');
+    });
+
+    test('two distinct routes under the same prefix still boot', async () => {
+      @Controller('/api/users')
+      class UsersIndexController {
+        @Get('/')
+        public index(context: AsenaContext<any, any>) {
+          return context.send('index');
+        }
+
+        @Get('/x')
+        public detail(context: AsenaContext<any, any>) {
+          return context.send('x');
+        }
+      }
+
+      await expect(boot([SharedService, UsersIndexController])).resolves.toBeUndefined();
+    });
+  });
 });

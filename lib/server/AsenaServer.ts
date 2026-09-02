@@ -716,7 +716,8 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
     controllerName: string,
     handlerName: string,
   ): void {
-    const routeKey = `${method.toUpperCase()} ${fullPath}`;
+    const canonicalPath = fullPath.length > 1 && fullPath.endsWith('/') ? fullPath.slice(0, -1) : fullPath;
+    const routeKey = `${method.toUpperCase()} ${canonicalPath}`;
 
     // Check for exact duplicate (same method + path)
     const existing = registeredRoutes.get(routeKey);
@@ -732,9 +733,9 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
     // Check ALL conflicts: if new route is ALL, check if any method already registered for this path
     if (method.toUpperCase() === 'ALL') {
       for (const [key, entry] of registeredRoutes) {
-        if (key.endsWith(` ${fullPath}`)) {
+        if (key.endsWith(` ${canonicalPath}`)) {
           throw new Error(
-            `Duplicate route detected: ALL ${fullPath} conflicts with ${key} — ` +
+            `Duplicate route detected: ALL ${canonicalPath} conflicts with ${key} — ` +
               `already registered by ${entry.controllerName}.${entry.handlerName}(), ` +
               `conflicts with ${controllerName}.${handlerName}()`,
           );
@@ -743,12 +744,12 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
     }
 
     // Check if ALL already registered for this path and new route conflicts
-    const allKey = `ALL ${fullPath}`;
+    const allKey = `ALL ${canonicalPath}`;
     const allEntry = registeredRoutes.get(allKey);
 
     if (allEntry && method.toUpperCase() !== 'ALL') {
       throw new Error(
-        `Duplicate route detected: ${routeKey} conflicts with ALL ${fullPath} — ` +
+        `Duplicate route detected: ${routeKey} conflicts with ALL ${canonicalPath} — ` +
           `already registered by ${allEntry.controllerName}.${allEntry.handlerName}(), ` +
           `conflicts with ${controllerName}.${handlerName}()`,
       );
