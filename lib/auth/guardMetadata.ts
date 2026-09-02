@@ -40,10 +40,21 @@ export function collectGuardMetadata(Class: Function): CollectedGuardMetadata {
 
 /**
  * The mark enforcement must apply for a handler: the method's own mark when present,
- * otherwise the class mark. A method mark never inherits `roles`/`provider` from the
- * class mark - `@Protected()` on a `@Roles('admin')` controller means "any session",
- * which is the only reading visible at the method.
+ * otherwise the class mark. `roles` never flow down from the class mark - `@Protected()`
+ * on a `@Roles('admin')` controller means "any session", which is the only reading visible
+ * at the method. `provider` does flow down: which system authenticates is a property of the
+ * controller, so `@Roles('admin')` under `@Protected({ provider: 'jwt' })` still asks `jwt`.
  */
 export function effectiveGuardMark(collected: CollectedGuardMetadata, method: string): GuardMark | undefined {
-  return collected.methods.get(method) ?? collected.classMark;
+  const methodMark = collected.methods.get(method);
+
+  if (!methodMark) {
+    return collected.classMark;
+  }
+
+  if (methodMark.access === 'protected' && methodMark.provider === undefined && collected.classMark?.provider) {
+    return { ...methodMark, provider: collected.classMark.provider };
+  }
+
+  return methodMark;
 }

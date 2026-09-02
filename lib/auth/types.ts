@@ -40,7 +40,7 @@ export interface AsenaAuthProvider<TUser extends AuthUser = AuthUser> {
  */
 export interface GuardMark {
   access: 'protected' | 'public';
-  /** Registered component name of the provider to consult; the default provider when omitted. */
+  /** Registered component name of the provider to consult; a method mark falls back to the class mark's, then to the default provider. */
   provider?: string;
   /** Any-of: a session holding at least one of these roles passes. */
   roles?: string[];

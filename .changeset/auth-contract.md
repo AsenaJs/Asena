@@ -13,8 +13,9 @@ decorators `@Protected` / `@Public` / `@Roles`, the guard-mark readers
 
 Guard marks are override semantics, deliberately unlike `@Transaction`'s accumulation:
 a subclass mark replaces the inherited one (a subclass `@Public` cancels a base
-`@Protected`), and a method mark never inherits `roles`/`provider` from the class
-mark. When two guard decorators stack on one target the one applied last wins
+`@Protected`), and a method mark never inherits `roles` from the class mark - it does
+inherit `provider`, so `@Roles('admin')` under `@Protected({ provider: 'jwt' })` still
+asks `jwt`. When two guard decorators stack on one target the one applied last wins
 entirely - with legacy decorators that is the one written above the other. The
 `AsenaVariables` context interface gains an optional `authSession` member
 (`undefined` = not resolved, `null` = anonymous), which is additive: code that

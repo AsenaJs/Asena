@@ -257,4 +257,24 @@ describe('effectiveGuardMark', () => {
       access: 'protected',
     });
   });
+
+  test('a method mark inherits the provider from a @Protected({ provider }) class mark', () => {
+    @Protected({ provider: 'jwt' })
+    class JwtController {
+      @Roles('admin')
+      admin() {}
+
+      @Protected({ provider: 'session' })
+      own() {}
+
+      @Public()
+      open() {}
+    }
+
+    const collected = collectGuardMetadata(JwtController);
+
+    expect(effectiveGuardMark(collected, 'admin')).toEqual({ access: 'protected', roles: ['admin'], provider: 'jwt' });
+    expect(effectiveGuardMark(collected, 'own')).toEqual({ access: 'protected', provider: 'session' });
+    expect(effectiveGuardMark(collected, 'open')).toEqual({ access: 'public' });
+  });
 });

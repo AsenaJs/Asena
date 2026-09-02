@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { AUTH_PROVIDER_KEY, AUTH_SESSION_CONTEXT_KEY, getAuthSession, requireAuthSession } from '../../lib/auth';
-import type { AsenaAuthProvider, AuthSession, AuthUser } from '../../lib/auth';
+import type { AsenaAuthProvider, AuthSession, AuthUser, RolesResolver } from '../../lib/auth';
 import { HttpException } from '../../lib/adapter';
 import type { AsenaContext } from '../../lib/adapter';
 import { TestContextWrapper } from '../utils/TestContextWrapper';
@@ -89,6 +89,16 @@ describe('auth contract types', () => {
     // @ts-expect-error - a provider missing getRoles does not satisfy the interface
     const incomplete: AsenaAuthProvider = { getSession: (_request) => Promise.resolve(null) };
     expect(incomplete).toBeDefined();
+  });
+
+  test('a RolesResolver maps a session to role names', () => {
+    const resolver: RolesResolver = (s) => s.user.roles ?? [];
+
+    expect(resolver(session)).toEqual(session.user.roles ?? []);
+
+    // @ts-expect-error - a resolver returning something other than string[] does not satisfy the type
+    const wrong: RolesResolver = (s) => s.user.id;
+    expect(wrong).toBeDefined();
   });
 
   test('the AsenaVariables augmentation types setValue for the authSession key', () => {
