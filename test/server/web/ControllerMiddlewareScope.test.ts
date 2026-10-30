@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
 import { AsenaServerFactory } from '../../../lib/server';
-import { Controller, Middleware } from '../../../lib/server/decorators';
+import { Controller, Middleware, WebSocket } from '../../../lib/server/decorators';
+import { AsenaWebSocketService } from '../../../lib/server/web/websocket';
 import { Get } from '../../../lib/server/web/decorators';
 import type { AsenaContext } from '../../../lib/adapter';
 import { AsenaMiddlewareService } from '../../../lib/server/web/middleware';
@@ -136,6 +137,9 @@ class RootBoth {
   }
 }
 
+@WebSocket({ path: '/guarded', middlewares: [Guard] })
+class GuardedSocket extends AsenaWebSocketService<any> {}
+
 describe('controller middlewares scope to their own routes', () => {
   let mockAdapter: any;
   let mockLogger: any;
@@ -260,6 +264,27 @@ describe('controller middlewares scope to their own routes', () => {
   test('no controller middleware is registered as a global pattern', async () => {
     await boot([Guard, RootGuarded]);
 
+    expect(mockAdapter.use).not.toHaveBeenCalled();
+  });
+
+  test('@WebSocket middlewares are handed to registerWebsocketRoute', async () => {
+    await boot([Guard, GuardedSocket]);
+
+    expect(mockAdapter.registerWebsocketRoute).toHaveBeenCalledTimes(1);
+
+    const [route] = mockAdapter.registerWebsocketRoute.mock.calls[0];
+
+    expect(route.path).toBe('guarded');
+    expect(route.middlewares).toHaveLength(1);
+
+    let nextCalled = false;
+
+    await route.middlewares[0].handle({}, async () => {
+      nextCalled = true;
+    });
+
+    expect(guardCalls).toBe(1);
+    expect(nextCalled).toBe(true);
     expect(mockAdapter.use).not.toHaveBeenCalled();
   });
 });
