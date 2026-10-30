@@ -5,6 +5,24 @@ import { Inject } from '../../../lib/ioc/component';
 import { getOwnTypedMetadata, getTypedMetadata } from '../../../lib/utils';
 
 describe('@FrontendController Decorator', () => {
+  describe('Missing path', () => {
+    test('names the frontend controller instead of throwing a raw TypeError', () => {
+      class NoPathUi {}
+
+      expect(() => FrontendController({ name: 'Ui' } as any)(NoPathUi)).toThrow(
+        /@FrontendController on NoPathUi: "path" is required/,
+      );
+    });
+
+    test('leaves the class unregistered when it throws', () => {
+      class AlsoNoPathUi {}
+
+      expect(() => FrontendController({} as any)(AlsoNoPathUi)).toThrow();
+
+      expect(getOwnTypedMetadata<boolean>(ComponentConstants.IOCObjectKey, AlsoNoPathUi)).toBeUndefined();
+    });
+  });
+
   describe('Class Registration', () => {
     test('should register class as FRONTEND_CONTROLLER component type', () => {
       @FrontendController('/ui')

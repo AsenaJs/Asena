@@ -1,6 +1,6 @@
 import { ComponentConstants, ComponentType, type ControllerParams } from '../../../ioc';
 import { defineComponent } from '../../../ioc/component';
-import { defineMiddleware } from '../../web/helper';
+import { assertPathGiven, defineMiddleware } from '../../web/helper';
 import { defineTypedMetadata } from '../../../utils/typedMetadata';
 
 import type { MiddlewareClass } from '../../web/middleware';
@@ -32,10 +32,7 @@ export const Controller = (params?: ControllerParams | string): ClassDecorator =
   });
 
   return (target) => {
-    if (typeof _params.path !== 'string') {
-      throw new Error(`@Controller on ${target.name}: "path" is required - use path: '/' for root-level routes`);
-    }
-
+    assertPathGiven('@Controller', target, _params.path);
     decorate(target);
   };
 };

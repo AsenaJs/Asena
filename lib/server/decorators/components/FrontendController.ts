@@ -1,5 +1,6 @@
 import { ComponentConstants, ComponentType } from '../../../ioc';
 import { defineComponent } from '../../../ioc/component';
+import { assertPathGiven } from '../../web/helper';
 import { defineTypedMetadata } from '../../../utils/typedMetadata';
 
 export interface FrontendControllerParams {
@@ -21,7 +22,12 @@ export const FrontendController = (params: FrontendControllerParams | string): C
   const _params =
     typeof params === 'string' ? { path: params, name: undefined } : params || { path: '', name: undefined };
 
-  return defineComponent(ComponentType.FRONTEND_CONTROLLER, _params, (target) => {
+  const decorate = defineComponent(ComponentType.FRONTEND_CONTROLLER, _params, (target) => {
     defineTypedMetadata<string>(ComponentConstants.PathKey, _params.path.replace(/^\/+/, '/') || '/', target);
   });
+
+  return (target) => {
+    assertPathGiven('@FrontendController', target, _params.path);
+    decorate(target);
+  };
 };

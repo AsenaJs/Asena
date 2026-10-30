@@ -1,6 +1,6 @@
 import { ComponentConstants, ComponentType, type ControllerParams } from '../../../ioc';
 import { defineComponent } from '../../../ioc/component';
-import { defineMiddleware } from '../../web/helper';
+import { assertPathGiven, defineMiddleware } from '../../web/helper';
 import { defineTypedMetadata } from '../../../utils/typedMetadata';
 
 import type { MiddlewareClass } from '../../web/middleware';
@@ -12,17 +12,10 @@ import type { MiddlewareClass } from '../../web/middleware';
  * @returns {ClassDecorator} - The class decorator for the WebSocket.
  */
 export const WebSocket = (params: ControllerParams | string): ClassDecorator => {
-  return defineComponent(ComponentType.WEBSOCKET, params, (target) => {
-    let path = typeof params === 'string' ? params : params.path;
+  const path = typeof params === 'string' ? params : params?.path;
 
-    if (!path) {
-      console.error('path parameter is required');
-      process.exit();
-    }
-
-    path = path.replace(/^\/+/, '');
-
-    defineTypedMetadata<string>(ComponentConstants.PathKey, path, target);
+  const decorate = defineComponent(ComponentType.WEBSOCKET, params, (target) => {
+    defineTypedMetadata<string>(ComponentConstants.PathKey, path.replace(/^\/+/, ''), target);
 
     defineMiddleware(target, (params as ControllerParams).middlewares || []);
 
@@ -32,4 +25,9 @@ export const WebSocket = (params: ControllerParams | string): ClassDecorator => 
       target,
     );
   });
+
+  return (target) => {
+    assertPathGiven('@WebSocket', target, path || undefined);
+    decorate(target);
+  };
 };
