@@ -1,3 +1,4 @@
+import { ASENA_CONTEXT_CONTRACT, resolveContextContract, assertRouteContract } from '../adapter/RequestContract';
 import type { Class, StaticServeClass } from './types';
 import {
   ComponentType,
@@ -665,6 +666,12 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
 
         this.checkDuplicateRoute(registeredRoutes, params.method, lastPath, controllerName, name);
 
+        const contextClass = resolveContextContract(controller, name);
+        assertRouteContract(
+          params,
+          contextClass,
+          `${params.method.toUpperCase()} ${lastPath} (${controllerName}.${name})`,
+        );
         const middlewares = [...controllerMiddlewares, ...(await this.prepareRouteMiddleware(params))];
         const validatorInstance = await this.prepareValidator(params.validator);
 
@@ -675,6 +682,9 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
           handler: controller[name].bind(controller),
           staticServe: await this.prepareStaticServeConfig(params.staticServe),
           validator: validatorInstance,
+          validatorCache: params.validatorCache,
+          contextClass,
+          contextContract: contextClass?.[ASENA_CONTEXT_CONTRACT],
           controllerName,
           controllerBasePath: routePath,
         });

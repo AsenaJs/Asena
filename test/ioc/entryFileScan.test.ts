@@ -16,6 +16,9 @@ const writeFixtureApp = (): string => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'asena-tla-entry-'));
 
   fs.mkdirSync(path.join(root, 'src/services'), { recursive: true });
+  // The temporary app imports reflect-metadata like a real installed app, so give it the
+  // package dependencies instead of relying on the test runner's module lookup path.
+  fs.symlinkSync(path.resolve(import.meta.dir, '../../node_modules'), path.join(root, 'node_modules'), 'dir');
 
   fs.writeFileSync(
     path.join(root, 'asena-config.ts'),

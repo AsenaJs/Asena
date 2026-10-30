@@ -1,3 +1,4 @@
+import type { ContractContextClass, RequestSchemas } from '../RequestContract';
 import type { HttpMethod } from '../../server/web/types';
 import type { AsenaHandler } from './AsenaHandler';
 import type { AsenaContext } from '../AsenaContext';
@@ -12,6 +13,9 @@ export interface RouteParams<C extends AsenaContext<any, any>, VS, E = any> {
   handler: AsenaHandler<C>;
   staticServe: BaseStaticServeParams<C, E>;
   validator: BaseValidator<VS>;
+  validatorCache?: boolean;
+  contextClass?: ContractContextClass;
+  contextContract?: Readonly<RequestSchemas>;
   controllerName?: string;
   controllerBasePath?: string;
 }
