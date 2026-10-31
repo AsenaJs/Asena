@@ -8,6 +8,7 @@ import { composeOnReceive } from '../../microservice';
 import type { Ulak } from '../../messaging';
 import type { MessageHandlerMetadata, MessagingInterceptor } from '../../microservice';
 import type { DestroyOptions, MessageContext, MicroserviceTransport } from '../../microservice';
+import type { PrepareExceptionHandlerService } from './PrepareExceptionHandlerService';
 
 /**
  * @description PrepareMicroserviceService - Registers microservice message handlers during bootstrap
@@ -43,6 +44,9 @@ export class PrepareMicroserviceService implements ICoreService {
 
   @Inject(ICoreServiceNames.__ULAK__)
   private ulak!: Ulak;
+
+  @Inject(ICoreServiceNames.PREPARE_EXCEPTION_HANDLER_SERVICE)
+  private exceptions!: PrepareExceptionHandlerService;
 
   private transports: Map<string, MicroserviceTransport> = new Map();
 
@@ -199,8 +203,12 @@ export class PrepareMicroserviceService implements ICoreService {
 
       const bound = controller[methodName].bind(controller);
 
-      const wrapped = (data: any, context: MessageContext) =>
+      const intercepted = (data: any, context: MessageContext) =>
         composeOnReceive(interceptors, context, () => Promise.resolve(bound(data, context)));
+
+      const wrapped = this.exceptions?.hasHandlers
+        ? this.routeFailures(intercepted, metadata.type, `${controllerName}.${methodName}`, transportName)
+        : intercepted;
 
       const finalPattern = this.buildPattern(prefix, metadata.pattern, applyPrefix);
 
@@ -230,6 +238,52 @@ export class PrepareMicroserviceService implements ICoreService {
     }
 
     this.logResolved(controllerName, transportName, prefix, resolved);
+  }
+
+  /**
+   * Offer a handler failure to the `@Catch` registry before the transport sees it.
+   *
+   * Outside the interceptor chain, as the http error handler sits outside middleware. Any value
+   * other than `undefined` answers: the reply for a message, containment for an event. Otherwise
+   * the original error reaches the transport untouched - synchronously when nothing matches it.
+   */
+  private routeFailures(
+    handler: (data: any, context: MessageContext) => Promise<any>,
+    kind: 'message' | 'event',
+    source: string,
+    transport: string,
+  ): (data: any, context: MessageContext) => Promise<any> {
+    const recover = async (error: unknown, data: unknown, message: MessageContext): Promise<any> => {
+      if (!this.exceptions.handles(error)) {
+        throw error;
+      }
+
+      const result = await this.exceptions
+        .dispatch(error, { scope: 'microservice', kind, message, data, source, transport })
+        .catch(() => undefined);
+
+      if (result === undefined) {
+        throw error;
+      }
+
+      return kind === 'message' ? result : undefined;
+    };
+
+    return (data, context) => {
+      let pending: Promise<any>;
+
+      try {
+        pending = handler(data, context);
+      } catch (error) {
+        if (!this.exceptions.handles(error)) {
+          throw error;
+        }
+
+        return recover(error, data, context);
+      }
+
+      return Promise.resolve(pending).catch((error: unknown) => recover(error, data, context));
+    };
   }
 
   /**

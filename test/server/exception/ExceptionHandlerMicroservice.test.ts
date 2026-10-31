@@ -1,0 +1,506 @@
+import { describe, expect, test } from 'bun:test';
+import { Config, ExceptionHandler, MessageController } from '../../../lib/server/decorators';
+import { Catch, type ExceptionContext } from '../../../lib/server/exception';
+import {
+  EventPattern,
+  InMemoryTransport,
+  MessagePattern,
+  type EventPatternHandler,
+  type MessageContext,
+  type MessageHandler,
+  type MessagingInterceptor,
+  type MicroserviceTransport,
+} from '../../../lib/server/microservice';
+import { UlakError, UlakErrorCode } from '../../../lib/server/messaging';
+import { bootExceptionApp, createLogger } from './bootHelper';
+
+abstract class DomainError extends Error {}
+
+class OutOfStock extends DomainError {}
+
+class Unrelated extends Error {}
+
+/** Keeps the registered handlers so a test can invoke one and see exactly what the transport would. */
+class RecordingTransport implements MicroserviceTransport {
+  public readonly name = 'recording';
+
+  public readonly isConnected = true;
+
+  public readonly messages = new Map<string, MessageHandler>();
+
+  public readonly events = new Map<string, EventPatternHandler>();
+
+  public async init(): Promise<void> {}
+
+  public registerMessageHandler(pattern: string, handler: MessageHandler): void {
+    this.messages.set(pattern, handler);
+  }
+
+  public registerEventHandler(pattern: string, handler: EventPatternHandler): void {
+    this.events.set(pattern, handler);
+  }
+
+  public async listen(): Promise<void> {}
+
+  public async send<T>(): Promise<T> {
+    throw new Error('not used');
+  }
+
+  public async emit(): Promise<void> {}
+
+  public async destroy(): Promise<void> {}
+}
+
+const messageContext = (pattern: string): MessageContext => ({
+  pattern,
+  messageId: 'm-1',
+  headers: {},
+  timestamp: 0,
+  attempt: 1,
+});
+
+const bootWith = async (
+  transport: MicroserviceTransport,
+  components: any[],
+  interceptors: MessagingInterceptor[] = [],
+) => {
+  @Config()
+  class TransportConfig {
+    public transport() {
+      return { microservice: { orders: transport }, interceptors };
+    }
+  }
+
+  return bootExceptionApp([TransportConfig, ...components]);
+};
+
+describe('@Catch for @MessagePattern', () => {
+  test('turns a matched failure into the reply, with the microservice context', async () => {
+    const transport = new InMemoryTransport();
+    const failure = new OutOfStock('sku-1');
+    const seen: ExceptionContext[] = [];
+
+    @ExceptionHandler()
+    class Errors {
+      @Catch(OutOfStock)
+      public outOfStock(error: Error, ctx: ExceptionContext) {
+        seen.push(ctx);
+        return { error: error.message };
+      }
+    }
+
+    @MessageController({ prefix: 'order', transport: 'orders' })
+    class OrderHandler {
+      @MessagePattern('create')
+      public async create() {
+        throw failure;
+      }
+    }
+
+    await bootWith(transport, [Errors, OrderHandler]);
+
+    expect(await transport.send('order.create', { sku: 'sku-1' }, { headers: { trace: 't' } })).toEqual({
+      error: 'sku-1',
+    });
+
+    const [ctx] = seen;
+
+    expect(ctx).toMatchObject({
+      scope: 'microservice',
+      kind: 'message',
+      data: { sku: 'sku-1' },
+      source: 'OrderHandler.create',
+      transport: 'orders',
+    });
+    expect((ctx as any).message).toMatchObject({ pattern: 'order.create', headers: { trace: 't' } });
+  });
+
+  test('catches a synchronous throw too', async () => {
+    const transport = new InMemoryTransport();
+
+    @ExceptionHandler()
+    class Errors {
+      @Catch(OutOfStock)
+      public outOfStock() {
+        return 'fallback';
+      }
+    }
+
+    @MessageController({ prefix: 'order', transport: 'orders' })
+    class OrderHandler {
+      @MessagePattern('create')
+      public create() {
+        throw new OutOfStock();
+      }
+    }
+
+    await bootWith(transport, [Errors, OrderHandler]);
+
+    expect(await transport.send('order.create')).toBe('fallback');
+  });
+
+  test('resolves the most specific type along the prototype chain', async () => {
+    const transport = new InMemoryTransport();
+
+    @ExceptionHandler()
+    class Errors {
+      @Catch(DomainError)
+      public domain() {
+        return 'domain';
+      }
+
+      @Catch(Error)
+      public generic() {
+        return 'generic';
+      }
+    }
+
+    @MessageController({ transport: 'orders' })
+    class OrderHandler {
+      @MessagePattern('stock')
+      public async stock() {
+        throw new OutOfStock();
+      }
+
+      @MessagePattern('other')
+      public async other() {
+        throw new Unrelated();
+      }
+    }
+
+    await bootWith(transport, [Errors, OrderHandler]);
+
+    expect(await transport.send('stock')).toBe('domain');
+    expect(await transport.send('other')).toBe('generic');
+  });
+
+  test('leaves an unmatched failure to the transport, untouched', async () => {
+    const transport = new RecordingTransport();
+    const failure = new Unrelated('nobody catches this');
+
+    @ExceptionHandler()
+    class Errors {
+      @Catch(OutOfStock)
+      public outOfStock() {
+        return 'never';
+      }
+    }
+
+    @MessageController({ transport: 'orders' })
+    class OrderHandler {
+      @MessagePattern('sync')
+      public sync() {
+        throw failure;
+      }
+
+      @MessagePattern('async')
+      public async async() {
+        throw failure;
+      }
+    }
+
+    await bootWith(transport, [Errors, OrderHandler]);
+
+    expect(() => transport.messages.get('sync')!({}, messageContext('sync'))).toThrow(failure);
+    await expect(transport.messages.get('async')!({}, messageContext('async'))).rejects.toBe(failure);
+  });
+
+  test('keeps the in-memory REMOTE_ERROR reply for an unmatched failure', async () => {
+    const transport = new InMemoryTransport();
+
+    @ExceptionHandler()
+    class Errors {
+      @Catch(OutOfStock)
+      public outOfStock() {
+        return 'never';
+      }
+    }
+
+    @MessageController({ transport: 'orders' })
+    class OrderHandler {
+      @MessagePattern('create')
+      public async create() {
+        throw new Unrelated('boom');
+      }
+    }
+
+    await bootWith(transport, [Errors, OrderHandler]);
+
+    const error = await transport.send('create').catch((caught) => caught);
+
+    expect(error).toBeInstanceOf(UlakError);
+    expect(error.code).toBe(UlakErrorCode.REMOTE_ERROR);
+    expect(error.message).toBe('Handler for pattern "create" failed: boom');
+  });
+
+  test('a @Catch that returns nothing declines, so the original error is the reply', async () => {
+    const transport = new RecordingTransport();
+    const failure = new OutOfStock();
+    let reached = false;
+
+    @ExceptionHandler()
+    class Errors {
+      @Catch(OutOfStock)
+      public outOfStock() {
+        reached = true;
+      }
+    }
+
+    @MessageController({ transport: 'orders' })
+    class OrderHandler {
+      @MessagePattern('create')
+      public async create() {
+        throw failure;
+      }
+    }
+
+    await bootWith(transport, [Errors, OrderHandler]);
+
+    await expect(transport.messages.get('create')!({}, messageContext('create'))).rejects.toBe(failure);
+    expect(reached).toBe(true);
+  });
+
+  test('a @Catch that throws is contained: its error is logged and the original is rethrown', async () => {
+    const transport = new RecordingTransport();
+    const failure = new OutOfStock('original');
+    const handlerFailure = new Error('handler broke');
+
+    @ExceptionHandler()
+    class Errors {
+      @Catch(OutOfStock)
+      public outOfStock() {
+        throw handlerFailure;
+      }
+    }
+
+    @MessageController({ transport: 'orders' })
+    class OrderHandler {
+      @MessagePattern('create')
+      public create() {
+        throw failure;
+      }
+    }
+
+    const { logger } = await bootWith(transport, [Errors, OrderHandler]);
+
+    await expect(transport.messages.get('create')!({}, messageContext('create'))).rejects.toBe(failure);
+    expect(logger.error).toHaveBeenCalledWith(
+      '@Catch handler Errors.outOfStock() threw an error, falling back to the framework default:',
+      handlerFailure,
+    );
+  });
+
+  test('sits outside the interceptor chain, so an interceptor still sees the failure', async () => {
+    const transport = new InMemoryTransport();
+    const observed: unknown[] = [];
+
+    const interceptor: MessagingInterceptor = {
+      async onReceive(_ctx, next) {
+        try {
+          return await next();
+        } catch (error) {
+          observed.push(error);
+          throw error;
+        }
+      },
+    };
+
+    @ExceptionHandler()
+    class Errors {
+      @Catch(OutOfStock)
+      public outOfStock() {
+        return 'recovered';
+      }
+    }
+
+    @MessageController({ transport: 'orders' })
+    class OrderHandler {
+      @MessagePattern('create')
+      public async create() {
+        throw new OutOfStock();
+      }
+    }
+
+    await bootWith(transport, [Errors, OrderHandler], [interceptor]);
+
+    expect(await transport.send('create')).toBe('recovered');
+    expect(observed).toHaveLength(1);
+    expect(observed[0]).toBeInstanceOf(OutOfStock);
+  });
+});
+
+describe('@Catch for @EventPattern', () => {
+  test('contains a matched failure when the @Catch answers, with the event context', async () => {
+    const transport = new RecordingTransport();
+    const seen: ExceptionContext[] = [];
+
+    @ExceptionHandler()
+    class Errors {
+      @Catch(OutOfStock)
+      public outOfStock(_error: unknown, ctx: ExceptionContext) {
+        seen.push(ctx);
+        return 'handled';
+      }
+    }
+
+    @MessageController({ prefix: 'order', transport: 'orders' })
+    class OrderEvents {
+      @EventPattern('shipped')
+      public async shipped() {
+        throw new OutOfStock();
+      }
+    }
+
+    await bootWith(transport, [Errors, OrderEvents]);
+
+    const context = messageContext('order.shipped');
+
+    expect(await transport.events.get('order.shipped')!({ id: 3 }, context)).toBeUndefined();
+    expect(seen).toEqual([
+      {
+        scope: 'microservice',
+        kind: 'event',
+        message: context,
+        data: { id: 3 },
+        source: 'OrderEvents.shipped',
+        transport: 'orders',
+      },
+    ]);
+  });
+
+  test('a @Catch that returns nothing declines, so the transport still sees the original failure', async () => {
+    const transport = new RecordingTransport();
+    const failure = new OutOfStock();
+
+    @ExceptionHandler()
+    class Errors {
+      @Catch(OutOfStock)
+      public outOfStock() {}
+    }
+
+    @MessageController({ transport: 'orders' })
+    class OrderEvents {
+      @EventPattern('shipped')
+      public async shipped() {
+        throw failure;
+      }
+    }
+
+    await bootWith(transport, [Errors, OrderEvents]);
+
+    await expect(transport.events.get('shipped')!({}, messageContext('shipped'))).rejects.toBe(failure);
+  });
+
+  test('leaves an unmatched failure to the transport', async () => {
+    const transport = new RecordingTransport();
+    const failure = new Unrelated();
+
+    @ExceptionHandler()
+    class Errors {
+      @Catch(OutOfStock)
+      public outOfStock() {
+        return 'never';
+      }
+    }
+
+    @MessageController({ transport: 'orders' })
+    class OrderEvents {
+      @EventPattern('shipped')
+      public shipped() {
+        throw failure;
+      }
+    }
+
+    await bootWith(transport, [Errors, OrderEvents]);
+
+    expect(() => transport.events.get('shipped')!({}, messageContext('shipped'))).toThrow(failure);
+  });
+
+  test('a @Catch that throws is contained: its error is logged and the transport sees the original', async () => {
+    const transport = new RecordingTransport();
+    const failure = new OutOfStock();
+    const handlerFailure = new Error('handler broke');
+
+    @ExceptionHandler()
+    class Errors {
+      @Catch(DomainError)
+      public async domain() {
+        throw handlerFailure;
+      }
+    }
+
+    @MessageController({ transport: 'orders' })
+    class OrderEvents {
+      @EventPattern('shipped')
+      public async shipped() {
+        throw failure;
+      }
+    }
+
+    const { logger } = await bootWith(transport, [Errors, OrderEvents]);
+
+    await expect(transport.events.get('shipped')!({}, messageContext('shipped'))).rejects.toBe(failure);
+    expect(logger.error).toHaveBeenCalledWith(
+      '@Catch handler Errors.domain() threw an error, falling back to the framework default:',
+      handlerFailure,
+    );
+  });
+});
+
+describe('when containing a throwing @Catch fails too', () => {
+  test('the transport still sees the original failure', async () => {
+    const transport = new RecordingTransport();
+    const failure = new OutOfStock();
+    const logger = createLogger();
+
+    logger.error.mockImplementation(() => {
+      throw new Error('logger down');
+    });
+
+    @ExceptionHandler()
+    class Errors {
+      @Catch(OutOfStock)
+      public outOfStock() {
+        throw new Error('handler broke');
+      }
+    }
+
+    @MessageController({ transport: 'orders' })
+    class OrderHandler {
+      @MessagePattern('create')
+      public async create() {
+        throw failure;
+      }
+    }
+
+    @Config()
+    class TransportConfig {
+      public transport() {
+        return { microservice: { orders: transport } };
+      }
+    }
+
+    await bootExceptionApp([TransportConfig, Errors, OrderHandler], { logger });
+
+    await expect(transport.messages.get('create')!({}, messageContext('create'))).rejects.toBe(failure);
+  });
+});
+
+describe('with no @Catch declared', () => {
+  test('hands the transport the handler unwrapped', async () => {
+    const transport = new RecordingTransport();
+    const failure = new OutOfStock();
+
+    @MessageController({ transport: 'orders' })
+    class OrderHandler {
+      @MessagePattern('create')
+      public create() {
+        throw failure;
+      }
+    }
+
+    await bootWith(transport, [OrderHandler]);
+
+    expect(() => transport.messages.get('create')!({}, messageContext('create'))).toThrow(failure);
+  });
+});
