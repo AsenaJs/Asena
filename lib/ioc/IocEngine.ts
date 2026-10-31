@@ -295,14 +295,14 @@ export class IocEngine implements ICoreService {
         this.warnAboutTransientLifecycleHooks(name, injectable);
       }
 
-      await this._container.register(name, injectable, isSingleton);
+      const entry = await this._container.register(name, injectable, isSingleton);
 
       const _interface = getTypedMetadata<string>(ComponentConstants.InterfaceKey, injectable);
 
-      // An overridden component must not sneak back in under its @Implements interface key -
-      // registering there would construct the real class and run its @PostConstruct anyway
-      if (_interface && !this._container.isOverridden(name)) {
-        await this._container.register(_interface, injectable, isSingleton);
+      // No entry means `name` is overridden: the real class must not come back in under its
+      // interface key either.
+      if (_interface && entry) {
+        this._container.registerAlias(_interface, entry);
       }
     }
   }

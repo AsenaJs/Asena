@@ -594,11 +594,19 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
 
     for (const type of httpOnlyTypes) {
       const names: string[] = [];
+      const seen = new Set<unknown>();
 
       for (const value of Object.values(services)) {
         const entries = Array.isArray(value) ? value : [value];
 
         for (const entry of entries) {
+          // An @Implements component is reachable under its interface key too, as the same entry.
+          if (seen.has(entry)) {
+            continue;
+          }
+
+          seen.add(entry);
+
           // Own-only, like every other component-type read in the framework. Off the chain a
           // @Service extending a @Controller was named here as an HTTP-only component that would
           // "be ignored" - while being registered and working perfectly.
