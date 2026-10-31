@@ -114,7 +114,12 @@ export class PrepareEventService implements ICoreService {
       const boundHandler = service[methodName].bind(service);
 
       // Register with EventEmitter
-      this.dispatchService.registerHandler(finalPattern, boundHandler);
+      this.dispatchService.registerHandler(
+        finalPattern,
+        boundHandler,
+        false,
+        `${service.constructor.name}.${methodName}`,
+      );
     }
   }
 

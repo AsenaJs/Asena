@@ -91,4 +91,9 @@ export interface EventSubscription {
    * Whether this is a one-time subscription (once)
    */
   once?: boolean;
+
+  /**
+   * `UserEventService.handleCreated` for a handler registered by `@On`; absent otherwise
+   */
+  source?: string;
 }

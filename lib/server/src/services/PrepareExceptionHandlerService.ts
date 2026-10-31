@@ -103,6 +103,11 @@ export class PrepareExceptionHandlerService implements ICoreService {
     }
   }
 
+  /** Whether some `@Catch` would receive this value. Synchronous, so a caller can keep its default path in the same tick. */
+  public handles(error: unknown): boolean {
+    return this.registry.resolve(error) !== undefined;
+  }
+
   /**
    * Run the `@Catch` chain for a thrown value.
    *

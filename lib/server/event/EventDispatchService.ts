@@ -1,6 +1,9 @@
 import { CoreService } from '../../ioc';
 import { ICoreServiceNames } from '../../ioc';
 import type { ICoreService } from '../../ioc';
+import { Inject } from '../../ioc/component';
+import type { EventExceptionContext } from '../exception/types';
+import type { PrepareExceptionHandlerService } from '../src/services/PrepareExceptionHandlerService';
 import { PatternHandlerIndex } from './PatternHandlerIndex';
 import type { EventHandler, EventSubscription } from './types';
 
@@ -22,6 +25,9 @@ import type { EventHandler, EventSubscription } from './types';
 @CoreService(ICoreServiceNames.EVENT_DISPATCH_SERVICE)
 export class EventDispatchService implements ICoreService {
   public readonly serviceName = 'EventDispatchService';
+
+  @Inject(ICoreServiceNames.PREPARE_EXCEPTION_HANDLER_SERVICE)
+  private exceptions?: PrepareExceptionHandlerService;
 
   /**
    * All registered event subscriptions
@@ -50,8 +56,8 @@ export class EventDispatchService implements ICoreService {
    * registerHandler('user.created', (eventName, data) => { ... });
    * registerHandler('download.*', (eventName, data) => { ... });
    */
-  public registerHandler(pattern: string, handler: EventHandler, once = false): void {
-    this.handlers.push({ pattern, handler, once });
+  public registerHandler(pattern: string, handler: EventHandler, once = false, source?: string): void {
+    this.handlers.push(source === undefined ? { pattern, handler, once } : { pattern, handler, once, source });
 
     // Invalidate warmup cache - will rebuild on next dispatch
     this.warmedUp = false;
@@ -117,12 +123,12 @@ export class EventDispatchService implements ICoreService {
         // Benchmark showed await Promise.resolve(syncHandler()) is 13x slower!
         if (result instanceof Promise) {
           result.catch((error) => {
-            console.error(`[EventDispatchService] Async error in handler for event "${eventName}":`, error);
+            this.handleFailure(sub, eventName, data, error, 'Async');
           });
         }
       } catch (error) {
         // Sync handler error - log but continue with other handlers
-        console.error(`[EventDispatchService] Sync error in handler for event "${eventName}":`, error);
+        this.handleFailure(sub, eventName, data, error, 'Sync');
       }
     }
 
@@ -134,6 +140,41 @@ export class EventDispatchService implements ICoreService {
     }
 
     return true;
+  }
+
+  /**
+   * Offer a handler failure to the `@Catch` registry, falling back to the log line.
+   *
+   * The unmatched case logs in the same tick, exactly as before the registry existed. A matched
+   * `@Catch` that returns nothing - or throws - declines, and the original error is logged.
+   */
+  private handleFailure(
+    sub: EventSubscription,
+    eventName: string,
+    data: unknown,
+    error: unknown,
+    kind: 'Sync' | 'Async',
+  ): void {
+    const logDefault = () => {
+      console.error(`[EventDispatchService] ${kind} error in handler for event "${eventName}":`, error);
+    };
+
+    const exceptions = this.exceptions;
+
+    if (!exceptions?.handles(error)) {
+      logDefault();
+
+      return;
+    }
+
+    const context: EventExceptionContext =
+      sub.source === undefined
+        ? { scope: 'event', event: eventName, data }
+        : { scope: 'event', event: eventName, data, source: sub.source };
+
+    exceptions.dispatch(error, context).then((result) => {
+      if (result === undefined) logDefault();
+    }, logDefault);
   }
 
   /**
