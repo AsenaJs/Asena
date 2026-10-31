@@ -10,49 +10,63 @@
 
 A high-performance IoC web framework for Bun runtime, bringing Spring Boot's automatic component discovery and field-based dependency injection to TypeScript.
 
-## Philosophy
-
-`Spring Boot` and `Quarkus` have established proven patterns for enterprise application development, but developers transitioning to TypeScript often find themselves reimplementing familiar concepts or adapting to unfamiliar architectures. `AsenaJS` addresses this gap by bringing automatic component discovery, field-based dependency injection to the `Bun` ecosystem.
-
-The framework eliminates boilerplate through automatic scanning of decorator-annotated classes, removing the need for explicit module declarations or manual wiring. Components marked with `@Controller`, `@Service`, or `@Repository` (via asena-drizzle package) are discovered and registered automatically, allowing developers to focus on business logic rather than configuration. This approach, combined with Bun's native performance characteristics, delivers both the familiar developer experience of Spring Boot and the speed expected from modern JavaScript runtimes.
-
-`AsenaJS` is designed to make developers familiar with `Spring Boot` and `Quarkus` feel at home in the TypeScript ecosystem. As the framework evolves, we remain committed to this philosophy—bringing more proven patterns from the Java world while maintaining the performance advantages that `Bun` provides and flexiblity of Typescript.
-
-## Documentation
-
-📚 **Full documentation:** [asena.sh](https://asena.sh)
-
-For complete guides, API reference, and advanced topics, visit our documentation site.
-
-**Example Project:** [AsenaExample](https://github.com/LibirSoft/AsenaExample) - See latest usage patterns and best practices.
+**Requirements:** Bun 1.4+, and `experimentalDecorators` + `emitDecoratorMetadata` enabled in `tsconfig.json`.
 
 ## Quick Start
 
 ```bash
-# Create new project
 bun add -g @asenajs/asena-cli
-asena create my-project --adapter=hono --logger --eslint --prettier
-cd my-project
-
-# Start development
+asena create my-app --adapter=ergenecore
+cd my-app
 asena dev start
 ```
 
-Visit [asena.sh/docs/get-started](https://asena.sh/docs/get-started) for detailed setup instructions.
+Or add it to an existing project:
 
-## Performance
+```bash
+bun add @asenajs/asena @asenajs/ergenecore @asenajs/asena-logger zod
+```
 
-Built on Bun runtime for exceptional performance:
+```typescript
+// src/index.ts
+import { AsenaServerFactory } from '@asenajs/asena';
+import { Controller, Service } from '@asenajs/asena/decorators';
+import { Get } from '@asenajs/asena/decorators/http';
+import { Inject } from '@asenajs/asena/decorators/ioc';
+import { createErgenecoreAdapter, type Context } from '@asenajs/ergenecore';
+import { AsenaLogger } from '@asenajs/asena-logger';
 
-| Framework                | Requests/sec          | Latency (avg) |
-|--------------------------|-----------------------|---------------|
-| **Asena + Ergenecore**   | **294,962.61**        | **1.34ms**    |
-| Hono                     | 266,476.83            | 1.49ms        |
-| **Asena + Hono-adapter** | **233,182.35**        | **1.70ms**    |
-| NestJS (Bun)             | 100,975.20            | 3.92ms        |
-| NestJS (Node)            | 88,083.22             | 5.33ms        |
+@Service()
+class GreetingService {
+  greet(name: string) {
+    return `Hello ${name}`;
+  }
+}
 
-> Benchmark: 12 threads, 400 connections, 120s duration, Hello World endpoint
+@Controller('/')
+class HelloController {
+  @Inject(GreetingService)
+  private greetingService: GreetingService;
+
+  @Get('/')
+  async hello(context: Context) {
+    return context.send(this.greetingService.greet('asena'));
+  }
+}
+
+const server = await AsenaServerFactory.create({
+  adapter: createErgenecoreAdapter(),
+  logger: new AsenaLogger(),
+  port: 3000,
+  components: [GreetingService, HelloController],
+});
+
+await server.start();
+```
+
+## Documentation
+
+Full documentation: [asena.sh/docs/get-started](https://asena.sh/docs/get-started) · Philosophy: [asena.sh/docs/philosophy](https://asena.sh/docs/philosophy) · Benchmarks: [asena.sh/docs/benchmarks](https://asena.sh/docs/benchmarks)
 
 ## Contributing
 
