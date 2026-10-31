@@ -22,7 +22,8 @@ import type { ControllerDecoratorParams } from '../../../../adapter';
  * ```
  */
 export function Route(method: string, params: ControllerDecoratorParams | string = '/'): Function {
-  const { path, middlewares, summary, description, staticServe, validator } = generateHandlerParams(params);
+  const { path, middlewares, summary, description, staticServe, validator, validatorCache } =
+    generateHandlerParams(params);
 
   return genericHandler({
     method: method.toLowerCase() as HttpMethod,
@@ -32,5 +33,6 @@ export function Route(method: string, params: ControllerDecoratorParams | string
     description,
     staticServe,
     validator,
+    validatorCache,
   });
 }

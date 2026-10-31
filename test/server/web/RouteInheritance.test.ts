@@ -339,16 +339,14 @@ describe('route inheritance', () => {
     // an authorization hole rather than a missing route.
     expect(guarded).toBeDefined();
     expect(guarded.method).toBe(HttpMethod.POST);
-    // Identity, not just count: a swap - the controller-level middleware landing in the route
-    // slot instead of the route's own - also reads as length 1 and is an authorization hole.
-    expect(guarded.middlewares).toHaveLength(1);
-    expect(identify(guarded.middlewares[0])).toBe('BaseRouteMiddleware');
+    // Identity and order, not just count: the controller-level guard runs first and the route's
+    // own is still there - dropping either, or swapping them, also reads as length 2.
+    expect(guarded.middlewares).toHaveLength(2);
+    expect(identify(guarded.middlewares[0])).toBe('TopLevelMiddleware');
+    expect(identify(guarded.middlewares[1])).toBe('BaseRouteMiddleware');
 
-    // ...and the controller-level one went through adapter.use, scoped to this controller
-    const [middleware, config] = mockAdapter.use.mock.calls.at(-1);
-
-    expect(identify(middleware)).toBe('TopLevelMiddleware');
-    expect(config).toEqual({ include: ['/carrier/*'] });
+    // ...and nothing was registered as a global pattern
+    expect(mockAdapter.use).not.toHaveBeenCalled();
   });
 
   test('two controllers extending one base do not contaminate each other', async () => {
@@ -377,13 +375,12 @@ describe('route inheritance', () => {
   test("a subclass inherits its base's controller-level middlewares", async () => {
     await boot([SubclassPrefixController, TopLevelMiddleware]);
 
-    expect(mockAdapter.use).toHaveBeenCalledTimes(1);
+    const thing = registered.find((route) => route.path === '/subclass-prefix/thing');
 
-    const [middleware, config] = mockAdapter.use.mock.calls[0];
-
-    expect(identify(middleware)).toBe('TopLevelMiddleware');
-    // Scoped to the subclass's own prefix, not the base's
-    expect(config).toEqual({ include: ['/subclass-prefix/*'] });
+    expect(thing).toBeDefined();
+    expect(thing.middlewares).toHaveLength(1);
+    expect(identify(thing.middlewares[0])).toBe('TopLevelMiddleware');
+    expect(mockAdapter.use).not.toHaveBeenCalled();
   });
 
   test('a subclass may add middlewares on top of the inherited ones', async () => {
@@ -392,7 +389,8 @@ describe('route inheritance', () => {
 
     await boot([AddingController, TopLevelMiddleware, BaseRouteMiddleware]);
 
-    const applied = mockAdapter.use.mock.calls.map(([middleware]: any[]) => identify(middleware));
+    const thing = registered.find((route) => route.path === '/adds/thing');
+    const applied = thing.middlewares.map((middleware: any) => identify(middleware));
 
     // Ancestors first, then its own - and the inherited one is not dropped
     expect(applied).toEqual(['TopLevelMiddleware', 'BaseRouteMiddleware']);

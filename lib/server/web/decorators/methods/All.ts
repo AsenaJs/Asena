@@ -8,7 +8,17 @@ import type { ControllerDecoratorParams } from '../../../../adapter';
  * @returns {Function} The generic handler for all HTTP methods.
  */
 export function All(params: ControllerDecoratorParams | string): Function {
-  const { path, middlewares, summary, description, staticServe, validator } = generateHandlerParams(params);
+  const { path, middlewares, summary, description, staticServe, validator, validatorCache } =
+    generateHandlerParams(params);
 
-  return genericHandler({ method: HttpMethod.ALL, path, summary, middlewares, description, staticServe, validator });
+  return genericHandler({
+    method: HttpMethod.ALL,
+    path,
+    summary,
+    middlewares,
+    description,
+    staticServe,
+    validator,
+    validatorCache,
+  });
 }

@@ -8,7 +8,8 @@ import type { ControllerDecoratorParams } from '../../../../adapter';
  * @returns {Function} The generic handler for the OPTIONS request.
  */
 export function Options(params: ControllerDecoratorParams | string): Function {
-  const { path, middlewares, summary, description, staticServe, validator } = generateHandlerParams(params);
+  const { path, middlewares, summary, description, staticServe, validator, validatorCache } =
+    generateHandlerParams(params);
 
   return genericHandler({
     method: HttpMethod.OPTIONS,
@@ -18,5 +19,6 @@ export function Options(params: ControllerDecoratorParams | string): Function {
     description,
     staticServe,
     validator,
+    validatorCache,
   });
 }

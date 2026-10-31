@@ -1,6 +1,6 @@
 import { ComponentConstants, ComponentType, type ControllerParams } from '../../../ioc';
 import { defineComponent } from '../../../ioc/component';
-import { defineMiddleware } from '../../web/helper';
+import { assertPathGiven, defineMiddleware } from '../../web/helper';
 import { defineTypedMetadata } from '../../../utils/typedMetadata';
 
 import type { MiddlewareClass } from '../../web/middleware';
@@ -15,7 +15,7 @@ export const Controller = (params?: ControllerParams | string): ClassDecorator =
   const _params =
     typeof params === 'string' ? { path: params, name: undefined } : params || { path: '', name: undefined };
 
-  return defineComponent(ComponentType.CONTROLLER, _params, (target) => {
+  const decorate = defineComponent(ComponentType.CONTROLLER, _params, (target) => {
     defineTypedMetadata<string>(ComponentConstants.PathKey, _params.path.replace(/^\/+/, '/') || '/', target);
 
     if (_params.description) {
@@ -30,4 +30,9 @@ export const Controller = (params?: ControllerParams | string): ClassDecorator =
       target,
     );
   });
+
+  return (target) => {
+    assertPathGiven('@Controller', target, _params.path);
+    decorate(target);
+  };
 };

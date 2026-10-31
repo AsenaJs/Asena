@@ -37,6 +37,7 @@ export interface ApiParams<C extends AsenaContext<any, any> = any, SH = unknown>
   staticServe: StaticServeClass;
   /** The validator class for request validation. */
   validator: ValidatorClass<SH>;
+  validatorCache?: boolean;
 }
 
 /**
@@ -88,4 +89,7 @@ export interface ControllerDecoratorParams<C extends AsenaContext<any, any> = an
    * Optional validator class for request validation.
    */
   validator?: ValidatorClass<SH>;
+
+  /** Cache schema factories per route at startup (default true). Set false for dynamic schemas. */
+  validatorCache?: boolean;
 }
