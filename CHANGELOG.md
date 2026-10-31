@@ -1,5 +1,39 @@
 # @asenajs/asena
 
+## 0.12.0
+
+### Minor Changes
+
+- 3838857: New `@asenajs/asena/auth` export: the shared auth contract every auth implementation
+  can depend on without depending on each other. It ships the provider interface
+  (`AsenaAuthProvider`, `RolesResolver`), the session shapes (`AuthUser`, `AuthSession`),
+  the wire constants (`AUTH_PROVIDER_KEY`, `AUTH_SESSION_CONTEXT_KEY`), the marker
+  decorators `@Protected` / `@Public` / `@Roles`, the guard-mark readers
+  (`collectGuardMetadata`, `effectiveGuardMark`) and the context helpers
+  `getAuthSession` / `requireAuthSession` (which throws an `HttpException` 401 on
+  `undefined` and `null` alike). Core itself never calls any of it.
+
+  Guard marks are override semantics, deliberately unlike `@Transaction`'s accumulation:
+  a subclass mark replaces the inherited one (a subclass `@Public` cancels a base
+  `@Protected`), and a method mark never inherits `roles` from the class mark - it does
+  inherit `provider`, so `@Roles('admin')` under `@Protected({ provider: 'jwt' })` still
+  asks `jwt`. When two guard decorators stack on one target the one applied last wins
+  entirely - with legacy decorators that is the one written above the other. The
+  `AsenaVariables` context interface gains an optional `authSession` member
+  (`undefined` = not resolved, `null` = anonymous), which is additive: code that
+  never touches the key is unaffected.
+
+- ca6b286: Controller-level middlewares are attached to each of the controller's own routes instead of being registered as a `/prefix/*` pattern. A controller mounted at `/`, `''` or a path with a trailing slash (`/admin/`) now runs its middlewares on every route (they never ran before), and a controller at `/api` no longer runs its middlewares for an unrelated controller at `/api/open`. Controller middlewares run only for routes the controller declares: not for unmatched paths under its prefix (404s) and not for `OPTIONS` preflight of routes without an `OPTIONS` handler — put `CorsMiddleware` in `globalMiddlewares()`. Pipeline per route: global → controller → route → validator → handler (validator-before-route-middleware on hono-adapter < 5.0.0).
+- 15e6596: Duplicate-route detection compares canonical paths, so a pair that differs only in a trailing slash is caught at boot instead of registering twice with one handler silently shadowing the other. `@Controller('/api')` with `@Get('/users')` and `@Controller('/api/users')` with `@Get('/')` both resolve to `GET /api/users` and fail the boot naming both controllers and both handlers; the `@All` conflict scan uses the same canonical path. The path handed to the adapter is unchanged.
+
+  This is a boot-time behavior change: an application that declares the same method on both `/x` and `/x/` booted before - with one handler silently answering both spellings on either adapter - and now fails to start until one of the two routes is removed.
+
+- 1f25a23: Add shared Standard Schema v1 route context contracts, metadata resolution, and per-route legacy validator cache configuration. Legacy schema factories now run once at startup by default; use `validatorCache: false` for request-time factories.
+
+### Patch Changes
+
+- aa8e1d9: `@Controller({ middlewares: [...] })` written without a `path` threw a raw `TypeError: Cannot read properties of undefined (reading 'replace')` at decoration time, `@FrontendController({})` threw the same `TypeError`, and `@WebSocket` without a path printed a message and called `process.exit()`. All three throw the same error naming the decorator, the class and the fix: `@Controller on <Class>: "path" is required - use path: '/' for root-level routes` (with `@FrontendController` / `@WebSocket` in place of `@Controller`). The class is left unregistered. `@Controller()` and `@Controller('')` are unchanged and still mount at `/`; `@WebSocket('')` is still rejected.
+
 ## 0.11.0
 
 ### Minor Changes
