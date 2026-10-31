@@ -235,6 +235,62 @@ describe('@Implements singleton', () => {
     expect(warning!.match(/ReportController/g)).toHaveLength(1);
   });
 
+  test('puts a double overriding the name under the interface key as well', async () => {
+    const constructed: string[] = [];
+
+    @Service()
+    @Implements('IMailer')
+    class SmtpMailer {
+      public constructor() {
+        constructed.push('smtp');
+      }
+
+      @OnStart()
+      public start() {
+        constructed.push('smtp.start');
+      }
+    }
+
+    @Service()
+    @Implements('IMailer')
+    class SesMailer {}
+
+    @Service()
+    class Notifier {
+      @Inject(SmtpMailer)
+      public smtp: unknown;
+
+      @Inject(SesMailer)
+      public ses: unknown;
+
+      @Strategy('IMailer')
+      public mailers: unknown[];
+    }
+
+    const fake = { send: () => 'fake' };
+    const { adapter } = createMockAdapter();
+
+    (adapter as any).onError = mock(() => {});
+
+    server = await AsenaServerFactory.create({
+      adapter: adapter as any,
+      logger: createLogger() as any,
+      port: 3000,
+      components: [SmtpMailer, SesMailer, Notifier],
+      overrides: { SmtpMailer: fake },
+    });
+
+    await server.start();
+
+    const notifier = await server.resolve<Notifier>('Notifier');
+
+    expect(constructed).toEqual([]);
+    expect(notifier.smtp).toBe(fake);
+    expect(notifier.mailers).toHaveLength(2);
+    expect(notifier.mailers).toContain(fake);
+    expect(notifier.mailers).toContain(notifier.ses);
+  });
+
   test('gives the interface key a test double without constructing the real class there', async () => {
     let constructed = 0;
 

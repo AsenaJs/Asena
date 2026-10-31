@@ -98,13 +98,12 @@ describe('AsenaServerFactory overrides', () => {
     expect(server.coreContainer.container.isOverridden('SignupService')).toBe(false);
   });
 
-  test('should not register an overridden component under its @Implements interface', async () => {
-    const server = await createServer({ PaymentGateway: { charge: () => 'double' } }, [StripeGateway]);
+  test('should put the double of an overridden component under its @Implements interface', async () => {
+    const double = { charge: () => 'double' };
+    const server = await createServer({ PaymentGateway: double }, [StripeGateway]);
 
-    expect(await server.coreContainer.container.resolve<{ charge: () => string }>('PaymentGateway')).toEqual({
-      charge: expect.any(Function),
-    });
-    expect(server.coreContainer.container.has('IPaymentGateway')).toBe(false);
+    expect(await server.coreContainer.container.resolve('PaymentGateway')).toBe(double);
+    expect(await server.coreContainer.container.resolve('IPaymentGateway')).toBe(double);
   });
 
   describe('core service guard', () => {

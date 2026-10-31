@@ -299,9 +299,8 @@ export class IocEngine implements ICoreService {
 
       const _interface = getTypedMetadata<string>(ComponentConstants.InterfaceKey, injectable);
 
-      // No entry means `name` is overridden: the real class must not come back in under its
-      // interface key either.
-      if (_interface && entry) {
+      // When `name` is overridden this is the double's entry, so the interface key reaches it too.
+      if (_interface) {
         this._container.registerAlias(_interface, entry);
       }
     }

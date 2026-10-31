@@ -80,14 +80,14 @@ export class Container {
   }
 
   /**
-   * @returns {Promise<ContainerService | undefined>} The new entry, or undefined when `key` is overridden
+   * @returns {Promise<ContainerService>} The new entry, or the test double's entry when `key` is overridden
    */
-  public async register(key: string, Class: Class, singleton: boolean): Promise<ContainerService | undefined> {
+  public async register(key: string, Class: Class, singleton: boolean): Promise<ContainerService> {
     // An overridden key keeps its test double. Returning early means the real class is
     // never instantiated (no @PostConstruct side effects) and the entry never turns
     // into an array, which is what resolve() would otherwise hand back.
     if (this.overriddenKeys.has(key)) {
-      return undefined;
+      return this._services[key] as ContainerService;
     }
 
     const instance = singleton ? await this.prepareInstance(Class) : null;
