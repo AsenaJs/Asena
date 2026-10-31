@@ -301,8 +301,13 @@ describe('AsenaSocket - Transport Routing', () => {
       ws.cork = mock((cb: any) => cb(ws));
       const socket = new AsenaSocket(ws, 'chat');
 
-      socket.cork(() => 'result' as any);
+      const ret = socket.cork((w) => {
+        expect(w).toBe(ws);
 
+        return 'result';
+      });
+
+      expect(ret).toBe('result');
       expect(ws.cork).toHaveBeenCalled();
     });
 
