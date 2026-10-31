@@ -14,6 +14,14 @@ updates:
         update-types:
           - 'minor'
           - 'patch'
+      dependencies:
+        patterns:
+          - '*'
+        exclude-patterns:
+          - '@asenajs/*'
+        update-types:
+          - 'minor'
+          - 'patch'
     ignore:
       - dependency-name: '*'
         update-types: ['version-update:semver-major']
@@ -27,6 +35,14 @@ updates:
     directory: '/'
     schedule:
       interval: 'weekly'
+    groups:
+      actions:
+        patterns:
+          - '*'
+    ignore:
+      # v2 requires @changesets/cli v3
+      - dependency-name: 'changesets/action'
+        update-types: ['version-update:semver-major']
     assignees:
       - 'LibirSoft'
     commit-message:
