@@ -4,7 +4,7 @@
   "author": "LibirSoft",
   "repository": {
     "type": "git",
-    "url": "https://github.com/AsenaJs/Asena.git"
+    "url": "git+https://github.com/AsenaJs/Asena.git"
   },
   "main": "dist/index.js",
   "homepage": "https://asena.sh/",

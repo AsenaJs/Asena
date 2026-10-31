@@ -1,0 +1,62 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - master
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    permissions:
+      contents: read
+    uses: ./.github/workflows/ci.yml
+
+  release:
+    name: Version PR or publish
+    needs: ci
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write
+      pull-requests: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.4
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+          package-manager-cache: false
+
+      - name: Assert npm supports trusted publishing
+        run: |
+          v="$(npm --version)"
+          echo "node $(node --version), npm $v"
+          node -e 'const [M,m,p]=process.argv[1].split(".").map(Number); if (M<11||(M===11&&(m<5||(m===5&&p<1)))) { console.error("npm >= 11.5.1 is required for trusted publishing, got " + process.argv[1]); process.exit(1); }' "$v"
+
+      - name: Install
+        run: bun install --frozen-lockfile
+
+      - name: Create Version PR or publish
+        uses: changesets/action@v1
+        with:
+          version: bun run version
+          publish: bun run release
+          commit: 'chore: version packages'
+          title: 'chore: version packages'
+          createGithubReleases: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_CONFIG_PROVENANCE: 'true'
