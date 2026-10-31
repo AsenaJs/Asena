@@ -41,7 +41,7 @@ export class AsenaSocket<T> {
    * Cached binary data type preference.
    * @private
    */
-  private _binaryType?: 'nodebuffer' | 'arraybuffer' | 'uint8array';
+  private _binaryType?: 'nodebuffer' | 'arraybuffer' | 'uint8array' | 'blob';
 
   /**
    * Custom data attached to this WebSocket connection.
@@ -305,7 +305,7 @@ export class AsenaSocket<T> {
    * All socket operations within the callback will be buffered and sent together.
    * This is useful when sending multiple messages at once to reduce syscalls.
    *
-   * @template T - The return type of the callback
+   * @template R - The return type of the callback
    * @param callback - The function containing socket operations to batch
    * @returns The return value of the callback
    *
@@ -319,7 +319,7 @@ export class AsenaSocket<T> {
    * });
    * ```
    */
-  public cork<T = unknown>(callback: (ws: ServerWebSocket<T>) => T): T {
+  public cork<R = unknown>(callback: (ws: ServerWebSocket<WebSocketData<T>>) => R): R {
     return this.ws.cork(callback);
   }
 
@@ -342,15 +342,16 @@ export class AsenaSocket<T> {
    * - 'nodebuffer': Node.js Buffer
    * - 'arraybuffer': JavaScript ArrayBuffer
    * - 'uint8array': JavaScript Uint8Array
+   * - 'blob': JavaScript Blob
    */
-  public get binaryType(): 'nodebuffer' | 'arraybuffer' | 'uint8array' {
+  public get binaryType(): 'nodebuffer' | 'arraybuffer' | 'uint8array' | 'blob' {
     return this._binaryType;
   }
 
   /**
    * Sets the binary data type used for binary messages.
    */
-  public set binaryType(value: 'nodebuffer' | 'arraybuffer' | 'uint8array') {
+  public set binaryType(value: 'nodebuffer' | 'arraybuffer' | 'uint8array' | 'blob') {
     this._binaryType = value;
   }
 
