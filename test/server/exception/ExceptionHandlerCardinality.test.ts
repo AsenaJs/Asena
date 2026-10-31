@@ -2,6 +2,7 @@ import { describe, expect, mock, test } from 'bun:test';
 import { AsenaServerFactory } from '../../../lib/server';
 import { ExceptionHandler } from '../../../lib/server/decorators';
 import { Catch, NotFound } from '../../../lib/server/exception';
+import { Implements } from '../../../lib/ioc/component/decorators';
 import type { AsenaContext, NotFoundRequest } from '../../../lib/adapter';
 import { createMockAdapter } from '../../utils/createMockContext';
 
@@ -224,5 +225,21 @@ describe('exception handler cardinality', () => {
 
       return BrokenImport;
     }).toThrow(/@Catch\(\) on BrokenImport\.handle\(\) received `undefined` at position 0/);
+  });
+
+  test('registers an @Implements handler once, not once per container key', async () => {
+    @ExceptionHandler()
+    @Implements('IErrorPolicy')
+    class OrderErrors {
+      @Catch(OrderFailure)
+      public handle() {}
+
+      @Catch()
+      public fallback() {}
+    }
+
+    const { server } = await boot([OrderErrors]);
+
+    await server.stop();
   });
 });

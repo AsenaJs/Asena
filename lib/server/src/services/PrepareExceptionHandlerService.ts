@@ -72,7 +72,16 @@ export class PrepareExceptionHandlerService implements ICoreService {
     // `resolveAll` yields `(T | T[])[]`: two components sharing a name arrive as a nested array.
     // Flattened rather than rejected - PrepareConfigService refuses the nested shape because it
     // wants exactly one config, whereas several exception handlers are the point.
-    const instances = resolved.flat();
+    // An @Implements class is registered under its name and its interface key, as two instances.
+    const byClass = new Map<Function, object>();
+
+    for (const instance of resolved.flat()) {
+      if (!byClass.has(instance.constructor)) {
+        byClass.set(instance.constructor, instance);
+      }
+    }
+
+    const instances = [...byClass.values()];
 
     // Type -> where it was already caught. The value is what makes the duplicate error able to
     // name both sides, which is the difference between a fixable message and a scavenger hunt.
