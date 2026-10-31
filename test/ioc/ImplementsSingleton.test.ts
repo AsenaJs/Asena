@@ -314,3 +314,80 @@ describe('@Implements singleton', () => {
     expect(await engine.container.resolve('StripeGateway')).toBeInstanceOf(StripeGateway);
   });
 });
+
+/**
+ * `@Inject('IPaymentGateway')` names an interface key, which had no node in the dependency graph,
+ * so nothing ordered the implementation before its dependent. The boot passed or failed with
+ * "'IPaymentGateway' is not registered" depending on the order of the component list.
+ */
+describe('@Inject by @Implements interface key', () => {
+  let server: AsenaServer<any> | undefined;
+
+  afterEach(async () => {
+    await server?.stop();
+    server = undefined;
+  });
+
+  @Service()
+  @Implements('IPaymentGateway')
+  class StripeGateway {}
+
+  @Service()
+  class RefundService {
+    @Inject('IPaymentGateway')
+    public gateway: unknown;
+  }
+
+  const boot = async (components: any[], overrides?: Record<string, object>) => {
+    const { adapter } = createMockAdapter();
+
+    (adapter as any).onError = mock(() => {});
+
+    server = await AsenaServerFactory.create({
+      adapter: adapter as any,
+      logger: createLogger() as any,
+      port: 3000,
+      components,
+      overrides,
+    });
+
+    await server.start();
+
+    return server;
+  };
+
+  test.each([
+    ['implementation first', [StripeGateway, RefundService]],
+    ['dependent first', [RefundService, StripeGateway]],
+  ])('registers the implementation before its dependent (%s)', async (_label, components) => {
+    const app = await boot(components);
+    const refunds = await app.resolve<RefundService>('RefundService');
+
+    expect(refunds.gateway).toBeInstanceOf(StripeGateway);
+    expect(refunds.gateway).toBe(await app.resolve('StripeGateway'));
+  });
+
+  test('injects a double overriding the implementation by name', async () => {
+    const fake = { charge: () => 'fake' };
+    const app = await boot([StripeGateway, RefundService], { StripeGateway: fake });
+
+    expect((await app.resolve<RefundService>('RefundService')).gateway).toBe(fake);
+  });
+
+  test('does not treat a component injecting its own interface key as a cycle', async () => {
+    @Service()
+    @Implements('IPaymentGateway')
+    class ChainedGateway {}
+
+    @Service()
+    @Implements('IPaymentGateway')
+    class FallbackGateway {
+      @Inject('IPaymentGateway')
+      public others: unknown;
+    }
+
+    const app = await boot([FallbackGateway, ChainedGateway]);
+
+    expect(await app.resolve('FallbackGateway')).toBeInstanceOf(FallbackGateway);
+  });
+});
