@@ -12,6 +12,7 @@ import { PrepareEventService } from '../server/src/services/PrepareEventService'
 import { PrepareScheduleService } from '../server/src/services/PrepareScheduleService';
 import { PrepareFrontendControllerService } from '../server/src/services/PrepareFrontendControllerService';
 import { PrepareMicroserviceService } from '../server/src/services/PrepareMicroserviceService';
+import { PrepareExceptionHandlerService } from '../server/src/services/PrepareExceptionHandlerService';
 import { Ulak } from '../server/messaging';
 import { EventDispatchService } from '../server/event';
 import { EventEmitter } from '../server/event';
@@ -135,6 +136,10 @@ export class CoreContainer {
     const services = [
       // Internal messaging system (must be registered before prepare services)
       { name: ICoreServiceNames.__ULAK__, Class: Ulak },
+
+      // Exception handling (must be registered before the services that dispatch into it -
+      // PrepareMicroserviceService injects it, and Container.register() resolves @Inject eagerly)
+      { name: ICoreServiceNames.PREPARE_EXCEPTION_HANDLER_SERVICE, Class: PrepareExceptionHandlerService },
 
       // Event system (must be registered before PrepareEventService)
       { name: ICoreServiceNames.EVENT_DISPATCH_SERVICE, Class: EventDispatchService },

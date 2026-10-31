@@ -95,6 +95,10 @@
       "import": "./dist/lib/server/event/index.js",
       "types": "./dist/lib/server/event/index.d.ts"
     },
+    "./exception": {
+      "import": "./dist/lib/server/exception/index.js",
+      "types": "./dist/lib/server/exception/index.d.ts"
+    },
     "./schedule": {
       "import": "./dist/lib/server/schedule/index.js",
       "types": "./dist/lib/server/schedule/index.d.ts"

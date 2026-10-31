@@ -3,6 +3,7 @@ export * from './CookieExtra';
 export * from './ErrorHandler';
 export * from './ValidationError';
 export * from './HttpException';
+export * from './HttpStatusExceptions';
 export * from './RouteParams';
 export * from './SendOptions';
 export * from './WebSocketRegistry';

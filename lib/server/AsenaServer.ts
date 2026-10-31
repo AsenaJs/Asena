@@ -12,10 +12,14 @@ import {
 import type {
   ApiParams,
   AsenaAdapter,
+  AsenaContext,
   AsenaStartOptions,
   BaseMiddleware,
   BaseStaticServeParams,
   BaseValidator,
+  ErrorHandler,
+  NotFoundHandler,
+  NotFoundRequest,
   PrepareMiddlewareParams,
   Route,
 } from '../adapter';
@@ -39,13 +43,19 @@ import type { PrepareFrontendControllerService } from './src/services/PrepareFro
 import { Inject, PostConstruct } from '../ioc/component';
 import { describeCauses } from '../utils/errorChain';
 import type { GlobalMiddlewareConfig, GlobalMiddlewareEntry } from './config';
-import { ASENA_CONFIG_FUNCTIONS, ASENA_CONFIG_HOOK_ALIASES, normalizeTransportConfig } from './config/AsenaConfig';
+import {
+  ASENA_CONFIG_FUNCTIONS,
+  ASENA_CONFIG_HOOK_ALIASES,
+  type AsenaConfig,
+  normalizeTransportConfig,
+} from './config/AsenaConfig';
 import type { Ulak } from './messaging';
 import type { HealthOptions } from './AsenaServerFactory';
 import { HealthServer } from './health';
 import type { PrepareEventService } from './src/services/PrepareEventService';
 import type { PrepareScheduleService } from './src/services/PrepareScheduleService';
 import type { PrepareMicroserviceService } from './src/services/PrepareMicroserviceService';
+import type { PrepareExceptionHandlerService } from './src/services/PrepareExceptionHandlerService';
 import type { CronRunner } from './schedule';
 import type { MessagingInterceptor } from './microservice';
 import type { MicroserviceTransport } from './microservice';
@@ -112,6 +122,9 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
   @Inject(ICoreServiceNames.PREPARE_MICROSERVICE_SERVICE)
   private prepareMicroserviceService: PrepareMicroserviceService;
 
+  @Inject(ICoreServiceNames.PREPARE_EXCEPTION_HANDLER_SERVICE)
+  private prepareExceptionHandlerService: PrepareExceptionHandlerService;
+
   @Inject(ICoreServiceNames.CRON_RUNNER)
   private cronRunner: CronRunner;
 
@@ -129,6 +142,10 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
   private microserviceTransports: Map<string, MicroserviceTransport> = new Map();
 
   private messagingInterceptors: MessagingInterceptor[] = [];
+
+  // The resolved @Config, kept so prepareExceptionHandling() can place its deprecated onError /
+  // onNotFound hooks at the end of the chain rather than dispatching them itself.
+  private configInstance?: AsenaConfig;
 
   // Optional health endpoint (mainly for headless deployments / K8s probes)
   private _health?: HealthOptions;
@@ -211,6 +228,9 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
     // Phase 7: Application setup
     this._coreContainer.setPhase(CoreBootstrapPhase.APPLICATION_SETUP);
     await this.prepareConfigs();
+    // After the config so its deprecated hooks can close the chain, before the microservice and
+    // event services so they wire their handlers against a populated registry.
+    await this.prepareExceptionHandling();
     await this.prepareMicroservices();
     await this.prepareEventService.prepare();
     await this.prepareScheduleService.prepare();
@@ -968,28 +988,10 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
       }
     }
 
-    if (typeof configInstance.onError === 'function') {
-      if (this._adapter) {
-        await this._adapter.onError(configInstance.onError.bind(configInstance));
-      } else {
-        this._logger.warn('Headless mode: onError() ignored (no HTTP adapter)');
-      }
-    }
-
-    if (typeof configInstance.onNotFound === 'function') {
-      if (!this._adapter) {
-        this._logger.warn('Headless mode: onNotFound() ignored (no HTTP adapter)');
-      } else if (typeof this._adapter.onNotFound !== 'function') {
-        // The hook is optional on AsenaAdapter so third-party adapters keep compiling. Say so
-        // rather than letting a declared handler silently never run.
-        this._logger.warn(
-          `Config declares onNotFound(), but adapter '${this._adapter.name}' does not support it - ` +
-            'unmatched routes will use the adapter default',
-        );
-      } else {
-        await this._adapter.onNotFound(configInstance.onNotFound.bind(configInstance));
-      }
-    }
+    // onError() and onNotFound() are no longer wired here. Both are now the last link of the
+    // chain prepareExceptionHandling() composes, so that @Catch and @NotFound handlers get first
+    // refusal - see that method.
+    this.configInstance = configInstance;
 
     // Pattern-based global middleware registration
     if (typeof configInstance.globalMiddlewares === 'function') {
@@ -1038,6 +1040,186 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
     const name = getOwnTypedMetadata<string>(ComponentConstants.NameKey, configInstance.constructor);
 
     this._logger.info(`Config ${yellow(name)} applied`);
+  }
+
+  /**
+   * @description Build the exception handling chain and hand it to the adapter
+   *
+   * Runs after prepareConfigs() so the deprecated `@Config` hooks are available to sit at the end
+   * of the chain, and before prepareMicroservices() / prepareEventService so those wire their
+   * handlers against a registry that is already populated.
+   *
+   * Resolution order, for both errors and unmatched routes:
+   *
+   *     @Catch / @NotFound  ->  @Config.onError / onNotFound  ->  the adapter's own default
+   *
+   * Each link declines by returning nothing. The composed function therefore returns `undefined`
+   * when no link answered, which is how both adapters have been told since 0.9.0 that the
+   * framework is the one answering - and therefore the one that must write the log line. Nothing
+   * about that contract changes here; the chain simply slots in front of it.
+   *
+   * **Nothing is registered when nothing was declared**, and nothing is *wrapped* when there is
+   * nothing to put in front. With no `@Catch` at all the config hook is handed to the adapter
+   * exactly as it was before this method existed - same function, not a chain of one - so an
+   * application that has not adopted any of this keeps its previous code path down to the
+   * synchronous call.
+   *
+   * @returns {Promise<void>}
+   */
+  private async prepareExceptionHandling(): Promise<void> {
+    await this.prepareExceptionHandlerService.prepare();
+
+    const config = this.configInstance;
+    const hasConfigOnError = typeof config?.onError === 'function';
+    const hasConfigOnNotFound = typeof config?.onNotFound === 'function';
+
+    await this.wireErrorChain(config, hasConfigOnError);
+    await this.wireNotFoundChain(config, hasConfigOnNotFound);
+
+    // Deprecations come last on purpose. The warnings above say something is wrong *now* - a
+    // handler that will never run - and a reader scanning for the first line about `onNotFound`
+    // should find that one, not a note about a release that has not happened yet.
+    if (hasConfigOnError) {
+      this._logger.warn(
+        'Config.onError() is deprecated and will be removed in 1.0 — move it to an @ExceptionHandler ' +
+          'class with @Catch() methods. It still runs in 0.11, after every @Catch handler has declined. ' +
+          'See https://asena.sh/docs/guides/error-handling',
+      );
+    }
+
+    if (hasConfigOnNotFound) {
+      this._logger.warn(
+        'Config.onNotFound() is deprecated and will be removed in 1.0 — move it to a @NotFound() method ' +
+          'in an @ExceptionHandler class. It still runs in 0.11 when no @NotFound() handler answers. ' +
+          'See https://asena.sh/docs/guides/error-handling',
+      );
+    }
+  }
+
+  /**
+   * @description Hand the adapter whatever should answer a thrown error
+   * @param {AsenaConfig} config - The resolved @Config, if there is one
+   * @param {boolean} hasConfigOnError - Whether it declares the deprecated onError() hook
+   * @returns {Promise<void>}
+   */
+  private async wireErrorChain(config: AsenaConfig | undefined, hasConfigOnError: boolean): Promise<void> {
+    const service = this.prepareExceptionHandlerService;
+
+    if (!service.hasHandlers && !hasConfigOnError) {
+      return;
+    }
+
+    if (!this._adapter) {
+      // Only the config hook is reported: it is HTTP-only, so headless really does ignore it.
+      // @Catch handlers are not - they still answer @Event and @MessagePattern failures.
+      if (hasConfigOnError) {
+        this._logger.warn('Headless mode: onError() ignored (no HTTP adapter)');
+      }
+
+      return;
+    }
+
+    if (!service.hasHandlers) {
+      // Nothing to put in front of it, so it goes over unwrapped - byte-identical to 0.10.
+      await this._adapter.onError(config.onError.bind(config));
+
+      return;
+    }
+
+    const chain = async (error: Error, context: AsenaContext<any, any>): Promise<Response | undefined> => {
+      const result = await service.dispatch(error, { scope: 'http', context });
+
+      if (result instanceof Response) {
+        return result;
+      }
+
+      if (result !== undefined) {
+        // Returning a value that is not a Response is a mistake rather than a decline, and a
+        // silent one: the request would answer from the framework default as though no handler
+        // existed at all.
+        this._logger.error(
+          'An @Catch handler returned a non-Response value for an HTTP request - it is being treated ' +
+            'as a decline. Return context.send(...) or nothing at all.',
+        );
+      }
+
+      if (hasConfigOnError) {
+        const fromConfig = await config.onError(error, context);
+
+        if (fromConfig instanceof Response) {
+          return fromConfig;
+        }
+      }
+
+      return undefined;
+    };
+
+    // `ErrorHandler` types the return as `Response` even though every adapter treats a missing one
+    // as a decline - widening it breaks the hono adapter, whose `HonoErrorHandler` is this very
+    // type and goes straight to hono's own `app.onError`. The cast keeps that cost at this one
+    // boundary; see the note on ErrorHandler itself.
+    await this._adapter.onError(chain as ErrorHandler<AsenaContext<any, any>>);
+  }
+
+  /**
+   * @description Hand the adapter whatever should answer an unmatched route
+   * @param {AsenaConfig} config - The resolved @Config, if there is one
+   * @param {boolean} hasConfigOnNotFound - Whether it declares the deprecated onNotFound() hook
+   * @returns {Promise<void>}
+   */
+  private async wireNotFoundChain(config: AsenaConfig | undefined, hasConfigOnNotFound: boolean): Promise<void> {
+    const service = this.prepareExceptionHandlerService;
+
+    if (!service.hasNotFoundHandler && !hasConfigOnNotFound) {
+      return;
+    }
+
+    if (!this._adapter) {
+      this._logger.warn(
+        service.hasNotFoundHandler
+          ? 'Headless mode: @NotFound() ignored (no HTTP adapter)'
+          : 'Headless mode: onNotFound() ignored (no HTTP adapter)',
+      );
+
+      return;
+    }
+
+    if (typeof this._adapter.onNotFound !== 'function') {
+      // The hook is optional on AsenaAdapter so third-party adapters keep compiling. Say so rather
+      // than letting a declared handler silently never run.
+      this._logger.warn(
+        `${service.hasNotFoundHandler ? 'An @ExceptionHandler declares @NotFound()' : 'Config declares onNotFound()'}` +
+          `, but adapter '${this._adapter.name}' does not support it - unmatched routes will use the adapter default`,
+      );
+
+      return;
+    }
+
+    if (!service.hasNotFoundHandler) {
+      await this._adapter.onNotFound(config.onNotFound.bind(config));
+
+      return;
+    }
+
+    const chain = async (context: AsenaContext<any, any>, request: NotFoundRequest): Promise<Response | undefined> => {
+      const fromHandler = await service.dispatchNotFound(context, request);
+
+      if (fromHandler) {
+        return fromHandler;
+      }
+
+      if (hasConfigOnNotFound) {
+        const fromConfig = await config.onNotFound(context, request);
+
+        if (fromConfig instanceof Response) {
+          return fromConfig;
+        }
+      }
+
+      return undefined;
+    };
+
+    await this._adapter.onNotFound(chain as NotFoundHandler<AsenaContext<any, any>>);
   }
 
   /**
