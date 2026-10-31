@@ -1,5 +1,11 @@
 # @asenajs/asena
 
+## 0.12.1
+
+### Patch Changes
+
+- b7a87f2: Align `AsenaSocket` with `@types/bun` 1.4.4: `binaryType` accepts `'blob'`, and `cork()` passes the socket's real `ServerWebSocket<WebSocketData<T>>` to its callback with an independent return type.
+
 ## 0.12.0
 
 ### Minor Changes
