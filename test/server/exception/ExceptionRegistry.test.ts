@@ -111,6 +111,24 @@ describe('ExceptionRegistry', () => {
       expect(registry.resolve(undefined)?.source).toBe('catchAll');
     });
 
+    it('does not throw when reading the thrown value throws', () => {
+      const registry = new ExceptionRegistry();
+
+      registry.register([Error], entry('error'));
+
+      const hostile = Object.defineProperty({}, 'constructor', {
+        get() {
+          throw new Error('getter');
+        },
+      });
+
+      expect(registry.resolve(hostile)).toBeUndefined();
+
+      registry.register([], entry('catchAll'));
+
+      expect(registry.resolve(hostile)?.source).toBe('catchAll');
+    });
+
     it('drops a non-Error throw when only @Catch(Error) exists', () => {
       const registry = new ExceptionRegistry();
 
@@ -139,6 +157,25 @@ describe('ExceptionRegistry', () => {
       registry.register([NotFoundException], entry('notFound'));
 
       expect(registry.resolve(new NotFoundException())?.source).toBe('notFound');
+    });
+
+    it('lets @Catch(HttpException) beat @Catch(Error) for a foreign branded exception', () => {
+      const registry = new ExceptionRegistry();
+
+      registry.register([Error], entry('error'));
+      registry.register([HttpException], entry('http'));
+
+      expect(registry.resolve(new ForeignHttpException())?.source).toBe('http');
+      expect(registry.resolve(new TypeError())?.source).toBe('error');
+    });
+
+    it('keeps an identity match on the foreign class itself over the brand', () => {
+      const registry = new ExceptionRegistry();
+
+      registry.register([HttpException], entry('http'));
+      registry.register([ForeignHttpException], entry('foreign'));
+
+      expect(registry.resolve(new ForeignHttpException())?.source).toBe('foreign');
     });
 
     it('does not consult the brand unless @Catch(HttpException) was declared', () => {

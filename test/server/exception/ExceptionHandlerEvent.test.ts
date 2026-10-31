@@ -330,6 +330,44 @@ describe('@Catch for @On handlers', () => {
     expect(calls.sort()).toEqual(['caught', 'second']);
   });
 
+  test('keeps the other handlers running when the thrown value cannot be inspected', async () => {
+    const calls: string[] = [];
+    const hostile = Object.defineProperty({}, 'constructor', {
+      get() {
+        throw new Error('getter');
+      },
+    });
+
+    @ExceptionHandler()
+    class Errors {
+      @Catch(QuotaExceeded)
+      public quota() {
+        return true;
+      }
+    }
+
+    @EventService()
+    class Events {
+      @On('hostile.hit')
+      public first() {
+        throw hostile;
+      }
+
+      @On('hostile.hit')
+      public second() {
+        calls.push('second');
+      }
+    }
+
+    const { emitter } = await boot([Errors, Events]);
+
+    expect(emitter.emit('hostile.hit')).toBe(true);
+    await flush();
+
+    expect(calls).toEqual(['second']);
+    expect(consoleError).toHaveBeenCalledTimes(1);
+  });
+
   test('routes handlers registered without @On, with no source', async () => {
     const seen: ExceptionContext[] = [];
 

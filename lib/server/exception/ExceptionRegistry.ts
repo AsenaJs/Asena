@@ -1,6 +1,11 @@
 import { HttpException, isHttpException } from '../../adapter/types/HttpException';
 import type { CatchEntry, ExceptionType } from './types';
 
+interface IdentityMatch {
+  type: ExceptionType;
+  entry: CatchEntry;
+}
+
 /**
  * Resolves a thrown value to the `@Catch` handler that should answer it.
  *
@@ -14,7 +19,8 @@ import type { CatchEntry, ExceptionType } from './types';
  *    answer Spring's `ExceptionDepthComparator` produces, without having to collect candidates
  *    and sort them.
  * 2. **The `HttpException` brand**, if `@Catch(HttpException)` was declared and step 1 found
- *    nothing. See {@link ExceptionRegistry.brandEntry} for why this exists at all.
+ *    nothing or only an ancestor of `HttpException` such as `Error`. See
+ *    {@link ExceptionRegistry.brandEntry} for why this exists at all.
  * 3. **The catch-all** `@Catch()`, if one was declared.
  * 4. Nothing - the caller falls back to whatever it does by default.
  *
@@ -48,8 +54,8 @@ export class ExceptionRegistry {
    *   classes, and the chain walk silently misses the other one. That is the exact failure the
    *   `Symbol.for` brand was introduced to close, and re-introducing it here would undo it.
    *
-   * The brand is only consulted after identity has failed, so a more specific `@Catch` still
-   * wins.
+   * The brand is only consulted when identity found nothing narrower than `HttpException`, so a
+   * more specific `@Catch` still wins.
    */
   private brandEntry?: CatchEntry;
 
@@ -62,7 +68,7 @@ export class ExceptionRegistry {
    * property - `HttpException` sets it in the constructor, so two errors sharing a constructor
    * can disagree about carrying it, and a constructor-keyed cache would answer for both.
    */
-  private readonly identityCache = new WeakMap<Function, CatchEntry | null>();
+  private readonly identityCache = new WeakMap<Function, IdentityMatch | null>();
 
   /**
    * Registers a handler for the given types.
@@ -99,20 +105,31 @@ export class ExceptionRegistry {
    * @returns The handler, or `undefined` when nothing matches
    */
   public resolve(error: unknown): CatchEntry | undefined {
-    const identity = this.resolveByIdentity(error);
+    // Callers run this from inside their own catch blocks; a hostile `constructor` getter or Proxy
+    // must not turn the error path into a second throw.
+    try {
+      const identity = this.resolveByIdentity(error);
 
-    if (identity) {
-      return identity;
-    }
+      if (this.brandEntry && (!identity || this.isBroaderThanHttpException(identity.type)) && isHttpException(error)) {
+        return this.brandEntry;
+      }
 
-    if (this.brandEntry && isHttpException(error)) {
-      return this.brandEntry;
+      if (identity) {
+        return identity.entry;
+      }
+    } catch {
+      // Unreadable value - only the catch-all can claim it.
     }
 
     return this.catchAll;
   }
 
-  private resolveByIdentity(error: unknown): CatchEntry | undefined {
+  /** `@Catch(Error)` must not shadow `@Catch(HttpException)` for a branded exception from another class tree. */
+  private isBroaderThanHttpException(type: ExceptionType): boolean {
+    return HttpException.prototype instanceof type;
+  }
+
+  private resolveByIdentity(error: unknown): IdentityMatch | undefined {
     // `throw null`, `throw undefined` and primitives have no constructor to walk. They are not a
     // failure to handle - they are precisely what the catch-all exists for.
     const ctor = (error as { constructor?: Function } | null | undefined)?.constructor;
@@ -135,7 +152,7 @@ export class ExceptionRegistry {
     return found;
   }
 
-  private walk(ctor: Function): CatchEntry | undefined {
+  private walk(ctor: Function): IdentityMatch | undefined {
     for (
       let current: unknown = ctor;
       typeof current === 'function' && current !== Function.prototype;
@@ -144,7 +161,7 @@ export class ExceptionRegistry {
       const entry = this.byType.get(current as ExceptionType);
 
       if (entry) {
-        return entry;
+        return { type: current as ExceptionType, entry };
       }
     }
 
