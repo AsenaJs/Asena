@@ -70,6 +70,16 @@ export abstract class AsenaWebsocketAdapter {
   public abstract startWebsocket(server: any): Promise<void> | void;
 
   /**
+   * Closes every open WebSocket connection and releases what the adapter holds (heartbeats,
+   * transport). The HTTP adapter's `stop()` must call it, and it must settle within `timeoutMs`.
+   * Adapters that accept connections override it; this default closes nothing and only warns.
+   * @param _timeoutMs - Upper bound for the graceful shutdown, in milliseconds
+   */
+  public async shutdown(_timeoutMs?: number): Promise<void> {
+    this.logger.warn(`${this.constructor.name} does not override shutdown(); no WebSocket connections were closed`);
+  }
+
+  /**
    * Gets the WebSocket registry
    */
   protected get websockets(): WebSocketRegistry {
