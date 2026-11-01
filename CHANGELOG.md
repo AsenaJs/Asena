@@ -1,5 +1,11 @@
 # @asenajs/asena
 
+## 0.12.3
+
+### Patch Changes
+
+- 5648a61: A failed `@OnStart` hook's boot log line now includes the cause, e.g. `@OnStart hook 'Db.open()' failed: connection refused`. `@OnStop` failure lines print the cause chain too (and no longer print `undefined` for a non-Error throw), and shutdown-step and unhandled-error lines append `Caused by: ...` after the stack. The thrown errors are unchanged.
+
 ## 0.12.2
 
 ### Patch Changes
