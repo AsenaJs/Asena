@@ -6,4 +6,4 @@ An `@Implements` singleton is constructed once. Its interface key now reaches th
 
 A test double passed through `overrides` under a component's name now also answers its `@Implements` interface key, so `@Strategy('IMailer')` sees the double instead of an empty slot. Overriding the interface key itself still replaces the whole slot.
 
-A field injected by an interface key - `@Inject('IPaymentGateway')` - now orders its implementations before the dependent. It used to pass or fail with "'IPaymentGateway' is not registered" depending on the order of the component list.
+A field injected by an interface key - `@Inject('IPaymentGateway')` - now orders its implementations before the dependent, whatever the order of the component list.

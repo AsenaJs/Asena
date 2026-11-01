@@ -300,7 +300,7 @@ export class IocEngine implements ICoreService {
       const _interface = getTypedMetadata<string>(ComponentConstants.InterfaceKey, injectable);
 
       // When `name` is overridden this is the double's entry, so the interface key reaches it too.
-      if (_interface) {
+      if (_interface && _interface !== name) {
         this._container.registerAlias(_interface, entry);
       }
     }
@@ -623,7 +623,8 @@ export class IocEngine implements ICoreService {
     nameToClass: Map<string, Class>,
     injectables: InjectableComponent[],
   ): string[] {
-    if (!dep || nameToClass.has(dep)) {
+    // An overridden interface key already holds its double; ordering the real classes could only add false cycles.
+    if (!dep || nameToClass.has(dep) || this._container.isOverridden(dep)) {
       return [dep];
     }
 

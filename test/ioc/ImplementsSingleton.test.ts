@@ -313,6 +313,28 @@ describe('@Implements singleton', () => {
     expect(await engine.container.resolve('IPaymentGateway')).toBe(double);
     expect(await engine.container.resolve('StripeGateway')).toBeInstanceOf(StripeGateway);
   });
+
+  test('is still found by a scan when its name is its interface key', async () => {
+    let constructed = 0;
+
+    @Service('IClock')
+    @Implements('IClock')
+    class SystemClock {
+      public constructor() {
+        constructed++;
+      }
+    }
+
+    const engine = engineWithContainer();
+
+    await engine.searchAndRegister([{ Class: SystemClock, interface: 'IClock' }]);
+
+    const scanned = ((await engine.container.resolveAll<object>(ComponentType.SERVICE)) ?? []).flat();
+
+    expect(constructed).toBe(1);
+    expect(await engine.container.resolve('IClock')).toBeInstanceOf(SystemClock);
+    expect(scanned).toHaveLength(1);
+  });
 });
 
 /**
@@ -389,5 +411,25 @@ describe('@Inject by @Implements interface key', () => {
     const app = await boot([FallbackGateway, ChainedGateway]);
 
     expect(await app.resolve('FallbackGateway')).toBeInstanceOf(FallbackGateway);
+  });
+
+  test('does not order the implementations of an overridden interface key', async () => {
+    @Service()
+    class Ledger {
+      @Inject('ILedgerGateway')
+      public gateway: unknown;
+    }
+
+    @Service()
+    @Implements('ILedgerGateway')
+    class LedgerGateway {
+      @Inject(Ledger)
+      public ledger: unknown;
+    }
+
+    const fake = { post: () => 'fake' };
+    const app = await boot([Ledger, LedgerGateway], { ILedgerGateway: fake });
+
+    expect((await app.resolve<Ledger>('Ledger')).gateway).toBe(fake);
   });
 });
