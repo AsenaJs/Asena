@@ -2,6 +2,7 @@ import { CoreService, ICoreServiceNames } from '../../ioc';
 import type { Container, ICoreService, LifecycleComponent } from '../../ioc';
 import { Inject } from '../../ioc/component';
 import type { ServerLogger } from '../../logger';
+import { describeErrorChain } from '../../utils/errorChain';
 import { LifecycleState } from './LifecycleState';
 
 /** Per-hook ceiling when none is configured. */
@@ -73,7 +74,7 @@ export class LifecycleService implements ICoreService {
         this._state = LifecycleState.FAILED;
 
         this.logger.error(
-          `[Lifecycle] ${component.key} failed to start - rolling back ${started} started component(s)`,
+          `[Lifecycle] ${component.key} failed to start: ${describeErrorChain(error)} - rolling back ${started} started component(s)`,
         );
 
         await this.stopComponents(components, DEFAULT_HOOK_TIMEOUT);
@@ -151,7 +152,7 @@ export class LifecycleService implements ICoreService {
           await this.withTimeout(component.instance[hook](), hookTimeout, label);
         } catch (error) {
           this.logger.error(
-            `[Lifecycle] @OnStop hook '${label}' failed, continuing shutdown: ${(error as Error).message}`,
+            `[Lifecycle] @OnStop hook '${label}' failed, continuing shutdown: ${describeErrorChain(error)}`,
           );
         }
       }

@@ -5,15 +5,16 @@ import { Inject, OnStart, OnStop, PostConstruct } from '../../lib/ioc/component'
 import { LifecycleState } from '../../lib/server/lifecycle';
 import { ICoreServiceNames } from '../../lib/ioc';
 import type { LifecycleService } from '../../lib/server/lifecycle';
-import { silentLogger } from '../../lib/test/harness/silentLogger';
+import { createCapturingLogger, silentLogger } from '../../lib/test/harness/silentLogger';
+import type { ServerLogger } from '../../lib/logger';
 import { createMockAdapter } from '../utils/createMockContext';
 
 const events: string[] = [];
 
-const createServer = (components: any[]) =>
+const createServer = (components: any[], logger: ServerLogger = silentLogger) =>
   AsenaServerFactory.create({
     adapter: createMockAdapter().adapter as any,
-    logger: silentLogger,
+    logger,
     components,
     shutdown: { signals: false },
     keepAlive: false,
@@ -137,6 +138,21 @@ describe('lifecycle hooks', () => {
       await expect(start).rejects.toHaveProperty('cause.message', 'cannot reach the thing');
     });
 
+    test('logs the hook and the cause message', async () => {
+      const { logger, entries } = createCapturingLogger();
+      const server = await createServer([Healthy, Broken], logger);
+
+      await expect(server.start()).rejects.toThrow();
+
+      const errors = entries.filter((entry) => entry.level === 'error').map((entry) => entry.message);
+
+      expect(errors).toContainEqual(
+        expect.stringContaining(
+          "failed to start: @OnStart hook 'Broken.open()' failed: cannot reach the thing - rolling back 1",
+        ),
+      );
+    });
+
     test('rolls back the components that already started', async () => {
       const server = await createServer([Healthy, Broken]);
 
@@ -213,6 +229,50 @@ describe('lifecycle hooks', () => {
 
       // Every hook was given its turn, in reverse order, despite one throwing and one hanging.
       expect(events).toEqual(['hanging:stop', 'exploding:stop', 'first:stop']);
+    });
+
+    test('logs the cause chain of a failed stop hook', async () => {
+      @Service()
+      class Wrapping {
+        @OnStop()
+        public async close() {
+          throw new Error('close failed', { cause: new Error('socket gone') });
+        }
+      }
+
+      const { logger, entries } = createCapturingLogger();
+      const server = await createServer([Wrapping], logger);
+
+      await server.start();
+      await server.stop();
+
+      const errors = entries.filter((entry) => entry.level === 'error').map((entry) => entry.message);
+
+      expect(errors).toContainEqual(
+        expect.stringContaining(
+          "@OnStop hook 'Wrapping.close()' failed, continuing shutdown: close failed: socket gone",
+        ),
+      );
+    });
+
+    test('logs a non-Error thrown by a stop hook', async () => {
+      @Service()
+      class ThrowsString {
+        @OnStop()
+        public close() {
+          throw 'raw string reason';
+        }
+      }
+
+      const { logger, entries } = createCapturingLogger();
+      const server = await createServer([ThrowsString], logger);
+
+      await server.start();
+      await server.stop();
+
+      const errors = entries.filter((entry) => entry.level === 'error').map((entry) => entry.message);
+
+      expect(errors).toContainEqual(expect.stringContaining('continuing shutdown: raw string reason'));
     });
   });
 
@@ -336,6 +396,24 @@ describe('lifecycle hooks', () => {
       expect(events).toEqual(['releasable:stop']);
 
       adapter.stop = original;
+    });
+
+    test('logs the cause of a failed step', async () => {
+      const { logger, entries } = createCapturingLogger();
+      const server = await createServer([Releasable], logger);
+
+      await server.start();
+
+      const adapter = (server as any)._adapter;
+
+      adapter.stop = () => Promise.reject(new Error('socket refused to close', { cause: new Error('EBADF') }));
+
+      await expect(server.stop()).rejects.toThrow('shutdown completed with 1 failure');
+
+      const line = entries.find((entry) => entry.level === 'error' && entry.message.includes('adapter failed'));
+
+      expect(line?.message).toContain('socket refused to close');
+      expect(line?.message).toContain('Caused by: EBADF');
     });
   });
 

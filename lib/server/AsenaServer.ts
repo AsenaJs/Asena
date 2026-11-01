@@ -37,6 +37,7 @@ import type { PrepareValidatorService } from './src/services/PrepareValidatorSer
 import type { PrepareStaticServeConfigService } from './src/services/PrepareStaticServeConfigService';
 import type { PrepareFrontendControllerService } from './src/services/PrepareFrontendControllerService';
 import { Inject, PostConstruct } from '../ioc/component';
+import { describeCauses } from '../utils/errorChain';
 import type { GlobalMiddlewareConfig, GlobalMiddlewareEntry } from './config';
 import { ASENA_CONFIG_FUNCTIONS, ASENA_CONFIG_HOOK_ALIASES, normalizeTransportConfig } from './config/AsenaConfig';
 import type { Ulak } from './messaging';
@@ -58,7 +59,7 @@ import type { AsenaStopOptions, ShutdownOptions } from './types';
  * stringifies to `[object Object]` - which is exactly the log line nobody can act on.
  */
 const describeError = (error: unknown): string =>
-  error instanceof Error ? (error.stack ?? error.message) : bun.inspect(error);
+  error instanceof Error ? (error.stack ?? error.message) + describeCauses(error) : bun.inspect(error);
 
 /**
  * @description AsenaServer - Main server class for Asena framework
