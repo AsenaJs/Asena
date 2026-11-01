@@ -126,7 +126,7 @@ describe('Container.overrideInstance', () => {
 });
 
 describe('IocEngine registration with overrides', () => {
-  test('should not re-register an overridden component under its @Implements interface', async () => {
+  test('should give the @Implements interface key the double of an overridden component', async () => {
     const iocEngine = new IocEngine();
 
     // IocEngine is a core service - its container normally arrives via DI
@@ -138,8 +138,8 @@ describe('IocEngine registration with overrides', () => {
     await iocEngine.searchAndRegister([{ Class: StripeGateway, interface: 'IPaymentGateway' }]);
 
     expect(await iocEngine.container.resolve<typeof double>('PaymentGateway')).toBe(double);
-    // Registering under the interface key would have constructed the real class anyway
-    expect(iocEngine.container.has('IPaymentGateway')).toBe(false);
+    expect(await iocEngine.container.resolve<typeof double>('IPaymentGateway')).toBe(double);
+    expect(await iocEngine.container.resolveStrategy('IPaymentGateway')).toEqual([double]);
   });
 
   test('should still register the interface key when the component is not overridden', async () => {

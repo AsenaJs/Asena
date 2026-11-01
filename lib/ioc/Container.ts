@@ -52,6 +52,9 @@ export class Container {
 
   private overriddenKeys = new Set<string>();
 
+  /** Key -> entries that live there only as an alias of their own key (see `registerAlias`). */
+  private aliases = new Map<string, Set<ContainerService>>();
+
   /**
    * Whether construction runs start hooks itself.
    *
@@ -76,12 +79,15 @@ export class Container {
     this._services = services || {};
   }
 
-  public async register(key: string, Class: Class, singleton: boolean) {
+  /**
+   * @returns {Promise<ContainerService>} The new entry, or the test double's entry when `key` is overridden
+   */
+  public async register(key: string, Class: Class, singleton: boolean): Promise<ContainerService> {
     // An overridden key keeps its test double. Returning early means the real class is
     // never instantiated (no @PostConstruct side effects) and the entry never turns
     // into an array, which is what resolve() would otherwise hand back.
     if (this.overriddenKeys.has(key)) {
-      return;
+      return this._services[key] as ContainerService;
     }
 
     const instance = singleton ? await this.prepareInstance(Class) : null;
@@ -90,19 +96,52 @@ export class Container {
       this.trackLifecycle(key, instance, Class);
     }
 
-    if (this._services[key]) {
-      if (Array.isArray(this._services[key])) {
-        this._services[key].push({ Class, instance, singleton });
+    const entry: ContainerService = { Class, instance, singleton };
 
-        return;
-      }
+    this.store(key, entry);
 
-      this._services[key] = [this._services[key], { Class, instance, singleton }];
+    return entry;
+  }
 
+  /**
+   * @description Make an entry registered under one key reachable under another as well.
+   *
+   * The entry object itself is shared, so a singleton keeps one instance and one lifecycle no
+   * matter how many keys reach it - `@Implements` registers a component under its name and its
+   * interface key this way. Component scans (`resolveAll`) skip alias positions, so the
+   * component is still found exactly once.
+   *
+   * @param {string} key - The additional key, e.g. an `@Implements` interface name
+   * @param {ContainerService} entry - An entry returned by `register()`
+   * @returns {void}
+   */
+  public registerAlias(key: string, entry: ContainerService): void {
+    if (this.overriddenKeys.has(key)) {
       return;
     }
 
-    this._services[key] = { Class, instance, singleton };
+    this.store(key, entry);
+
+    let aliased = this.aliases.get(key);
+
+    if (!aliased) {
+      aliased = new Set();
+      this.aliases.set(key, aliased);
+    }
+
+    aliased.add(entry);
+  }
+
+  private store(key: string, entry: ContainerService): void {
+    const existing = this._services[key];
+
+    if (!existing) {
+      this._services[key] = entry;
+    } else if (Array.isArray(existing)) {
+      existing.push(entry);
+    } else {
+      this._services[key] = [existing, entry];
+    }
   }
 
   /**
@@ -277,23 +316,25 @@ export class Container {
     return instances;
   }
 
-  private filterServices(typeOfComponent: ComponentType) {
-    return Object.entries(this._services)
-      .filter(([, value]) => {
-        // Own-only, matching `metadataExtractor.isController` and friends. Walking the chain
-        // here meant a @Service extending a @Controller answered true for CONTROLLER, so it was
-        // resolved as one - and since PathKey is own-only it mounted its inherited routes at the
-        // server root.
-        if (Array.isArray(value)) {
-          // check every element in the array is the same type
-          return value.every((service) => {
-            return getOwnTypedMetadata(typeOfComponent, service.Class);
-          });
-        }
+  private filterServices(typeOfComponent: ComponentType): (ContainerService | ContainerService[])[] {
+    const matches: (ContainerService | ContainerService[])[] = [];
 
-        return getOwnTypedMetadata(typeOfComponent, value.Class);
-      })
-      .map(([, value]) => value);
+    for (const [key, value] of Object.entries(this._services)) {
+      const aliased = this.aliases.get(key);
+      const entries = (Array.isArray(value) ? value : [value]).filter((entry) => !aliased?.has(entry));
+
+      // Own-only, matching `metadataExtractor.isController` and friends. Walking the chain
+      // here meant a @Service extending a @Controller answered true for CONTROLLER, so it was
+      // resolved as one - and since PathKey is own-only it mounted its inherited routes at the
+      // server root.
+      if (!entries.length || !entries.every((entry) => getOwnTypedMetadata(typeOfComponent, entry.Class))) {
+        continue;
+      }
+
+      matches.push(entries.length > 1 ? entries : entries[0]);
+    }
+
+    return matches;
   }
 
   private async resolveContainerService<T>(containerService: ContainerService): Promise<T> {
@@ -625,5 +666,6 @@ export class Container {
 
   public set services(value: { [p: string]: ContainerService | ContainerService[] }) {
     this._services = value;
+    this.aliases.clear();
   }
 }

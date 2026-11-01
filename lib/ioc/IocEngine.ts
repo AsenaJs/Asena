@@ -295,14 +295,13 @@ export class IocEngine implements ICoreService {
         this.warnAboutTransientLifecycleHooks(name, injectable);
       }
 
-      await this._container.register(name, injectable, isSingleton);
+      const entry = await this._container.register(name, injectable, isSingleton);
 
       const _interface = getTypedMetadata<string>(ComponentConstants.InterfaceKey, injectable);
 
-      // An overridden component must not sneak back in under its @Implements interface key -
-      // registering there would construct the real class and run its @PostConstruct anyway
-      if (_interface && !this._container.isOverridden(name)) {
-        await this._container.register(_interface, injectable, isSingleton);
+      // When `name` is overridden this is the double's entry, so the interface key reaches it too.
+      if (_interface && _interface !== name) {
+        this._container.registerAlias(_interface, entry);
       }
     }
   }
@@ -598,7 +597,12 @@ export class IocEngine implements ICoreService {
 
     classes.forEach((cls) => {
       const name = getTypedMetadata<string>(ComponentConstants.NameKey, cls) || cls.name;
-      const dependencies = [...this.getDependencies(cls), ...this.getStrategyDependencies(cls, injectables)];
+      const dependencies = [
+        ...this.getDependencies(cls).flatMap((dep) =>
+          this.expandInterfaceDependency(dep, name, nameToClass, injectables),
+        ),
+        ...this.getStrategyDependencies(cls, injectables),
+      ];
 
       dependencies.forEach((dep) => {
         if (dep) {
@@ -607,6 +611,28 @@ export class IocEngine implements ICoreService {
         }
       });
     });
+  }
+
+  /**
+   * `@Inject('IMailer')` names an `@Implements` interface key, not a component, so it has no node
+   * in the graph. Its implementations are the components that must be registered first.
+   */
+  private expandInterfaceDependency(
+    dep: string,
+    selfName: string,
+    nameToClass: Map<string, Class>,
+    injectables: InjectableComponent[],
+  ): string[] {
+    // An overridden interface key already holds its double; ordering the real classes could only add false cycles.
+    if (!dep || nameToClass.has(dep) || this._container.isOverridden(dep)) {
+      return [dep];
+    }
+
+    const implementations = getStrategyClass({ dep }, injectables).filter(
+      (implementation) => implementation && implementation !== selfName,
+    );
+
+    return implementations.length ? implementations : [dep];
   }
 
   private findCycle(adjacencyList: Map<string, string[]>): string[] {
