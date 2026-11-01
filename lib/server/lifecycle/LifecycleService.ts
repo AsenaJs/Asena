@@ -74,7 +74,7 @@ export class LifecycleService implements ICoreService {
         this._state = LifecycleState.FAILED;
 
         this.logger.error(
-          `[Lifecycle] ${component.key} failed to start - rolling back ${started} started component(s): ${describeErrorChain(error)}`,
+          `[Lifecycle] ${component.key} failed to start: ${describeErrorChain(error)} - rolling back ${started} started component(s)`,
         );
 
         await this.stopComponents(components, DEFAULT_HOOK_TIMEOUT);

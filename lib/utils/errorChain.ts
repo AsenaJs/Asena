@@ -8,12 +8,7 @@ const describeValue = (value: unknown): string => {
   return Bun.inspect(value, { compact: true });
 };
 
-/**
- * The message of an error followed by the message of every `cause` under it, joined with `': '`.
- *
- * @param {unknown} error - Whatever was thrown
- * @returns {string} For example `"@OnStart hook 'Db.open()' failed: connection refused"`
- */
+/** `"@OnStart hook 'Db.open()' failed: connection refused"` - the message, then every cause's. */
 export const describeErrorChain = (error: unknown): string => {
   const parts: string[] = [];
   const seen = new Set<unknown>();
@@ -31,12 +26,7 @@ export const describeErrorChain = (error: unknown): string => {
   return parts.join(': ');
 };
 
-/**
- * Only the `cause` part of {@link describeErrorChain}, prefixed for appending to a stack trace.
- *
- * @param {unknown} error - Whatever was thrown
- * @returns {string} `''` when there is no cause, otherwise `'\nCaused by: ...'`
- */
+/** A stack trace never includes the cause; this is what to append to one. */
 export const describeCauses = (error: unknown): string => {
   if (!(error instanceof Error) || error.cause === undefined || error.cause === error) return '';
 

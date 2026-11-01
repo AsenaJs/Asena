@@ -147,7 +147,9 @@ describe('lifecycle hooks', () => {
       const errors = entries.filter((entry) => entry.level === 'error').map((entry) => entry.message);
 
       expect(errors).toContainEqual(
-        expect.stringContaining("@OnStart hook 'Broken.open()' failed: cannot reach the thing"),
+        expect.stringContaining(
+          "failed to start: @OnStart hook 'Broken.open()' failed: cannot reach the thing - rolling back 1",
+        ),
       );
     });
 
