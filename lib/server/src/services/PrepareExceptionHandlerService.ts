@@ -9,6 +9,7 @@ import type {
   CatchHandlerMetadata,
   ExceptionContext,
   ExceptionType,
+  MicroserviceExceptionContext,
   NotFoundHandlerMetadata,
 } from '../../exception/types';
 import type { NotFoundRequest } from '../../../adapter/types/ErrorHandler';
@@ -143,6 +144,36 @@ export class PrepareExceptionHandlerService implements ICoreService {
           'has no effect in event scopes (@On, @EventPattern); the original error continues unchanged.',
       );
     }
+  }
+
+  /**
+   * Run the `@Catch` chain for a `@MessagePattern` failure, where the return value becomes the
+   * reply. A `Response` is an HTTP answer, never a message reply: it is reported and declined, so
+   * the caller sees the original failure instead of a serialized `Response` posing as success.
+   *
+   * @returns The reply, or `undefined` when nothing matched, the handler declined, threw, or
+   *          returned a `Response`
+   */
+  public async reply(error: unknown, context: MicroserviceExceptionContext): Promise<unknown> {
+    const entry = this.registry.resolve(error);
+
+    if (!entry) {
+      return undefined;
+    }
+
+    const result = await this.invoke(entry, error, context);
+
+    if (result instanceof Response) {
+      this.logger.warn(
+        `@Catch handler ${entry.source}() returned a Response for @MessagePattern ${context.source}() — a ` +
+          'Response is an HTTP answer, not a message reply; it is treated as a decline and the original ' +
+          'error reaches the transport.',
+      );
+
+      return undefined;
+    }
+
+    return result;
   }
 
   private async invoke(entry: CatchEntry, error: unknown, context: ExceptionContext<any>): Promise<unknown> {

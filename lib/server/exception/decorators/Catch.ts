@@ -32,7 +32,7 @@ import type { CatchHandlerMetadata, ExceptionType } from '../types';
  * | Scope | Return value |
  * |---|---|
  * | HTTP | a `Response` answers the request; anything else declines |
- * | `@MessagePattern` | becomes the reply |
+ * | `@MessagePattern` | becomes a successful reply; a `Response` declines with a warning |
  * | `@EventPattern`, `@On` | ignored with a warning - the original failure continues unchanged |
  *
  * @param types - Error classes to handle. None means catch-all.

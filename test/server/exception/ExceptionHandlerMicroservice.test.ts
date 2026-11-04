@@ -79,6 +79,11 @@ const returnValueWarnings = (logger: ReturnType<typeof createLogger>) =>
     .map(([message]) => String(message))
     .filter((message) => message.includes('has no effect in event scopes'));
 
+const responseReplyWarnings = (logger: ReturnType<typeof createLogger>) =>
+  (logger.warn.mock.calls as unknown[][])
+    .map(([message]) => String(message))
+    .filter((message) => message.includes('returned a Response for @MessagePattern'));
+
 describe('@Catch for @MessagePattern', () => {
   test('turns a matched failure into the reply, with the microservice context', async () => {
     const transport = new InMemoryTransport();
@@ -264,6 +269,96 @@ describe('@Catch for @MessagePattern', () => {
 
     await expect(transport.messages.get('create')!({}, messageContext('create'))).rejects.toBe(failure);
     expect(reached).toBe(true);
+  });
+
+  // A Response serialized as a reply would reach the caller as a success, hiding the failure.
+  test('a @Catch returning a Response declines with a warning, so the transport sees the original error', async () => {
+    const transport = new RecordingTransport();
+    const failure = new OutOfStock();
+
+    @ExceptionHandler()
+    class Errors {
+      @Catch(OutOfStock)
+      public outOfStock() {
+        return Response.json({ error: 'out of stock' }, { status: 409 });
+      }
+    }
+
+    @MessageController({ transport: 'orders' })
+    class OrderHandler {
+      @MessagePattern('create')
+      public async create() {
+        throw failure;
+      }
+    }
+
+    const { logger } = await bootWith(transport, [Errors, OrderHandler]);
+
+    await expect(transport.messages.get('create')!({}, messageContext('create'))).rejects.toBe(failure);
+    await expect(transport.messages.get('create')!({}, messageContext('create'))).rejects.toBe(failure);
+
+    const warnings = responseReplyWarnings(logger);
+
+    expect(warnings).toHaveLength(2);
+    expect(warnings[0]).toContain('Errors.outOfStock()');
+    expect(warnings[0]).toContain('OrderHandler.create()');
+  });
+
+  test('a @Catch returning a Response leaves the caller with a failed reply, not a successful one', async () => {
+    const transport = new InMemoryTransport();
+
+    @ExceptionHandler()
+    class Errors {
+      @Catch(OutOfStock)
+      public outOfStock() {
+        return new Response('out of stock', { status: 409 });
+      }
+    }
+
+    @MessageController({ transport: 'orders' })
+    class OrderHandler {
+      @MessagePattern('create')
+      public async create() {
+        throw new OutOfStock('sku-1');
+      }
+    }
+
+    await bootWith(transport, [Errors, OrderHandler]);
+
+    const error = await transport.send<never>('create').catch((caught: UlakError) => caught);
+
+    expect(error).toBeInstanceOf(UlakError);
+    expect(error.code).toBe(UlakErrorCode.REMOTE_ERROR);
+    expect(error.message).toBe('Handler for pattern "create" failed: sku-1');
+  });
+
+  test('a @Catch returning a plain object keeps it as the reply, with no warning', async () => {
+    const transport = new RecordingTransport();
+
+    @ExceptionHandler()
+    class Errors {
+      @Catch(OutOfStock)
+      public outOfStock() {
+        return { status: 409, error: 'out of stock' };
+      }
+    }
+
+    @MessageController({ transport: 'orders' })
+    class OrderHandler {
+      @MessagePattern('create')
+      public async create() {
+        throw new OutOfStock();
+      }
+    }
+
+    const { logger } = await bootWith(transport, [Errors, OrderHandler]);
+    const warningsAtBoot = logger.warn.mock.calls.length;
+
+    expect(await transport.messages.get('create')!({}, messageContext('create'))).toEqual({
+      status: 409,
+      error: 'out of stock',
+    });
+    expect(logger.warn.mock.calls.length).toBe(warningsAtBoot);
   });
 
   test('a @Catch that throws is contained: its error is logged and the original is rethrown', async () => {
