@@ -61,6 +61,8 @@ import type { MessagingInterceptor } from './microservice';
 import type { MicroserviceTransport } from './microservice';
 import type { LifecycleService } from './lifecycle';
 import type { AsenaStopOptions, ShutdownOptions } from './types';
+import type { EventEmitter } from './event/EventEmitter';
+import { DEVTOOLS_HOOK, type DevtoolsAttachment, type DevtoolsHook } from '../devtools/context';
 
 /**
  * Whatever a catch block or a signal handler received, in a shape safe to put in a log line.
@@ -176,6 +178,8 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
   // what a caller needs when starting on port 0 or on a unix socket
   private _httpServer?: bun.Server<any>;
 
+  private devtools?: DevtoolsAttachment;
+
   /**
    * @description Lifecycle hook - called after dependencies are injected
    * @returns {void}
@@ -258,6 +262,7 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
 
     this.installShutdownHandlers();
     this.installKeepAlive();
+    await this.attachDevtools();
 
     if (this._gc) {
       bun.gc(true);
@@ -364,6 +369,8 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
 
     // Last: the probe outlives the drain it is reporting on.
     await release('health server', () => this.healthServer?.stop());
+
+    await release('devtools agent', () => this.devtools?.detach());
 
     if (failures.length > 0) {
       throw new AggregateError(failures, `Server shutdown completed with ${failures.length} failure(s)`);
@@ -586,6 +593,45 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
     if (this.keepAliveTimer) {
       clearInterval(this.keepAliveTimer);
       this.keepAliveTimer = undefined;
+    }
+  }
+
+  /**
+   * @description Hand the server to the devtools agent, when `asena console` spawned this process.
+   *
+   * Only an IPC child with the wrapper's hook set gets here; anything else returns before
+   * allocating. The call is the agent's ready signal.
+   * @returns {Promise<void>}
+   */
+  private async attachDevtools(): Promise<void> {
+    const hook = (globalThis as Record<symbol, unknown>)[DEVTOOLS_HOOK] as DevtoolsHook | undefined;
+
+    if (typeof hook !== 'function' || typeof process.send !== 'function') {
+      return;
+    }
+
+    const lifecycle = this.lifecycleService;
+
+    try {
+      const attachment = hook({
+        port: this._httpServer?.port ?? null,
+        adapter: this._adapter?.name ?? null,
+        container: this._coreContainer.container,
+        ulak: this._ulak,
+        lifecycle: {
+          get state() {
+            return lifecycle.state;
+          },
+        },
+        cron: this.cronRunner,
+        events: await this._coreContainer.resolve<EventEmitter>(ICoreServiceNames.EVENT_EMITTER),
+      });
+
+      if (attachment) {
+        this.devtools = attachment;
+      }
+    } catch (error) {
+      this._logger.warn(`${yellow('[AsenaServer]')} devtools agent failed to attach: ${describeError(error)}`);
     }
   }
 
