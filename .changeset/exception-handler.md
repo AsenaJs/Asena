@@ -13,3 +13,5 @@
 - **Ready-made status exceptions** in `@asenajs/asena/adapter`, one `HttpException` subclass per common status (`BadRequestException`, `UnauthorizedException`, `ForbiddenException`, `NotFoundException`, `ConflictException`, `UnprocessableEntityException`, `InternalServerErrorException`, `ServiceUnavailableException` and more), each catchable by type and defaulting its body to the reason phrase.
 
 `@Config.onError` and `@Config.onNotFound` are deprecated and will be removed in 1.0. They keep working as the last link of the chain and log a deprecation warning at boot.
+
+The new `@asenajs/asena/devtools` entry point holds the in-app agent that `asena console` attaches over IPC once the server is ready: it reports the app's components, routes, handlers and runtime metrics, runs schedules, events and messages through their real dispatch paths, and does nothing in a process the console did not spawn.
