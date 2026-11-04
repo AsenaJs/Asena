@@ -110,6 +110,10 @@
     "./test": {
       "import": "./dist/lib/test/index.js",
       "types": "./dist/lib/test/index.d.ts"
+    },
+    "./devtools": {
+      "import": "./dist/lib/devtools/index.js",
+      "types": "./dist/lib/devtools/index.d.ts"
     }
   },
   "description": "Asena is a spring like framework for building web applications built with bun",
