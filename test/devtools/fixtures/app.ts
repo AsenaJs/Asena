@@ -13,14 +13,17 @@ import {
   Controller,
   EventService,
   ExceptionHandler,
+  FrontendController,
   MessageController,
   Middleware,
   PostProcessor,
   Schedule,
   Service,
+  StaticServe,
   WebSocket,
 } from '../../../lib/server/decorators';
-import { Get, Post, Put } from '../../../lib/server/web/decorators';
+import { Get, Page, Post, Put } from '../../../lib/server/web/decorators';
+import { AsenaStaticServeService } from '../../../lib/server/web/middleware';
 import { AsenaWebSocketService } from '../../../lib/server/web/websocket';
 import { On } from '../../../lib/server/event';
 import { EventPattern, InMemoryTransport, MessagePattern } from '../../../lib/server/microservice';
@@ -72,6 +75,9 @@ export class CreateItemValidator {
     return acceptAnything;
   }
 }
+
+@StaticServe({ root: './public/items', name: 'ItemImages' })
+export class ItemImages extends AsenaStaticServeService<any> {}
 
 @Service()
 @Implements('PriceFormatter')
@@ -133,6 +139,29 @@ export class ItemController {
   @Put('/:id/name')
   public rename(context: RenameItemContext) {
     return context;
+  }
+
+  @Get({ path: '/images/*', staticServe: ItemImages })
+  public images() {}
+}
+
+/** Stands in for a Bun HTMLBundle, which only a `.html` import produces. */
+const adminBundle = { index: 'admin.html' };
+
+@FrontendController('/admin')
+export class AdminPages {
+  public static pageCalls = 0;
+
+  @Page('/')
+  public home() {
+    AdminPages.pageCalls += 1;
+    return adminBundle;
+  }
+
+  @Page('reports')
+  public reports() {
+    AdminPages.pageCalls += 1;
+    return adminBundle;
   }
 }
 
@@ -213,7 +242,9 @@ export const fixtureComponents = [
   DollarFormatter,
   ItemService,
   ItemDraft,
+  ItemImages,
   ItemController,
+  AdminPages,
   ItemFeed,
   NightlyCleanup,
   ItemEvents,

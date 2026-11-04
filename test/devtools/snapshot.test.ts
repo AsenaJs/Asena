@@ -11,16 +11,17 @@ import { Catch } from '../../lib/server/exception';
 import type { AsenaContext, AsenaNextHandler } from '../../lib/adapter';
 import { HTTP_EXCEPTION } from '../../lib/adapter/types/HttpException';
 import { createMockAdapter } from '../utils/createMockContext';
-import { AppConfig, fixtureComponents, ItemDraft } from './fixtures/app';
+import { AdminPages, AppConfig, fixtureComponents, ItemDraft } from './fixtures/app';
 
 const SNAPSHOT_FILE = join(import.meta.dir, 'fixtures', 'snapshot.json');
 
-// The mock adapter has neither hook; a real adapter always has onError and may have onNotFound.
+// The mock adapter has none of these; a real adapter always has onError and registerHTMLRoute, and may have onNotFound.
 const bootFixture = async (components: any[]): Promise<TestApp> => {
   const { adapter } = createMockAdapter();
 
   (adapter as any).onError = mock(() => {});
   (adapter as any).onNotFound = mock(() => {});
+  (adapter as any).registerHTMLRoute = mock(() => {});
 
   return createTestApp({ adapter: adapter as any, logger: silentLogger, components });
 };
@@ -30,6 +31,7 @@ describe('buildDevtoolsSnapshot', () => {
   let snapshot: DevtoolsSnapshot;
   let draftsBeforeSnapshot: number;
   let configCallsBeforeSnapshot: number;
+  let pageCallsBeforeSnapshot: number;
 
   beforeAll(async () => {
     process.env.DEVTOOLS_FIXTURE_REGION = 'eu-west';
@@ -39,6 +41,7 @@ describe('buildDevtoolsSnapshot', () => {
 
     draftsBeforeSnapshot = ItemDraft.constructed;
     configCallsBeforeSnapshot = AppConfig.globalMiddlewareCalls;
+    pageCallsBeforeSnapshot = AdminPages.pageCalls;
     snapshot = await buildDevtoolsSnapshot(app.container);
   });
 
@@ -49,6 +52,7 @@ describe('buildDevtoolsSnapshot', () => {
 
   test('lists user components only, each once, by name', () => {
     expect(snapshot.components.map((component) => component.name)).toEqual([
+      'AdminPages',
       'ApiExceptionHandler',
       'AppConfig',
       'AuditTrail',
@@ -61,6 +65,7 @@ describe('buildDevtoolsSnapshot', () => {
       'ItemDraft',
       'ItemEvents',
       'ItemFeed',
+      'ItemImages',
       'ItemService',
       'NightlyCleanup',
       'PassThroughPostProcessor',
@@ -72,6 +77,8 @@ describe('buildDevtoolsSnapshot', () => {
     const byName = Object.fromEntries(snapshot.components.map((component) => [component.name, component]));
 
     expect(byName.ItemController.type).toBe('CONTROLLER');
+    expect(byName.AdminPages.type).toBe('FRONTEND_CONTROLLER');
+    expect(byName.ItemImages.type).toBe('MIDDLEWARE');
     expect(byName.ItemService.type).toBe('SERVICE');
     expect(byName.RequestTimer.type).toBe('MIDDLEWARE');
     expect(byName.RequestTimer.className).toBe('RequestTimerMiddleware');
@@ -117,7 +124,7 @@ describe('buildDevtoolsSnapshot', () => {
     expect(JSON.stringify(snapshot)).not.toContain('eu-west');
   });
 
-  test('describes routes with the full path, the middleware chain and the validation source', () => {
+  test('describes routes with the full path, the middleware chain, the validation source and static serving', () => {
     expect(snapshot.routes).toEqual([
       {
         controller: 'ItemController',
@@ -128,6 +135,7 @@ describe('buildDevtoolsSnapshot', () => {
         validator: 'CreateItemValidator',
         contract: null,
         hasBodySchema: true,
+        staticServe: false,
       },
       {
         controller: 'ItemController',
@@ -138,6 +146,7 @@ describe('buildDevtoolsSnapshot', () => {
         validator: null,
         contract: null,
         hasBodySchema: false,
+        staticServe: false,
       },
       {
         controller: 'ItemController',
@@ -148,6 +157,18 @@ describe('buildDevtoolsSnapshot', () => {
         validator: null,
         contract: 'RenameItemContext',
         hasBodySchema: true,
+        staticServe: false,
+      },
+      {
+        controller: 'ItemController',
+        method: 'images',
+        httpMethod: 'GET',
+        path: '/items/images/*',
+        middlewares: ['AuditTrail'],
+        validator: null,
+        contract: null,
+        hasBodySchema: false,
+        staticServe: true,
       },
     ]);
   });
@@ -155,10 +176,27 @@ describe('buildDevtoolsSnapshot', () => {
   test('paths agree with what the server registered on the adapter', () => {
     const adapter = (app.server.coreContainer.container.services.AsenaAdapter as any).instance;
     const registered = adapter.registerRoute.mock.calls.map(([route]: any[]) => `${route.method} ${route.path}`);
+    const staticRoutes = adapter.registerRoute.mock.calls
+      .filter(([route]: any[]) => route.staticServe !== undefined)
+      .map(([route]: any[]) => route.path);
 
     expect(snapshot.routes.map((route) => `${route.httpMethod.toLowerCase()} ${route.path}`).sort()).toEqual(
       registered.sort(),
     );
+    expect(snapshot.routes.filter((route) => route.staticServe).map((route) => route.path)).toEqual(staticRoutes);
+  });
+
+  // HTML routes bypass the middleware chain, so F3 lists them apart from the routes.
+  test('lists @FrontendController pages without calling the @Page methods', () => {
+    const adapter = (app.server.coreContainer.container.services.AsenaAdapter as any).instance;
+    const registered = adapter.registerHTMLRoute.mock.calls.map(([path]: any[]) => path);
+
+    expect(snapshot.pages).toEqual([
+      { controller: 'AdminPages', method: 'home', path: '/admin' },
+      { controller: 'AdminPages', method: 'reports', path: '/admin/reports' },
+    ]);
+    expect(snapshot.pages!.map((page) => page.path).sort()).toEqual(registered.sort());
+    expect(AdminPages.pageCalls).toBe(pageCallsBeforeSnapshot);
   });
 
   test('describes websockets, schedules, @On events and message handlers with prefixes applied', () => {

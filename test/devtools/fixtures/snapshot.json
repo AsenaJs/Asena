@@ -1,6 +1,15 @@
 {
   "components": [
     {
+      "name": "AdminPages",
+      "type": "FRONTEND_CONTROLLER",
+      "scope": "singleton",
+      "interfaces": [],
+      "className": "AdminPages",
+      "dependencies": [],
+      "values": []
+    },
+    {
       "name": "ApiExceptionHandler",
       "type": "EXCEPTION_HANDLER",
       "scope": "singleton",
@@ -125,6 +134,15 @@
       "values": []
     },
     {
+      "name": "ItemImages",
+      "type": "MIDDLEWARE",
+      "scope": "singleton",
+      "interfaces": [],
+      "className": "ItemImages",
+      "dependencies": [],
+      "values": []
+    },
+    {
       "name": "ItemService",
       "type": "SERVICE",
       "scope": "singleton",
@@ -191,7 +209,8 @@
       "middlewares": ["AuditTrail", "RequestTimer"],
       "validator": "CreateItemValidator",
       "contract": null,
-      "hasBodySchema": true
+      "hasBodySchema": true,
+      "staticServe": false
     },
     {
       "controller": "ItemController",
@@ -201,7 +220,8 @@
       "middlewares": ["AuditTrail"],
       "validator": null,
       "contract": null,
-      "hasBodySchema": false
+      "hasBodySchema": false,
+      "staticServe": false
     },
     {
       "controller": "ItemController",
@@ -211,7 +231,31 @@
       "middlewares": ["AuditTrail"],
       "validator": null,
       "contract": "RenameItemContext",
-      "hasBodySchema": true
+      "hasBodySchema": true,
+      "staticServe": false
+    },
+    {
+      "controller": "ItemController",
+      "method": "images",
+      "httpMethod": "GET",
+      "path": "/items/images/*",
+      "middlewares": ["AuditTrail"],
+      "validator": null,
+      "contract": null,
+      "hasBodySchema": false,
+      "staticServe": true
+    }
+  ],
+  "pages": [
+    {
+      "controller": "AdminPages",
+      "method": "home",
+      "path": "/admin"
+    },
+    {
+      "controller": "AdminPages",
+      "method": "reports",
+      "path": "/admin/reports"
     }
   ],
   "websockets": [

@@ -12,6 +12,7 @@ import {
 } from '../utils';
 import { ASENA_CONTEXT_CONTRACT, resolveContextContract } from '../adapter/RequestContract';
 import type { Route } from '../adapter';
+import type { PageRoute } from '../server/web/decorators/Page';
 import type { Class } from '../server/types';
 import type { AsenaConfig, GlobalMiddlewareEntry } from '../server/config';
 import type { EventHandlerMetadata } from '../server/event/types';
@@ -31,6 +32,7 @@ import type {
   DevtoolsGlobalMiddleware,
   DevtoolsHttpMethod,
   DevtoolsMessageHandler,
+  DevtoolsPage,
   DevtoolsRoute,
   DevtoolsSchedule,
   DevtoolsSnapshot,
@@ -155,6 +157,7 @@ const describeRoutes = (controllers: ComponentEntry[]): DevtoolsRoute[] => {
               validator &&
               (typeof validator.prototype.json === 'function' || typeof validator.prototype.form === 'function'),
             ),
+        staticServe: Boolean(params.staticServe),
       });
     }
   }
@@ -162,6 +165,22 @@ const describeRoutes = (controllers: ComponentEntry[]): DevtoolsRoute[] => {
   return routes.sort(
     (a, b) => byText(a.path, b.path) || byText(a.httpMethod, b.httpMethod) || byText(a.method, b.method),
   );
+};
+
+// The path rule of PrepareFrontendControllerService, which calls each @Page method; this calls none.
+const describePages = (frontendControllers: ComponentEntry[]): DevtoolsPage[] => {
+  const pages: DevtoolsPage[] = [];
+
+  for (const { name, Class } of frontendControllers) {
+    const basePath = getOwnTypedMetadata<string>(ComponentConstants.PathKey, Class) || '/';
+    const declared = getChainedTypedMetadata<PageRoute>(ComponentConstants.PageRoutesKey, Class);
+
+    for (const [method, page] of Object.entries(declared)) {
+      pages.push({ controller: name, method, path: path.join(basePath, page.path).replace(/\\/g, '/') });
+    }
+  }
+
+  return pages.sort((a, b) => byText(a.path, b.path) || byText(a.method, b.method));
 };
 
 const describeWebSockets = (websockets: ComponentEntry[]): DevtoolsWebSocket[] =>
@@ -324,6 +343,7 @@ export const buildDevtoolsSnapshot = async (container: Container): Promise<Devto
   return {
     components: components.map(describeComponent),
     routes: describeRoutes(ofType(components, ComponentType.CONTROLLER)),
+    pages: describePages(ofType(components, ComponentType.FRONTEND_CONTROLLER)),
     websockets: describeWebSockets(ofType(components, ComponentType.WEBSOCKET)),
     schedules: describeSchedules(ofType(components, ComponentType.SCHEDULE)),
     events: describeEvents(ofType(components, ComponentType.EVENT)),

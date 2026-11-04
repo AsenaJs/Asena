@@ -72,6 +72,15 @@ export interface DevtoolsRoute {
   contract: string | null;
   /** Whether a JSON or form body is validated, by the validator or by the contract. */
   hasBodySchema: boolean;
+  /** Whether the route serves files through a `staticServe` class. */
+  staticServe?: boolean;
+}
+
+/** A `@Page` of a `@FrontendController`, served by Bun outside the middleware chain. */
+export interface DevtoolsPage {
+  controller: string;
+  method: string;
+  path: string;
 }
 
 export interface DevtoolsWebSocket {
@@ -140,6 +149,7 @@ export interface DevtoolsConfig {
 export interface DevtoolsSnapshot {
   components: DevtoolsComponent[];
   routes: DevtoolsRoute[];
+  pages?: DevtoolsPage[];
   websockets: DevtoolsWebSocket[];
   schedules: DevtoolsSchedule[];
   events: DevtoolsEventHandler[];
