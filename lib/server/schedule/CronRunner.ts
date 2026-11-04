@@ -73,6 +73,27 @@ export class CronRunner implements ICoreService {
   }
 
   /**
+   * Run a registered job once, now, through the same path a timed run takes: a failure is logged
+   * the same way. Its schedule is left as it is.
+   *
+   * @param name - The job name, as registered
+   * @throws When no job has that name, or with the job's own failure after it is logged
+   */
+  public async runNow(name: string): Promise<void> {
+    const job = this.jobs.find((candidate) => candidate.name === name);
+
+    if (!job) {
+      throw new Error(`No @Schedule job named "${name}"`);
+    }
+
+    const failure = await this.execute(job);
+
+    if (failure) {
+      throw failure.error;
+    }
+  }
+
+  /**
    * Get registered job count (for testing/debugging)
    */
   public get jobCount(): number {
@@ -129,13 +150,22 @@ export class CronRunner implements ICoreService {
     job.timer = setTimeout(() => {
       if (!job.running) return;
 
-      void Promise.resolve(job.handler())
-        .catch((error) => {
-          this.logger.error(`[Schedule] Error in "${job.name}":`, error);
-        })
-        .then(() => {
-          this.scheduleNext(job);
-        });
+      void this.execute(job).then(() => {
+        this.scheduleNext(job);
+      });
     }, delay);
+  }
+
+  /** @returns The failure, already logged, or `undefined` when the job succeeded */
+  private async execute(job: ScheduledJob): Promise<{ error: unknown } | undefined> {
+    try {
+      await job.handler();
+
+      return undefined;
+    } catch (error) {
+      this.logger.error(`[Schedule] Error in "${job.name}":`, error);
+
+      return { error };
+    }
   }
 }

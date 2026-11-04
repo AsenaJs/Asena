@@ -165,6 +165,59 @@ describe('CronRunner', () => {
     });
   });
 
+  // The console's "run now" must behave like the timer firing, not like calling execute() by hand.
+  describe('runNow', () => {
+    test('runs the named job once without starting its schedule', async () => {
+      const ran: string[] = [];
+
+      cronRunner.registerJob('first', '@daily', () => {
+        ran.push('first');
+      });
+      cronRunner.registerJob('second', '@daily', async () => {
+        ran.push('second');
+      });
+
+      await cronRunner.runNow('second');
+
+      expect(ran).toEqual(['second']);
+      expect(cronRunner.hasRunningJobs).toBe(false);
+    });
+
+    test('rejects an unknown job by name', async () => {
+      cronRunner.registerJob('known', '@daily', () => {});
+
+      await expect(cronRunner.runNow('unknown')).rejects.toThrow('No @Schedule job named "unknown"');
+    });
+
+    test('logs a failure exactly as a timed run does, then rejects with it', async () => {
+      const failure = new Error('job failed');
+      const logger = (cronRunner as any).logger;
+      const originalParse = Bun.cron.parse;
+
+      cronRunner.registerJob('flaky', '@daily', () => {
+        throw failure;
+      });
+
+      (Bun.cron as any).parse = (_expression: string, from: number) => new Date(from + 1);
+
+      try {
+        cronRunner.startAll();
+        await Bun.sleep(20);
+      } finally {
+        (Bun.cron as any).parse = originalParse;
+        cronRunner.stopAll();
+      }
+
+      const timedRun = logger.error.mock.calls[0];
+
+      logger.error.mockClear();
+
+      await expect(cronRunner.runNow('flaky')).rejects.toBe(failure);
+      expect(timedRun).toEqual(['[Schedule] Error in "flaky":', failure]);
+      expect(logger.error.mock.calls).toEqual([timedRun]);
+    });
+  });
+
   describe('serviceName', () => {
     test('should have correct service name', () => {
       expect(cronRunner.serviceName).toBe('CronRunner');
