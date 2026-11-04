@@ -1,0 +1,284 @@
+{
+  "components": [
+    {
+      "name": "ApiExceptionHandler",
+      "type": "EXCEPTION_HANDLER",
+      "scope": "singleton",
+      "interfaces": [],
+      "className": "ApiExceptionHandler",
+      "dependencies": [],
+      "values": []
+    },
+    {
+      "name": "AppConfig",
+      "type": "CONFIG",
+      "scope": "singleton",
+      "interfaces": [],
+      "className": "AppConfig",
+      "dependencies": [],
+      "values": []
+    },
+    {
+      "name": "AuditTrail",
+      "type": "MIDDLEWARE",
+      "scope": "singleton",
+      "interfaces": [],
+      "className": "AuditTrail",
+      "dependencies": [],
+      "values": []
+    },
+    {
+      "name": "CorsHeaders",
+      "type": "MIDDLEWARE",
+      "scope": "singleton",
+      "interfaces": [],
+      "className": "CorsHeaders",
+      "dependencies": [],
+      "values": []
+    },
+    {
+      "name": "CreateItemValidator",
+      "type": "MIDDLEWARE",
+      "scope": "singleton",
+      "interfaces": [],
+      "className": "CreateItemValidator",
+      "dependencies": [],
+      "values": []
+    },
+    {
+      "name": "DollarFormatter",
+      "type": "SERVICE",
+      "scope": "singleton",
+      "interfaces": ["PriceFormatter"],
+      "className": "DollarFormatter",
+      "dependencies": [],
+      "values": []
+    },
+    {
+      "name": "EuroFormatter",
+      "type": "SERVICE",
+      "scope": "singleton",
+      "interfaces": ["PriceFormatter"],
+      "className": "EuroFormatter",
+      "dependencies": [],
+      "values": []
+    },
+    {
+      "name": "InventoryHandler",
+      "type": "MESSAGE_CONTROLLER",
+      "scope": "singleton",
+      "interfaces": [],
+      "className": "InventoryHandler",
+      "dependencies": [],
+      "values": []
+    },
+    {
+      "name": "ItemController",
+      "type": "CONTROLLER",
+      "scope": "singleton",
+      "interfaces": [],
+      "className": "ItemController",
+      "dependencies": [
+        {
+          "field": "itemService",
+          "target": "ItemService",
+          "kind": "inject"
+        },
+        {
+          "field": null,
+          "target": "AuditTrail",
+          "kind": "soft"
+        },
+        {
+          "field": null,
+          "target": "RequestTimer",
+          "kind": "soft"
+        }
+      ],
+      "values": []
+    },
+    {
+      "name": "ItemDraft",
+      "type": "SERVICE",
+      "scope": "prototype",
+      "interfaces": [],
+      "className": "ItemDraft",
+      "dependencies": [],
+      "values": []
+    },
+    {
+      "name": "ItemEvents",
+      "type": "EVENT",
+      "scope": "singleton",
+      "interfaces": [],
+      "className": "ItemEvents",
+      "dependencies": [],
+      "values": []
+    },
+    {
+      "name": "ItemFeed",
+      "type": "WEBSOCKET",
+      "scope": "singleton",
+      "interfaces": [],
+      "className": "ItemFeed",
+      "dependencies": [],
+      "values": []
+    },
+    {
+      "name": "ItemService",
+      "type": "SERVICE",
+      "scope": "singleton",
+      "interfaces": [],
+      "className": "ItemService",
+      "dependencies": [
+        {
+          "field": "formatters",
+          "target": "PriceFormatter",
+          "kind": "strategy"
+        }
+      ],
+      "values": [
+        {
+          "field": "pageSize",
+          "key": "DEVTOOLS_FIXTURE_PAGE_SIZE",
+          "hasDefault": true,
+          "parsed": true,
+          "isSet": false
+        },
+        {
+          "field": "region",
+          "key": "DEVTOOLS_FIXTURE_REGION",
+          "hasDefault": false,
+          "parsed": false,
+          "isSet": true
+        }
+      ]
+    },
+    {
+      "name": "NightlyCleanup",
+      "type": "SCHEDULE",
+      "scope": "singleton",
+      "interfaces": [],
+      "className": "NightlyCleanup",
+      "dependencies": [],
+      "values": []
+    },
+    {
+      "name": "PassThroughPostProcessor",
+      "type": "POST_PROCESSOR",
+      "scope": "singleton",
+      "interfaces": [],
+      "className": "PassThroughPostProcessor",
+      "dependencies": [],
+      "values": []
+    },
+    {
+      "name": "RequestTimer",
+      "type": "MIDDLEWARE",
+      "scope": "singleton",
+      "interfaces": [],
+      "className": "RequestTimerMiddleware",
+      "dependencies": [],
+      "values": []
+    }
+  ],
+  "routes": [
+    {
+      "controller": "ItemController",
+      "method": "create",
+      "httpMethod": "POST",
+      "path": "/items/",
+      "middlewares": ["AuditTrail", "RequestTimer"],
+      "validator": "CreateItemValidator",
+      "contract": null,
+      "hasBodySchema": true
+    },
+    {
+      "controller": "ItemController",
+      "method": "find",
+      "httpMethod": "GET",
+      "path": "/items/:id",
+      "middlewares": ["AuditTrail"],
+      "validator": null,
+      "contract": null,
+      "hasBodySchema": false
+    },
+    {
+      "controller": "ItemController",
+      "method": "rename",
+      "httpMethod": "PUT",
+      "path": "/items/:id/name",
+      "middlewares": ["AuditTrail"],
+      "validator": null,
+      "contract": "RenameItemContext",
+      "hasBodySchema": true
+    }
+  ],
+  "websockets": [
+    {
+      "namespace": "ws/items",
+      "component": "ItemFeed"
+    }
+  ],
+  "schedules": [
+    {
+      "name": "NightlyCleanup",
+      "cron": "0 3 * * *"
+    }
+  ],
+  "events": [
+    {
+      "component": "ItemEvents",
+      "method": "onAudit",
+      "event": "audit.*"
+    },
+    {
+      "component": "ItemEvents",
+      "method": "onCreated",
+      "event": "item.created"
+    }
+  ],
+  "messageHandlers": [
+    {
+      "controller": "InventoryHandler",
+      "method": "onRestocked",
+      "pattern": "inventory.restocked",
+      "kind": "event",
+      "transport": "default"
+    },
+    {
+      "controller": "InventoryHandler",
+      "method": "reserve",
+      "pattern": "inventory.reserve",
+      "kind": "message",
+      "transport": "default"
+    }
+  ],
+  "exceptionHandlers": [
+    {
+      "component": "ApiExceptionHandler",
+      "catches": [
+        {
+          "method": "fallback",
+          "types": "catch-all"
+        },
+        {
+          "method": "known",
+          "types": ["ItemMissing", "ItemRejected"]
+        }
+      ],
+      "notFound": "missingRoute"
+    }
+  ],
+  "config": {
+    "component": "AppConfig",
+    "hasOnError": false,
+    "hasOnNotFound": false,
+    "globalMiddlewares": [
+      {
+        "middleware": "CorsHeaders",
+        "exclude": ["/health"]
+      }
+    ]
+  }
+}
