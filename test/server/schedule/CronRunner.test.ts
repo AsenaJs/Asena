@@ -202,7 +202,10 @@ describe('CronRunner', () => {
 
       try {
         cronRunner.startAll();
-        await Bun.sleep(20);
+
+        for (let waited = 0; logger.error.mock.calls.length === 0 && waited < 2000; waited += 5) {
+          await Bun.sleep(5);
+        }
       } finally {
         (Bun.cron as any).parse = originalParse;
         cronRunner.stopAll();

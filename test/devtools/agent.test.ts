@@ -86,7 +86,10 @@ describe('attachDevtoolsAgent', () => {
     const { channel, sent } = fakeChannel();
 
     attachment = attachDevtoolsAgent(context, { channel, sampleIntervalMs: 10 });
-    await Bun.sleep(45);
+
+    for (let waited = 0; payloadsOf(sent, 'metrics').length < 2 && waited < 2000; waited += 10) {
+      await Bun.sleep(10);
+    }
 
     const metrics = payloadsOf(sent, 'metrics');
 
