@@ -46,6 +46,33 @@ describe('devtools protocol', () => {
     expect(commandBack.payload).toEqual(command.payload);
   });
 
+  // Optional on both, so an agent that predates them still speaks v1.
+  test('carries the microservice transports on hello and metrics', () => {
+    const transports = [
+      { name: 'default', connected: true },
+      { name: 'audit', connected: false },
+    ];
+    const hello = agentMessage('hello', { coreVersion: '0.13.0', adapter: null, port: null, pid: 7, transports });
+    const metrics = agentMessage('metrics', {
+      rss: 1,
+      heapUsed: 1,
+      heapTotal: 1,
+      cpuPercent: 0,
+      eventLoopLagMs: 0,
+      uptimeSeconds: 1,
+      readiness: { status: 'degraded', transports: { default: 'connected', audit: 'disconnected' } },
+      transports,
+    });
+    const bare = agentMessage('hello', { coreVersion: '0.13.0', adapter: null, port: null, pid: 7 });
+
+    for (const message of [hello, metrics, bare]) {
+      expect(isDevtoolsAgentMessage(structuredClone(message))).toBe(true);
+    }
+
+    expect(structuredClone(hello).payload.transports).toEqual(transports);
+    expect(structuredClone(metrics).payload.transports).toEqual(transports);
+  });
+
   test('rejects another protocol version, an unknown type and the wrong direction', () => {
     const result = agentMessage('commandResult', { id: 'c-1', ok: true });
 

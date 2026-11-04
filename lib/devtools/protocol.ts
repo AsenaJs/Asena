@@ -158,6 +158,12 @@ export interface DevtoolsSnapshot {
   config: DevtoolsConfig;
 }
 
+/** A microservice transport from `@Config.transport()`, under the name `Ulak` registers it by. */
+export interface DevtoolsTransport {
+  name: string;
+  connected: boolean;
+}
+
 export interface DevtoolsHello {
   coreVersion: string;
   /** Adapter name, `null` in headless mode. */
@@ -165,6 +171,7 @@ export interface DevtoolsHello {
   /** Bound HTTP port, `null` in headless mode. */
   port: number | null;
   pid: number;
+  transports?: DevtoolsTransport[];
 }
 
 /** Exactly the readiness body `HealthServer` answers, minus `uptime` (carried by the metrics). */
@@ -181,6 +188,7 @@ export interface DevtoolsMetrics {
   eventLoopLagMs: number;
   uptimeSeconds: number;
   readiness: DevtoolsReadiness;
+  transports?: DevtoolsTransport[];
 }
 
 export type DevtoolsStepKind =
