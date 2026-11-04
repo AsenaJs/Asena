@@ -2,7 +2,8 @@ import * as bun from 'bun';
 import { blue, type ServerLogger } from '../../logger';
 import type { HealthOptions } from '../AsenaServerFactory';
 import type { Ulak } from '../messaging/Ulak';
-import { LifecycleState } from '../lifecycle';
+import type { LifecycleState } from '../lifecycle';
+import { computeReadiness } from './readiness';
 
 /**
  * @description Minimal zero-dependency health endpoint for headless/hybrid deployments.
@@ -68,36 +69,19 @@ export class HealthServer {
 
   private buildReadinessResponse(): Response {
     const uptime = this.uptime();
-    const state = this.lifecycleState?.();
+    const readiness = computeReadiness(this.lifecycleState?.(), this.ulak.getMicroserviceTransports());
 
-    // Draining or not up yet. Reported before the transport check because it is the more
-    // specific answer: a stopping instance is not ready even if every transport is healthy.
-    if (state && state !== LifecycleState.STARTED) {
-      return Response.json({ status: 'not_ready', state, uptime }, { status: 503 });
+    if (readiness.status === 'not_ready') {
+      return Response.json({ status: readiness.status, state: readiness.state, uptime }, { status: 503 });
     }
 
-    const transports = this.ulak.getMicroserviceTransports();
-
-    if (transports.size === 0) {
-      return Response.json({ status: 'up', uptime });
-    }
-
-    const states: Record<string, 'connected' | 'disconnected'> = {};
-    let degraded = false;
-
-    for (const [name, transport] of transports) {
-      const connected = transport.isConnected;
-
-      states[name] = connected ? 'connected' : 'disconnected';
-
-      if (!connected) {
-        degraded = true;
-      }
+    if (!('transports' in readiness)) {
+      return Response.json({ status: readiness.status, uptime });
     }
 
     return Response.json(
-      { status: degraded ? 'degraded' : 'up', uptime, transports: states },
-      { status: degraded ? 503 : 200 },
+      { status: readiness.status, uptime, transports: readiness.transports },
+      { status: readiness.status === 'degraded' ? 503 : 200 },
     );
   }
 }
