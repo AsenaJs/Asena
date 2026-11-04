@@ -87,7 +87,7 @@ const ofType = (components: ComponentEntry[], type: ComponentType): ComponentEnt
 const describeDependencies = (Class: Class): DevtoolsDependency[] => {
   const injected = getChainedTypedMetadata<Dependencies>(ComponentConstants.DependencyKey, Class);
   const strategies = getChainedTypedMetadata<Strategies>(ComponentConstants.StrategyKey, Class);
-  const soft = getOwnTypedMetadata<Dependencies>(ComponentConstants.SoftDependencyKey, Class) || {};
+  const soft = getChainedTypedMetadata<Dependencies>(ComponentConstants.SoftDependencyKey, Class);
 
   const dependencies: DevtoolsDependency[] = [
     ...Object.entries(injected).map(([field, target]) => ({ field, target, kind: 'inject' as const })),

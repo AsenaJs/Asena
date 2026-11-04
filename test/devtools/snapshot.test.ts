@@ -5,7 +5,9 @@ import { silentLogger } from '../../lib/test/harness/silentLogger';
 import type { TestApp } from '../../lib/test/harness/types';
 import { buildDevtoolsSnapshot } from '../../lib/devtools/snapshot';
 import type { DevtoolsSnapshot } from '../../lib/devtools/protocol';
-import { Config, Service } from '../../lib/server/decorators';
+import { Config, Controller, Middleware, Service } from '../../lib/server/decorators';
+import { Get } from '../../lib/server/web/decorators';
+import type { AsenaContext, AsenaNextHandler } from '../../lib/adapter';
 import { createMockAdapter } from '../utils/createMockContext';
 import { AppConfig, fixtureComponents, ItemDraft } from './fixtures/app';
 
@@ -263,5 +265,35 @@ describe('buildDevtoolsSnapshot config edge cases', () => {
 
     expect(snapshot.config).toEqual({ hasOnError: false, hasOnNotFound: false, globalMiddlewares: [] });
     expect(snapshot.components.map((component) => component.name)).toEqual(['LoneService']);
+  });
+});
+
+describe('buildDevtoolsSnapshot inheritance', () => {
+  // IocEngine orders creation by soft dependencies collected across the class chain; the graph must show the same edges.
+  test('carries the soft edges of a route inherited from a base controller', async () => {
+    @Middleware()
+    class BaseGuard {
+      public async handle(_context: AsenaContext<any, any>, next: AsenaNextHandler) {
+        await next();
+      }
+    }
+
+    class BaseResource {
+      @Get({ path: '/', middlewares: [BaseGuard] })
+      public list(context: AsenaContext<any, any>) {
+        return context.send([]);
+      }
+    }
+
+    @Controller('/things')
+    class ThingController extends BaseResource {}
+
+    await using app = await bootFixture([BaseGuard, ThingController]);
+
+    const snapshot = await buildDevtoolsSnapshot(app.container);
+    const thing = snapshot.components.find((component) => component.name === 'ThingController')!;
+
+    expect(snapshot.routes.map((route) => [route.path, route.middlewares])).toEqual([['/things/', ['BaseGuard']]]);
+    expect(thing.dependencies).toEqual([{ field: null, target: 'BaseGuard', kind: 'soft' }]);
   });
 });
