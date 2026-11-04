@@ -226,7 +226,7 @@ describe('@Catch for @MessagePattern', () => {
 
     await bootWith(transport, [Errors, OrderHandler]);
 
-    const error = await transport.send('create').catch((caught) => caught);
+    const error = await transport.send<never>('create').catch((caught: UlakError) => caught);
 
     expect(error).toBeInstanceOf(UlakError);
     expect(error.code).toBe(UlakErrorCode.REMOTE_ERROR);
