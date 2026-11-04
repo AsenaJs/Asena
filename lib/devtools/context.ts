@@ -2,6 +2,7 @@ import type { Container } from '../ioc';
 import type { Ulak } from '../server/messaging';
 import type { LifecycleState } from '../server/lifecycle/LifecycleState';
 import type { GlobalMiddlewareConfig } from '../server/config';
+import type { ExceptionRegistryView } from '../server/exception/ExceptionRegistry';
 
 /** The `globalThis` key the `asena console` wrapper sets to the agent factory. */
 export const DEVTOOLS_HOOK = Symbol.for('asena.devtools');
@@ -19,6 +20,7 @@ export interface DevtoolsServerContext {
   events: { emit(event: string, data?: unknown): boolean };
   /** The `@Config.globalMiddlewares()` list as applied at boot; empty in headless mode. */
   globalMiddlewares: readonly GlobalMiddlewareConfig[];
+  exceptions: ExceptionRegistryView;
 }
 
 export interface DevtoolsAttachment {

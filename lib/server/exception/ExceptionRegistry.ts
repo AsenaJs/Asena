@@ -1,6 +1,21 @@
 import { HttpException, isHttpException } from '../../adapter/types/HttpException';
 import type { CatchEntry, ExceptionType } from './types';
 
+export interface ExceptionRegistryEntry {
+  readonly type: ExceptionType | 'catch-all';
+  /** `Class.method` of the `@Catch` that answers it. */
+  readonly source: string;
+}
+
+/** What the registry holds at runtime, for the devtools exception map. Cannot change it. */
+export interface ExceptionRegistryView {
+  readonly catches: readonly ExceptionRegistryEntry[];
+  /** `Class.method` of the `@NotFound()` handler, if one is registered. */
+  readonly notFound?: string;
+  /** `Class.method` of the `@Catch` this value would reach, by the registry's own rules. */
+  whoCatches(error: unknown): string | undefined;
+}
+
 interface IdentityMatch {
   type: ExceptionType;
   entry: CatchEntry;
@@ -91,6 +106,19 @@ export class ExceptionRegistry {
         this.brandEntry = entry;
       }
     }
+  }
+
+  /** Every registration, in registration order, the catch-all last. A copy: the registry stays sealed. */
+  public entries(): readonly ExceptionRegistryEntry[] {
+    const entries: ExceptionRegistryEntry[] = [...this.byType].map(([type, entry]) =>
+      Object.freeze({ type, source: entry.source }),
+    );
+
+    if (this.catchAll) {
+      entries.push(Object.freeze({ type: 'catch-all' as const, source: this.catchAll.source }));
+    }
+
+    return Object.freeze(entries);
   }
 
   /** Whether anything at all was registered. Used to decide if the adapter needs wiring up. */
