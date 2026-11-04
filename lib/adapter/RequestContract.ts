@@ -3,6 +3,7 @@ import { getOwnMetadata } from 'reflect-metadata/no-conflict';
 import type { AsenaContext } from './AsenaContext';
 import { HttpException } from './types/HttpException';
 import { VALIDATION_ERROR, type ValidationIssue, type ValidationErrorLike } from './types/ValidationError';
+import { devtoolsBus } from '../devtools/DevtoolsBus';
 
 /** Structural consumer of Standard Schema v1 (https://standardschema.dev).
  * Kept local deliberately: neither runtime nor published declarations require a schema package.
@@ -154,7 +155,7 @@ export interface ContractInputContext {
 /** Prepared once per route. No schema factory, target scan or metadata lookup on the request path. */
 export function prepareContextValidation(schemas: RequestSchemas): (context: ContractInputContext) => Promise<void> {
   const steps = INPUT_TARGETS.filter((key) => schemas[key]).map((target) => ({ target, schema: schemas[target] }));
-  return async (context) => {
+  const validate = async (context: ContractInputContext): Promise<void> => {
     for (const { target, schema } of steps) {
       const result = await schema['~standard'].validate(await context.readContractInput(target));
       if (result.issues) throw new ContractValidationError(target, result.issues);
@@ -162,6 +163,7 @@ export function prepareContextValidation(schemas: RequestSchemas): (context: Con
     }
     context.completeValidatedInput();
   };
+  return devtoolsBus.wrap('validator', devtoolsBus.contractName(schemas), validate);
 }
 
 /** Shared extraction rules for contract routes only; legacy extraction remains adapter-owned. */

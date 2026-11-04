@@ -2,6 +2,7 @@ import { CoreService, ICoreServiceNames } from '../../ioc';
 import type { ICoreService } from '../../ioc';
 import { Inject } from '../../ioc/component';
 import type { ServerLogger } from '../../logger';
+import { devtoolsBus } from '../../devtools/DevtoolsBus';
 
 interface ScheduledJob {
   name: string;
@@ -159,7 +160,9 @@ export class CronRunner implements ICoreService {
   /** @returns The failure, already logged, or `undefined` when the job succeeded */
   private async execute(job: ScheduledJob): Promise<{ error: unknown } | undefined> {
     try {
-      await job.handler();
+      await (devtoolsBus.enabled
+        ? devtoolsBus.observe('@Schedule', job.name, `${job.name}.execute`, job.handler)
+        : job.handler());
 
       return undefined;
     } catch (error) {

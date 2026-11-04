@@ -13,6 +13,7 @@ import type {
   NotFoundHandlerMetadata,
 } from '../../exception/types';
 import type { NotFoundRequest } from '../../../adapter/types/ErrorHandler';
+import { devtoolsBus } from '../../../devtools/DevtoolsBus';
 
 /** A resolved `@NotFound()` method, with where it came from for the cardinality error. */
 interface NotFoundEntry {
@@ -186,6 +187,8 @@ export class PrepareExceptionHandlerService implements ICoreService {
   }
 
   private async invoke(entry: CatchEntry, error: unknown, context: ExceptionContext<any>): Promise<unknown> {
+    devtoolsBus.step('catch', entry.source);
+
     try {
       return await entry.handler(error, context);
     } catch (handlerError) {
@@ -209,6 +212,8 @@ export class PrepareExceptionHandlerService implements ICoreService {
     if (!this.notFound) {
       return undefined;
     }
+
+    devtoolsBus.step('not-found', this.notFound.source);
 
     try {
       const result = await this.notFound.handler(context, request);

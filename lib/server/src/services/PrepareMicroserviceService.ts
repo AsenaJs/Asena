@@ -9,6 +9,7 @@ import type { Ulak } from '../../messaging';
 import type { MessageHandlerMetadata, MessagingInterceptor } from '../../microservice';
 import type { DestroyOptions, MessageContext, MicroserviceTransport } from '../../microservice';
 import type { PrepareExceptionHandlerService } from './PrepareExceptionHandlerService';
+import { devtoolsBus } from '../../../devtools/DevtoolsBus';
 
 /**
  * @description PrepareMicroserviceService - Registers microservice message handlers during bootstrap
@@ -206,9 +207,17 @@ export class PrepareMicroserviceService implements ICoreService {
       const intercepted = (data: any, context: MessageContext) =>
         composeOnReceive(interceptors, context, () => Promise.resolve(bound(data, context)));
 
-      const wrapped = this.exceptions?.hasHandlers
+      const routed = this.exceptions?.hasHandlers
         ? this.routeFailures(intercepted, metadata.type, `${controllerName}.${methodName}`, transportName)
         : intercepted;
+
+      const dispatch = metadata.type === 'message' ? '@MessagePattern' : '@EventPattern';
+      const wrapped = devtoolsBus.enabled
+        ? (data: unknown, context: MessageContext) =>
+            devtoolsBus.observe(dispatch, context.pattern, `${controllerName}.${methodName}`, () =>
+              routed(data, context),
+            )
+        : routed;
 
       const finalPattern = this.buildPattern(prefix, metadata.pattern, applyPrefix);
 

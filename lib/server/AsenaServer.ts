@@ -63,6 +63,7 @@ import type { LifecycleService } from './lifecycle';
 import type { AsenaStopOptions, ShutdownOptions } from './types';
 import type { EventEmitter } from './event/EventEmitter';
 import { DEVTOOLS_HOOK, type DevtoolsAttachment, type DevtoolsHook } from '../devtools/context';
+import { devtoolsBus } from '../devtools/DevtoolsBus';
 
 /**
  * Whatever a catch block or a signal handler received, in a shape safe to put in a log line.
@@ -183,6 +184,8 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
 
   private devtools?: DevtoolsAttachment;
 
+  private enabledDevtoolsBus = false;
+
   /**
    * @description Lifecycle hook - called after dependencies are injected
    * @returns {void}
@@ -199,6 +202,12 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
    * @returns {Promise<void>}
    */
   public async start(options?: AsenaStartOptions): Promise<void> {
+    // Before any emit site is prepared: whether they wrap is decided once, here.
+    if (this.devtoolsHook()) {
+      devtoolsBus.enable();
+      this.enabledDevtoolsBus = true;
+    }
+
     await this.resolveAdapter();
 
     if (this._adapter) {
@@ -373,7 +382,13 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
     // Last: the probe outlives the drain it is reporting on.
     await release('health server', () => this.healthServer?.stop());
 
-    await release('devtools agent', () => this.devtools?.detach());
+    await release('devtools agent', () => {
+      this.devtools?.detach();
+
+      if (this.enabledDevtoolsBus) {
+        devtoolsBus.disable();
+      }
+    });
 
     if (failures.length > 0) {
       throw new AggregateError(failures, `Server shutdown completed with ${failures.length} failure(s)`);
@@ -600,6 +615,16 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
   }
 
   /**
+   * @description The console wrapper's hook, when this process is an IPC child that has one.
+   * @returns {DevtoolsHook | undefined}
+   */
+  private devtoolsHook(): DevtoolsHook | undefined {
+    const hook = (globalThis as Record<symbol, unknown>)[DEVTOOLS_HOOK];
+
+    return typeof hook === 'function' && typeof process.send === 'function' ? (hook as DevtoolsHook) : undefined;
+  }
+
+  /**
    * @description Hand the server to the devtools agent, when `asena console` spawned this process.
    *
    * Only an IPC child with the wrapper's hook set gets here; anything else returns before
@@ -607,9 +632,9 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
    * @returns {Promise<void>}
    */
   private async attachDevtools(): Promise<void> {
-    const hook = (globalThis as Record<symbol, unknown>)[DEVTOOLS_HOOK] as DevtoolsHook | undefined;
+    const hook = this.devtoolsHook();
 
-    if (typeof hook !== 'function' || typeof process.send !== 'function') {
+    if (!hook || !this.enabledDevtoolsBus) {
       return;
     }
 
@@ -630,6 +655,7 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
         events: await this._coreContainer.resolve<EventEmitter>(ICoreServiceNames.EVENT_EMITTER),
         globalMiddlewares: this.globalMiddlewareConfigs,
         exceptions: this.prepareExceptionHandlerService.view,
+        bus: devtoolsBus,
       });
 
       if (attachment) {
@@ -737,7 +763,7 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
 
       this.logInheritedRoutes(controller, routes);
 
-      const controllerMiddlewares = await this.prepareTopMiddlewares({ controller });
+      const controllerMiddlewares = await this.prepareTopMiddlewares({ controller }, 'middleware');
 
       for (const [name, params] of Object.entries(routes)) {
         const lastPath = path.join(`${routePath}/`, params.path).replace(/\\/g, '/');
@@ -755,11 +781,15 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
         const middlewares = [...controllerMiddlewares, ...(await this.prepareRouteMiddleware(params))];
         const validatorInstance = await this.prepareValidator(params.validator);
 
+        if (contextClass) {
+          devtoolsBus.nameContract(contextClass[ASENA_CONTEXT_CONTRACT], contextClass.name);
+        }
+
         await this._adapter.registerRoute({
           method: params.method,
           path: lastPath,
           middlewares: middlewares,
-          handler: controller[name].bind(controller),
+          handler: devtoolsBus.wrap('controller', `${controllerName}.${name}`, controller[name].bind(controller)),
           staticServe: await this.prepareStaticServeConfig(params.staticServe),
           validator: validatorInstance,
           validatorCache: params.validatorCache,
@@ -879,7 +909,10 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
    * @param {PrepareMiddlewareParams} params - Middleware parameters
    * @returns {Promise<BaseMiddleware[]>}
    */
-  private async prepareTopMiddlewares({ controller }: PrepareMiddlewareParams): Promise<BaseMiddleware[]> {
+  private async prepareTopMiddlewares(
+    { controller }: PrepareMiddlewareParams,
+    step?: 'middleware',
+  ): Promise<BaseMiddleware[]> {
     // Unioned across the chain, not read own-only. @Controller always writes this key - an
     // empty array when no middlewares are declared - so a subclass would otherwise shadow its
     // base's guards while still inheriting the base's routes: the route registers, the guard
@@ -889,7 +922,7 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
       controller.constructor,
     );
 
-    return this.prepareMiddlewares(topMiddlewares);
+    return this.prepareMiddlewares(topMiddlewares, step);
   }
 
   /**
@@ -909,16 +942,20 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
   private async prepareRouteMiddleware(middlewareParams: ApiParams): Promise<BaseMiddleware[]> {
     const routeMiddlewares = middlewareParams?.middlewares || [];
 
-    return this.prepareMiddlewares(routeMiddlewares);
+    return this.prepareMiddlewares(routeMiddlewares, 'middleware');
   }
 
   /**
    * @description Prepare middlewares from classes
    * @param {MiddlewareClass[]} middlewares - Middleware classes
+   * @param {'global-middleware' | 'middleware'} step - The devtools step, for middlewares on the request path
    * @returns {Promise<BaseMiddleware[]>}
    */
-  private async prepareMiddlewares(middlewares: MiddlewareClass[]): Promise<BaseMiddleware[]> {
-    return this.prepareMiddleware.prepare(middlewares);
+  private async prepareMiddlewares(
+    middlewares: MiddlewareClass[],
+    step?: 'global-middleware' | 'middleware',
+  ): Promise<BaseMiddleware[]> {
+    return this.prepareMiddleware.prepare(middlewares, step);
   }
 
   /**
@@ -1056,7 +1093,7 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
           this.globalMiddlewareConfigs.push(config);
 
           // Prepare middleware instances
-          const preparedMiddlewares = await this.prepareMiddlewares([config.middleware]);
+          const preparedMiddlewares = await this.prepareMiddlewares([config.middleware], 'global-middleware');
 
           // Register with adapter (pass route config)
           for (const middleware of preparedMiddlewares) {
@@ -1150,6 +1187,19 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
   }
 
   /**
+   * @description The @Config component name, for devtools step names
+   * @param {AsenaConfig} config - The resolved @Config, if there is one
+   * @returns {string}
+   */
+  private configName(config: AsenaConfig | undefined): string {
+    return (
+      (config && getOwnTypedMetadata<string>(ComponentConstants.NameKey, config.constructor)) ||
+      config?.constructor.name ||
+      'Config'
+    );
+  }
+
+  /**
    * @description Hand the adapter whatever should answer a thrown error
    * @param {AsenaConfig} config - The resolved @Config, if there is one
    * @param {boolean} hasConfigOnError - Whether it declares the deprecated onError() hook
@@ -1172,9 +1222,11 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
       return;
     }
 
+    const onErrorStep = `${this.configName(config)}.onError`;
+
     if (!service.hasHandlers) {
-      // Nothing to put in front of it, so it goes over unwrapped - byte-identical to 0.10.
-      await this._adapter.onError(config.onError.bind(config));
+      // Nothing to put in front of it, so it goes over unwrapped - byte-identical to 0.10 unless the console is attached.
+      await this._adapter.onError(devtoolsBus.wrap('config-onError', onErrorStep, config.onError.bind(config)));
 
       return;
     }
@@ -1197,6 +1249,8 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
       }
 
       if (hasConfigOnError) {
+        devtoolsBus.step('config-onError', onErrorStep);
+
         const fromConfig = await config.onError(error, context);
 
         if (fromConfig instanceof Response) {
@@ -1248,8 +1302,10 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
       return;
     }
 
+    const onNotFoundStep = `${this.configName(config)}.onNotFound`;
+
     if (!service.hasNotFoundHandler) {
-      await this._adapter.onNotFound(config.onNotFound.bind(config));
+      await this._adapter.onNotFound(devtoolsBus.wrap('not-found', onNotFoundStep, config.onNotFound.bind(config)));
 
       return;
     }
@@ -1262,6 +1318,8 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
       }
 
       if (hasConfigOnNotFound) {
+        devtoolsBus.step('not-found', onNotFoundStep);
+
         const fromConfig = await config.onNotFound(context, request);
 
         if (fromConfig instanceof Response) {

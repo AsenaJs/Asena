@@ -3,6 +3,7 @@ import type { Ulak } from '../server/messaging';
 import type { LifecycleState } from '../server/lifecycle/LifecycleState';
 import type { GlobalMiddlewareConfig } from '../server/config';
 import type { ExceptionRegistryView } from '../server/exception/ExceptionRegistry';
+import type { DevtoolsBus } from './DevtoolsBus';
 
 /** The `globalThis` key the `asena console` wrapper sets to the agent factory. */
 export const DEVTOOLS_HOOK = Symbol.for('asena.devtools');
@@ -21,6 +22,8 @@ export interface DevtoolsServerContext {
   /** The `@Config.globalMiddlewares()` list as applied at boot; empty in headless mode. */
   globalMiddlewares: readonly GlobalMiddlewareConfig[];
   exceptions: ExceptionRegistryView;
+  /** The server's own bus, not the one the agent's module copy would import. */
+  bus: DevtoolsBus;
 }
 
 export interface DevtoolsAttachment {

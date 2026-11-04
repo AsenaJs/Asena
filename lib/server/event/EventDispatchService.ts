@@ -5,6 +5,7 @@ import { Inject } from '../../ioc/component';
 import type { EventExceptionContext } from '../exception/types';
 import type { PrepareExceptionHandlerService } from '../src/services/PrepareExceptionHandlerService';
 import { PatternHandlerIndex } from './PatternHandlerIndex';
+import { devtoolsBus } from '../../devtools/DevtoolsBus';
 import type { EventHandler, EventSubscription } from './types';
 
 /**
@@ -116,6 +117,11 @@ export class EventDispatchService implements ICoreService {
 
     // 4. Call all matching handlers (fire-and-forget, error isolation)
     for (const sub of handlersToCall) {
+      if (devtoolsBus.enabled) {
+        this.dispatchObserved(sub, eventName, data);
+        continue;
+      }
+
       try {
         const result = sub.handler(eventName, data);
 
@@ -123,12 +129,12 @@ export class EventDispatchService implements ICoreService {
         // Benchmark showed await Promise.resolve(syncHandler()) is 13x slower!
         if (result instanceof Promise) {
           result.catch((error) => {
-            this.handleFailure(sub, eventName, data, error, 'Async');
+            void this.handleFailure(sub, eventName, data, error, 'Async');
           });
         }
       } catch (error) {
         // Sync handler error - log but continue with other handlers
-        this.handleFailure(sub, eventName, data, error, 'Sync');
+        void this.handleFailure(sub, eventName, data, error, 'Sync');
       }
     }
 
@@ -143,10 +149,38 @@ export class EventDispatchService implements ICoreService {
   }
 
   /**
+   * The same call and failure handling as the plain loop, framed as a devtools record that stays
+   * open until a matching `@Catch` has observed the failure.
+   */
+  private dispatchObserved(sub: EventSubscription, eventName: string, data: unknown): void {
+    devtoolsBus
+      .observe('@On', eventName, sub.source ?? sub.pattern, async () => {
+        let result: unknown;
+
+        try {
+          result = sub.handler(eventName, data);
+        } catch (error) {
+          await this.handleFailure(sub, eventName, data, error, 'Sync');
+          throw error;
+        }
+
+        try {
+          await result;
+        } catch (error) {
+          await this.handleFailure(sub, eventName, data, error, 'Async');
+          throw error;
+        }
+      })
+      .catch(() => undefined);
+  }
+
+  /**
    * Log a handler failure, then show it to a matching `@Catch`.
    *
    * Events are observe-only: the error line is logged in the same tick whether or not a `@Catch`
    * matches, and nothing the `@Catch` returns or throws changes that.
+   *
+   * @returns The `@Catch` run, which only the devtools path waits for
    */
   private handleFailure(
     sub: EventSubscription,
@@ -154,13 +188,13 @@ export class EventDispatchService implements ICoreService {
     data: unknown,
     error: unknown,
     kind: 'Sync' | 'Async',
-  ): void {
+  ): Promise<void> | undefined {
     console.error(`[EventDispatchService] ${kind} error in handler for event "${eventName}":`, error);
 
     const exceptions = this.exceptions;
 
     if (!exceptions?.handles(error)) {
-      return;
+      return undefined;
     }
 
     const context: EventExceptionContext =
@@ -168,7 +202,7 @@ export class EventDispatchService implements ICoreService {
         ? { scope: 'event', event: eventName, data }
         : { scope: 'event', event: eventName, data, source: sub.source };
 
-    exceptions.observe(error, context).catch(() => undefined);
+    return exceptions.observe(error, context).catch(() => undefined);
   }
 
   /**
