@@ -307,11 +307,11 @@ const describeGlobalMiddleware = (entry: GlobalMiddlewareEntry): DevtoolsGlobalM
   return { middleware: middlewareName(entry) };
 };
 
-/**
- * `globalMiddlewares()` is the one thing metadata cannot answer, so the already-built `@Config`
- * singleton is asked again. Nothing is constructed: a transient config is read off its prototype.
- */
-const describeConfig = async (configs: ComponentEntry[]): Promise<DevtoolsConfig> => {
+// A transient config is read off its prototype, so nothing is constructed.
+const describeConfig = (
+  configs: ComponentEntry[],
+  globalMiddlewares: readonly GlobalMiddlewareEntry[],
+): DevtoolsConfig => {
   const [config] = configs;
 
   if (!config) {
@@ -319,25 +319,33 @@ const describeConfig = async (configs: ComponentEntry[]): Promise<DevtoolsConfig
   }
 
   const target: Partial<AsenaConfig> = config.entry.instance ?? config.Class.prototype;
-  const entries =
-    config.entry.instance && typeof target.globalMiddlewares === 'function' ? await target.globalMiddlewares() : [];
 
   return {
     component: config.name,
     hasOnError: typeof target.onError === 'function',
     hasOnNotFound: typeof target.onNotFound === 'function',
-    globalMiddlewares: entries.map(describeGlobalMiddleware),
+    globalMiddlewares: globalMiddlewares.map(describeGlobalMiddleware),
   };
 };
 
+/** What the server captured at boot that metadata cannot answer. */
+export interface DevtoolsSnapshotRuntime {
+  /** The `@Config.globalMiddlewares()` list as the server applied it; empty in headless mode. */
+  globalMiddlewares?: readonly GlobalMiddlewareEntry[];
+}
+
 /**
- * Describes what the application is made of, from decorator metadata and the container's
- * registrations. Resolves nothing and constructs nothing.
+ * Describes what the application is made of, from decorator metadata, the container's
+ * registrations and what the server captured at boot. Resolves, constructs and calls nothing.
  *
  * @param container - The user component container (`server.coreContainer.container`)
+ * @param runtime - What the server captured at boot (the devtools hook context carries it)
  * @returns The snapshot, every list in a stable order so two boots of one app compare equal
  */
-export const buildDevtoolsSnapshot = async (container: Container): Promise<DevtoolsSnapshot> => {
+export const buildDevtoolsSnapshot = (
+  container: Container,
+  runtime: DevtoolsSnapshotRuntime = {},
+): DevtoolsSnapshot => {
   const components = collectComponents(container);
 
   return {
@@ -349,6 +357,6 @@ export const buildDevtoolsSnapshot = async (container: Container): Promise<Devto
     events: describeEvents(ofType(components, ComponentType.EVENT)),
     messageHandlers: describeMessageHandlers(ofType(components, ComponentType.MESSAGE_CONTROLLER)),
     exceptionHandlers: describeExceptionHandlers(ofType(components, ComponentType.EXCEPTION_HANDLER)),
-    config: await describeConfig(ofType(components, ComponentType.CONFIG)),
+    config: describeConfig(ofType(components, ComponentType.CONFIG), runtime.globalMiddlewares ?? []),
   };
 };

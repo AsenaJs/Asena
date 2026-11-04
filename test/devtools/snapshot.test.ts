@@ -11,7 +11,9 @@ import { Catch } from '../../lib/server/exception';
 import type { AsenaContext, AsenaNextHandler } from '../../lib/adapter';
 import { HTTP_EXCEPTION } from '../../lib/adapter/types/HttpException';
 import { createMockAdapter } from '../utils/createMockContext';
-import { AdminPages, AppConfig, fixtureComponents, ItemDraft } from './fixtures/app';
+import { AdminPages, AppConfig, CorsHeaders, fixtureComponents, ItemDraft } from './fixtures/app';
+import type { DevtoolsServerContext } from '../../lib/devtools/context';
+import { installDevtoolsHook } from './helpers';
 
 const SNAPSHOT_FILE = join(import.meta.dir, 'fixtures', 'snapshot.json');
 
@@ -33,20 +35,27 @@ describe('buildDevtoolsSnapshot', () => {
   let configCallsBeforeSnapshot: number;
   let pageCallsBeforeSnapshot: number;
 
+  let context: DevtoolsServerContext;
+  let restoreHook: () => void;
+
   beforeAll(async () => {
     process.env.DEVTOOLS_FIXTURE_REGION = 'eu-west';
     delete process.env.DEVTOOLS_FIXTURE_PAGE_SIZE;
 
+    restoreHook = installDevtoolsHook((handed) => {
+      context = handed;
+    });
     app = await bootFixture(fixtureComponents);
 
     draftsBeforeSnapshot = ItemDraft.constructed;
     configCallsBeforeSnapshot = AppConfig.globalMiddlewareCalls;
     pageCallsBeforeSnapshot = AdminPages.pageCalls;
-    snapshot = await buildDevtoolsSnapshot(app.container);
+    snapshot = buildDevtoolsSnapshot(app.container, context);
   });
 
   afterAll(async () => {
     await app?.stop();
+    restoreHook?.();
     delete process.env.DEVTOOLS_FIXTURE_REGION;
   });
 
@@ -271,13 +280,15 @@ describe('buildDevtoolsSnapshot', () => {
     expect(ItemDraft.constructed).toBe(0);
   });
 
-  // The one call metadata cannot replace. WP-1 should capture the list at prepareConfigs() instead.
-  test('asks the @Config for its global middlewares once more', () => {
-    expect(AppConfig.globalMiddlewareCalls).toBe(configCallsBeforeSnapshot + 1);
+  // A second call could hand back a different list than the one the adapter was given, or have side effects.
+  test('never calls the @Config: global middlewares come from the list the server captured at boot', () => {
+    expect(configCallsBeforeSnapshot).toBe(1);
+    expect(AppConfig.globalMiddlewareCalls).toBe(configCallsBeforeSnapshot);
+    expect(context.globalMiddlewares).toEqual([{ middleware: CorsHeaders, routes: { exclude: ['/health'] } }]);
   });
 
   test('is deterministic and matches the committed fixture the UI is built against', async () => {
-    const again = await buildDevtoolsSnapshot(app.container);
+    const again = buildDevtoolsSnapshot(app.container, context);
 
     expect(again).toEqual(snapshot);
 

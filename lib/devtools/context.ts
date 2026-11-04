@@ -1,6 +1,7 @@
 import type { Container } from '../ioc';
 import type { Ulak } from '../server/messaging';
 import type { LifecycleState } from '../server/lifecycle/LifecycleState';
+import type { GlobalMiddlewareConfig } from '../server/config';
 
 /** The `globalThis` key the `asena console` wrapper sets to the agent factory. */
 export const DEVTOOLS_HOOK = Symbol.for('asena.devtools');
@@ -16,6 +17,8 @@ export interface DevtoolsServerContext {
   lifecycle: { readonly state: LifecycleState };
   cron: { runNow(name: string): Promise<void> };
   events: { emit(event: string, data?: unknown): boolean };
+  /** The `@Config.globalMiddlewares()` list as applied at boot; empty in headless mode. */
+  globalMiddlewares: readonly GlobalMiddlewareConfig[];
 }
 
 export interface DevtoolsAttachment {

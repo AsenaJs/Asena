@@ -145,6 +145,9 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
 
   private messagingInterceptors: MessagingInterceptor[] = [];
 
+  // Kept for the devtools snapshot, which must not call the @Config again.
+  private globalMiddlewareConfigs: GlobalMiddlewareConfig[] = [];
+
   // The resolved @Config, kept so prepareExceptionHandling() can place its deprecated onError /
   // onNotFound hooks at the end of the chain rather than dispatching them itself.
   private configInstance?: AsenaConfig;
@@ -625,6 +628,7 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
         },
         cron: this.cronRunner,
         events: await this._coreContainer.resolve<EventEmitter>(ICoreServiceNames.EVENT_EMITTER),
+        globalMiddlewares: this.globalMiddlewareConfigs,
       });
 
       if (attachment) {
@@ -1047,6 +1051,8 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
         for (const entry of middlewareEntries) {
           // Normalize entry to config format (handles backward compatibility)
           const config = this.normalizeMiddlewareEntry(entry);
+
+          this.globalMiddlewareConfigs.push(config);
 
           // Prepare middleware instances
           const preparedMiddlewares = await this.prepareMiddlewares([config.middleware]);
