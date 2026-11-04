@@ -17,9 +17,11 @@ import type { AsenaConfig, GlobalMiddlewareEntry } from '../server/config';
 import type { EventHandlerMetadata } from '../server/event/types';
 import type { MessageHandlerMetadata } from '../server/microservice/types';
 import { DEFAULT_TRANSPORT_NAME } from '../server/microservice/types';
-import type { CatchHandlerMetadata, NotFoundHandlerMetadata } from '../server/exception/types';
+import type { CatchHandlerMetadata, ExceptionType, NotFoundHandlerMetadata } from '../server/exception/types';
+import { HTTP_EXCEPTION, HttpException } from '../adapter/types/HttpException';
 import type {
   DevtoolsCatch,
+  DevtoolsCaughtType,
   DevtoolsComponent,
   DevtoolsComponentType,
   DevtoolsConfig,
@@ -223,6 +225,30 @@ const describeMessageHandlers = (controllers: ComponentEntry[]): DevtoolsMessage
   return handlers.sort((a, b) => byText(a.controller, b.controller) || byText(a.method, b.method));
 };
 
+// HttpException sets its brand per instance; hono's HTTPException gets it on the prototype.
+const carriesHttpExceptionBrand = (type: ExceptionType): boolean =>
+  type === HttpException ||
+  type.prototype instanceof HttpException ||
+  (type.prototype as Record<symbol, unknown> | undefined)?.[HTTP_EXCEPTION] === true;
+
+const describeCaughtType = (type: ExceptionType): DevtoolsCaughtType => {
+  const chain: string[] = [];
+
+  for (
+    let current: unknown = type;
+    typeof current === 'function' && current !== Function.prototype && current !== Object && current !== Function;
+    current = Object.getPrototypeOf(current)
+  ) {
+    chain.push(current.name);
+  }
+
+  return {
+    name: type.name,
+    chain,
+    ...(carriesHttpExceptionBrand(type) ? { httpException: true as const } : {}),
+  };
+};
+
 const describeExceptionHandlers = (handlers: ComponentEntry[]): DevtoolsExceptionHandler[] =>
   handlers.map(({ name, Class }) => {
     const catches = getChainedTypedMetadata<Record<string, CatchHandlerMetadata>>(
@@ -238,7 +264,7 @@ const describeExceptionHandlers = (handlers: ComponentEntry[]): DevtoolsExceptio
       catches: Object.entries(catches)
         .map(([method, metadata]): DevtoolsCatch => ({
           method,
-          types: metadata.types.length === 0 ? 'catch-all' : metadata.types.map((type) => type.name),
+          types: metadata.types.length === 0 ? 'catch-all' : metadata.types.map(describeCaughtType),
         }))
         .sort((a, b) => byText(a.method, b.method)),
     };

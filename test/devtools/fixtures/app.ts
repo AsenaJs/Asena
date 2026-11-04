@@ -1,4 +1,5 @@
 import type { AsenaContext, AsenaNextHandler } from '../../../lib/adapter';
+import { ConflictException } from '../../../lib/adapter/types/HttpStatusExceptions';
 import {
   ASENA_CONTEXT_ADAPTER,
   ASENA_CONTEXT_CONTRACT,
@@ -26,9 +27,13 @@ import { EventPattern, InMemoryTransport, MessagePattern } from '../../../lib/se
 import { Catch, NotFound } from '../../../lib/server/exception';
 import type { AsenaSchedule } from '../../../lib/server/schedule';
 
-export class ItemMissing extends Error {}
+export class ItemError extends Error {}
 
-export class ItemRejected extends Error {}
+export class ItemMissing extends ItemError {}
+
+export class ItemRejected extends ItemError {}
+
+export class ItemConflict extends ConflictException {}
 
 const acceptAnything: RequestSchema = {
   '~standard': { version: 1, vendor: 'fixture', validate: (value) => ({ value }) },
@@ -188,6 +193,9 @@ export class AppConfig {
 export class ApiExceptionHandler {
   @Catch(ItemMissing, ItemRejected)
   public known() {}
+
+  @Catch(ItemConflict)
+  public conflict() {}
 
   @Catch()
   public fallback() {}

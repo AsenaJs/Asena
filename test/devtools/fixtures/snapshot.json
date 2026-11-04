@@ -259,12 +259,31 @@
       "component": "ApiExceptionHandler",
       "catches": [
         {
+          "method": "conflict",
+          "types": [
+            {
+              "name": "ItemConflict",
+              "chain": ["ItemConflict", "ConflictException", "HttpException", "Error"],
+              "httpException": true
+            }
+          ]
+        },
+        {
           "method": "fallback",
           "types": "catch-all"
         },
         {
           "method": "known",
-          "types": ["ItemMissing", "ItemRejected"]
+          "types": [
+            {
+              "name": "ItemMissing",
+              "chain": ["ItemMissing", "ItemError", "Error"]
+            },
+            {
+              "name": "ItemRejected",
+              "chain": ["ItemRejected", "ItemError", "Error"]
+            }
+          ]
         }
       ],
       "notFound": "missingRoute"

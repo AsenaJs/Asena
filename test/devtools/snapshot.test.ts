@@ -5,9 +5,11 @@ import { silentLogger } from '../../lib/test/harness/silentLogger';
 import type { TestApp } from '../../lib/test/harness/types';
 import { buildDevtoolsSnapshot } from '../../lib/devtools/snapshot';
 import type { DevtoolsSnapshot } from '../../lib/devtools/protocol';
-import { Config, Controller, Middleware, Service } from '../../lib/server/decorators';
+import { Config, Controller, ExceptionHandler, Middleware, Service } from '../../lib/server/decorators';
 import { Get } from '../../lib/server/web/decorators';
+import { Catch } from '../../lib/server/exception';
 import type { AsenaContext, AsenaNextHandler } from '../../lib/adapter';
+import { HTTP_EXCEPTION } from '../../lib/adapter/types/HttpException';
 import { createMockAdapter } from '../utils/createMockContext';
 import { AppConfig, fixtureComponents, ItemDraft } from './fixtures/app';
 
@@ -187,13 +189,30 @@ describe('buildDevtoolsSnapshot', () => {
     ]);
   });
 
-  test('describes exception handlers: typed @Catch, the catch-all and @NotFound', () => {
+  // F7 answers "who catches this?" by walking these chains the way ExceptionRegistry walks constructors.
+  test('describes exception handlers: typed @Catch with ancestor chains, the catch-all and @NotFound', () => {
     expect(snapshot.exceptionHandlers).toEqual([
       {
         component: 'ApiExceptionHandler',
         catches: [
+          {
+            method: 'conflict',
+            types: [
+              {
+                name: 'ItemConflict',
+                chain: ['ItemConflict', 'ConflictException', 'HttpException', 'Error'],
+                httpException: true,
+              },
+            ],
+          },
           { method: 'fallback', types: 'catch-all' },
-          { method: 'known', types: ['ItemMissing', 'ItemRejected'] },
+          {
+            method: 'known',
+            types: [
+              { name: 'ItemMissing', chain: ['ItemMissing', 'ItemError', 'Error'] },
+              { name: 'ItemRejected', chain: ['ItemRejected', 'ItemError', 'Error'] },
+            ],
+          },
         ],
         notFound: 'missingRoute',
       },
@@ -265,6 +284,40 @@ describe('buildDevtoolsSnapshot config edge cases', () => {
 
     expect(snapshot.config).toEqual({ hasOnError: false, hasOnNotFound: false, globalMiddlewares: [] });
     expect(snapshot.components.map((component) => component.name)).toEqual(['LoneService']);
+  });
+});
+
+describe('buildDevtoolsSnapshot caught types', () => {
+  // The hono adapter brands hono's HTTPException on its prototype; the registry matches it without any shared class.
+  test('flags a foreign class branded on its prototype, and stops the chain before Object', async () => {
+    class ForeignHttpError {}
+
+    Object.defineProperty(ForeignHttpError.prototype, HTTP_EXCEPTION, { value: true });
+
+    class PlainFailure {}
+
+    @ExceptionHandler()
+    class ForeignHandler {
+      @Catch(ForeignHttpError, PlainFailure)
+      public foreign() {}
+    }
+
+    await using app = await bootFixture([ForeignHandler]);
+
+    expect((await buildDevtoolsSnapshot(app.container)).exceptionHandlers).toEqual([
+      {
+        component: 'ForeignHandler',
+        catches: [
+          {
+            method: 'foreign',
+            types: [
+              { name: 'ForeignHttpError', chain: ['ForeignHttpError'], httpException: true },
+              { name: 'PlainFailure', chain: ['PlainFailure'] },
+            ],
+          },
+        ],
+      },
+    ]);
   });
 });
 

@@ -101,10 +101,18 @@ export interface DevtoolsMessageHandler {
   transport: string;
 }
 
+export interface DevtoolsCaughtType {
+  name: string;
+  /** Constructor names from this type upward, itself first, `Object` and `Function` left out. */
+  chain: string[];
+  /** Present when the type carries the `HttpException` brand, which the registry matches across class trees. */
+  httpException?: true;
+}
+
 export interface DevtoolsCatch {
   method: string;
-  /** Error class names, or `'catch-all'` for a bare `@Catch()`. */
-  types: string[] | 'catch-all';
+  /** The `@Catch` types, or `'catch-all'` for a bare `@Catch()`. */
+  types: DevtoolsCaughtType[] | 'catch-all';
 }
 
 export interface DevtoolsExceptionHandler {
