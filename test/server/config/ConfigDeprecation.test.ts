@@ -7,7 +7,7 @@ const deprecationLines = (app: Awaited<ReturnType<typeof bootExceptionApp>>) =>
   app.logger.warn.mock.calls.map((call: any[]) => call[0]).filter((message: string) => message.includes('deprecated'));
 
 /**
- * `onError` and `onNotFound` still work in 0.11 - they are the last link of the chain - but they
+ * `onError` and `onNotFound` still work in 0.13 - they are the last link of the chain - but they
  * are on their way out in 1.0, and a deprecation nobody sees is not a deprecation.
  *
  * The warnings are emitted **after** the wiring diagnostics on purpose. Those say something is
@@ -29,7 +29,7 @@ describe('@Config error hook deprecations', () => {
     expect(lines[0]).toContain('Config.onError() is deprecated');
     expect(lines[0]).toContain('@ExceptionHandler');
     // Says what still happens, so nobody reads it as "this stopped working".
-    expect(lines[0]).toContain('still runs in 0.11');
+    expect(lines[0]).toContain('still runs in 0.13');
   });
 
   test('warns once for onNotFound', async () => {
@@ -45,6 +45,7 @@ describe('@Config error hook deprecations', () => {
     expect(lines).toHaveLength(1);
     expect(lines[0]).toContain('Config.onNotFound() is deprecated');
     expect(lines[0]).toContain('@NotFound()');
+    expect(lines[0]).toContain('still runs in 0.13');
   });
 
   test('warns once per hook when both are declared', async () => {

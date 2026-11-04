@@ -155,6 +155,8 @@ export interface AsenaConfig<C extends AsenaContext<any, any> = AsenaContext<any
    * @param error - The error object that was thrown
    * @param context - The current Asena context
    * @returns Response object or a Promise that resolves to a Response
+   * @deprecated Removed in 1.0. Use an `@ExceptionHandler` class with `@Catch()` methods; this hook
+   * runs only after every `@Catch` has declined.
    */
   onError?(error: Error, context: C): Response | Promise<Response>;
 
@@ -180,6 +182,9 @@ export interface AsenaConfig<C extends AsenaContext<any, any> = AsenaContext<any
    *   );
    * }
    * ```
+   *
+   * @deprecated Removed in 1.0. Use a `@NotFound()` method in an `@ExceptionHandler` class; this
+   * hook runs only when no `@NotFound()` handler answers.
    */
   onNotFound?(context: C, request: NotFoundRequest): Response | Promise<Response>;
 

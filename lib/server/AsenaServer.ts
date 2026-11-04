@@ -1082,7 +1082,7 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
     if (hasConfigOnError) {
       this._logger.warn(
         'Config.onError() is deprecated and will be removed in 1.0 — move it to an @ExceptionHandler ' +
-          'class with @Catch() methods. It still runs in 0.11, after every @Catch handler has declined. ' +
+          'class with @Catch() methods. It still runs in 0.13, after every @Catch handler has declined. ' +
           'See https://asena.sh/docs/guides/error-handling',
       );
     }
@@ -1090,7 +1090,7 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
     if (hasConfigOnNotFound) {
       this._logger.warn(
         'Config.onNotFound() is deprecated and will be removed in 1.0 — move it to a @NotFound() method ' +
-          'in an @ExceptionHandler class. It still runs in 0.11 when no @NotFound() handler answers. ' +
+          'in an @ExceptionHandler class. It still runs in 0.13 when no @NotFound() handler answers. ' +
           'See https://asena.sh/docs/guides/error-handling',
       );
     }
