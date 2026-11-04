@@ -26,6 +26,15 @@ import type { CatchHandlerMetadata, ExceptionType } from '../types';
  * A routing 404 is **not** an error and never reaches `@Catch()`, not even the catch-all - it has
  * its own hook, `@NotFound()`.
  *
+ * **What a return value does depends on the scope.** Returning `undefined` always declines: on HTTP
+ * `@Config.onError` and then the adapter default answer, elsewhere the original error continues.
+ *
+ * | Scope | Return value |
+ * |---|---|
+ * | HTTP | a `Response` answers the request; anything else declines |
+ * | `@MessagePattern` | becomes the reply |
+ * | `@EventPattern`, `@On` | ignored with a warning - the original failure continues unchanged |
+ *
  * @param types - Error classes to handle. None means catch-all.
  *
  * @example

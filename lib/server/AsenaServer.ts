@@ -1111,7 +1111,7 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
 
     if (!this._adapter) {
       // Only the config hook is reported: it is HTTP-only, so headless really does ignore it.
-      // @Catch handlers are not - they still answer @Event and @MessagePattern failures.
+      // @Catch handlers are not - they still see @On, @EventPattern and @MessagePattern failures.
       if (hasConfigOnError) {
         this._logger.warn('Headless mode: onError() ignored (no HTTP adapter)');
       }

@@ -5,6 +5,7 @@ import { getChainedTypedMetadata, getOwnTypedMetadata } from '../../../utils';
 import { type ServerLogger, yellow } from '../../../logger';
 import { ExceptionRegistry } from '../../exception/ExceptionRegistry';
 import type {
+  CatchEntry,
   CatchHandlerMetadata,
   ExceptionContext,
   ExceptionType,
@@ -119,10 +120,32 @@ export class PrepareExceptionHandlerService implements ICoreService {
   public async dispatch(error: unknown, context: ExceptionContext<any>): Promise<unknown> {
     const entry = this.registry.resolve(error);
 
+    return entry ? this.invoke(entry, error, context) : undefined;
+  }
+
+  /**
+   * Run the `@Catch` chain for a failure in an event scope (`@On`, `@EventPattern`), where a
+   * handler can only observe: the caller carries on with the original error whatever it returns.
+   * A returned value is reported, since it can only mean the handler expected it to count.
+   */
+  public async observe(error: unknown, context: ExceptionContext<any>): Promise<void> {
+    const entry = this.registry.resolve(error);
+
     if (!entry) {
-      return undefined;
+      return;
     }
 
+    const result = await this.invoke(entry, error, context);
+
+    if (result !== undefined) {
+      this.logger.warn(
+        `@Catch handler ${entry.source}() returned a value for an event failure — a return value ` +
+          'has no effect in event scopes (@On, @EventPattern); the original error continues unchanged.',
+      );
+    }
+  }
+
+  private async invoke(entry: CatchEntry, error: unknown, context: ExceptionContext<any>): Promise<unknown> {
     try {
       return await entry.handler(error, context);
     } catch (handlerError) {

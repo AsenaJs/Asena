@@ -74,6 +74,11 @@ const bootWith = async (
   return bootExceptionApp([TransportConfig, ...components]);
 };
 
+const returnValueWarnings = (logger: ReturnType<typeof createLogger>) =>
+  (logger.warn.mock.calls as unknown[][])
+    .map(([message]) => String(message))
+    .filter((message) => message.includes('has no effect in event scopes'));
+
 describe('@Catch for @MessagePattern', () => {
   test('turns a matched failure into the reply, with the microservice context', async () => {
     const transport = new InMemoryTransport();
@@ -97,11 +102,12 @@ describe('@Catch for @MessagePattern', () => {
       }
     }
 
-    await bootWith(transport, [Errors, OrderHandler]);
+    const { logger } = await bootWith(transport, [Errors, OrderHandler]);
 
     expect(await transport.send('order.create', { sku: 'sku-1' }, { headers: { trace: 't' } })).toEqual({
       error: 'sku-1',
     });
+    expect(returnValueWarnings(logger)).toHaveLength(0);
 
     const [ctx] = seen;
 
@@ -330,8 +336,9 @@ describe('@Catch for @MessagePattern', () => {
 });
 
 describe('@Catch for @EventPattern', () => {
-  test('contains a matched failure when the @Catch answers, with the event context', async () => {
+  test('a @Catch returning a value only observes: the transport still sees the original, with a warning', async () => {
     const transport = new RecordingTransport();
+    const failure = new OutOfStock();
     const seen: ExceptionContext[] = [];
 
     @ExceptionHandler()
@@ -347,15 +354,17 @@ describe('@Catch for @EventPattern', () => {
     class OrderEvents {
       @EventPattern('shipped')
       public async shipped() {
-        throw new OutOfStock();
+        throw failure;
       }
     }
 
-    await bootWith(transport, [Errors, OrderEvents]);
+    const { logger } = await bootWith(transport, [Errors, OrderEvents]);
 
     const context = messageContext('order.shipped');
 
-    expect(await transport.events.get('order.shipped')!({ id: 3 }, context)).toBeUndefined();
+    await expect(transport.events.get('order.shipped')!({ id: 3 }, context)).rejects.toBe(failure);
+    expect(returnValueWarnings(logger)).toHaveLength(1);
+    expect(returnValueWarnings(logger)[0]).toContain('Errors.outOfStock()');
     expect(seen).toEqual([
       {
         scope: 'microservice',
@@ -386,9 +395,38 @@ describe('@Catch for @EventPattern', () => {
       }
     }
 
+    const { logger } = await bootWith(transport, [Errors, OrderEvents]);
+
+    await expect(transport.events.get('shipped')!({}, messageContext('shipped'))).rejects.toBe(failure);
+    expect(returnValueWarnings(logger)).toHaveLength(0);
+  });
+
+  test('observes a synchronous throw too, and still rethrows the original', async () => {
+    const transport = new RecordingTransport();
+    const failure = new OutOfStock();
+    let reached = false;
+
+    @ExceptionHandler()
+    class Errors {
+      @Catch(OutOfStock)
+      public outOfStock() {
+        reached = true;
+        return 'handled';
+      }
+    }
+
+    @MessageController({ transport: 'orders' })
+    class OrderEvents {
+      @EventPattern('shipped')
+      public shipped() {
+        throw failure;
+      }
+    }
+
     await bootWith(transport, [Errors, OrderEvents]);
 
     await expect(transport.events.get('shipped')!({}, messageContext('shipped'))).rejects.toBe(failure);
+    expect(reached).toBe(true);
   });
 
   test('leaves an unmatched failure to the transport', async () => {
@@ -444,6 +482,7 @@ describe('@Catch for @EventPattern', () => {
       '@Catch handler Errors.domain() threw an error, falling back to the framework default:',
       handlerFailure,
     );
+    expect(returnValueWarnings(logger)).toHaveLength(0);
   });
 });
 

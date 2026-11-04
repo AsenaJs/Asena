@@ -143,10 +143,10 @@ export class EventDispatchService implements ICoreService {
   }
 
   /**
-   * Offer a handler failure to the `@Catch` registry, falling back to the log line.
+   * Log a handler failure, then show it to a matching `@Catch`.
    *
-   * The unmatched case logs in the same tick, exactly as before the registry existed. A matched
-   * `@Catch` that returns nothing - or throws - declines, and the original error is logged.
+   * Events are observe-only: the error line is logged in the same tick whether or not a `@Catch`
+   * matches, and nothing the `@Catch` returns or throws changes that.
    */
   private handleFailure(
     sub: EventSubscription,
@@ -155,15 +155,11 @@ export class EventDispatchService implements ICoreService {
     error: unknown,
     kind: 'Sync' | 'Async',
   ): void {
-    const logDefault = () => {
-      console.error(`[EventDispatchService] ${kind} error in handler for event "${eventName}":`, error);
-    };
+    console.error(`[EventDispatchService] ${kind} error in handler for event "${eventName}":`, error);
 
     const exceptions = this.exceptions;
 
     if (!exceptions?.handles(error)) {
-      logDefault();
-
       return;
     }
 
@@ -172,9 +168,7 @@ export class EventDispatchService implements ICoreService {
         ? { scope: 'event', event: eventName, data }
         : { scope: 'event', event: eventName, data, source: sub.source };
 
-    exceptions.dispatch(error, context).then((result) => {
-      if (result === undefined) logDefault();
-    }, logDefault);
+    exceptions.observe(error, context).catch(() => undefined);
   }
 
   /**

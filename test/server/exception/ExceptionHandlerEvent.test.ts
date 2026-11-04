@@ -13,6 +13,11 @@ class Unrelated extends Error {}
 
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
 
+const returnValueWarnings = (logger: ReturnType<typeof createLogger>) =>
+  (logger.warn.mock.calls as unknown[][])
+    .map(([message]) => String(message))
+    .filter((message) => message.includes('has no effect in event scopes'));
+
 describe('@Catch for @On handlers', () => {
   let consoleError: ReturnType<typeof spyOn>;
 
@@ -32,7 +37,7 @@ describe('@Catch for @On handlers', () => {
     return { ...app, emitter, dispatcher };
   };
 
-  test('hands a sync failure to the matching @Catch with the event context', async () => {
+  test('hands a sync failure to the matching @Catch with the event context, observe-only', async () => {
     const seen: [unknown, ExceptionContext][] = [];
     const failure = new QuotaExceeded('quota');
 
@@ -53,7 +58,7 @@ describe('@Catch for @On handlers', () => {
       }
     }
 
-    const { emitter } = await boot([Errors, UserEvents]);
+    const { emitter, logger } = await boot([Errors, UserEvents]);
 
     expect(emitter.emit('user.created', { id: 1 })).toBe(true);
     await flush();
@@ -61,10 +66,16 @@ describe('@Catch for @On handlers', () => {
     expect(seen).toEqual([
       [failure, { scope: 'event', event: 'user.created', data: { id: 1 }, source: 'UserEvents.onCreated' }],
     ]);
-    expect(consoleError).not.toHaveBeenCalled();
+    expect(consoleError).toHaveBeenCalledTimes(1);
+    expect(consoleError).toHaveBeenCalledWith(
+      '[EventDispatchService] Sync error in handler for event "user.created":',
+      failure,
+    );
+    expect(returnValueWarnings(logger)).toHaveLength(1);
+    expect(returnValueWarnings(logger)[0]).toContain('Errors.quota()');
   });
 
-  test('hands an async rejection to the matching @Catch', async () => {
+  test('hands an async rejection to the matching @Catch, and still logs the default line', async () => {
     const seen: unknown[] = [];
     const failure = new QuotaExceeded('quota');
 
@@ -85,13 +96,18 @@ describe('@Catch for @On handlers', () => {
       }
     }
 
-    const { emitter } = await boot([Errors, UserEvents]);
+    const { emitter, logger } = await boot([Errors, UserEvents]);
 
     emitter.emit('user.deleted');
     await flush();
 
     expect(seen).toEqual([failure]);
-    expect(consoleError).not.toHaveBeenCalled();
+    expect(consoleError).toHaveBeenCalledTimes(1);
+    expect(consoleError).toHaveBeenCalledWith(
+      '[EventDispatchService] Async error in handler for event "user.deleted":',
+      failure,
+    );
+    expect(returnValueWarnings(logger)).toHaveLength(1);
   });
 
   test('resolves the most specific type along the prototype chain', async () => {
@@ -214,7 +230,7 @@ describe('@Catch for @On handlers', () => {
       }
     }
 
-    const { emitter } = await boot([Errors, Events]);
+    const { emitter, logger } = await boot([Errors, Events]);
 
     emitter.emit('quota.hit');
     await flush();
@@ -224,6 +240,7 @@ describe('@Catch for @On handlers', () => {
       '[EventDispatchService] Sync error in handler for event "quota.hit":',
       failure,
     );
+    expect(returnValueWarnings(logger)).toHaveLength(0);
   });
 
   test('a @Catch that throws is contained: its error is logged and the original still reaches the default', async () => {
@@ -260,6 +277,7 @@ describe('@Catch for @On handlers', () => {
       '[EventDispatchService] Async error in handler for event "quota.hit":',
       failure,
     );
+    expect(returnValueWarnings(logger)).toHaveLength(0);
   });
 
   test('still logs the original when containing a throwing @Catch fails too', async () => {

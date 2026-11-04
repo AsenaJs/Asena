@@ -6,9 +6,10 @@ import { defineComponent } from '../../../ioc/component';
  *
  * The class is a normal IoC component - it is found by component scanning, resolved from the
  * container, and `@Inject` works in it - so a handler can reach a logger, an audit service or
- * anything else the application already registers. Its `@Catch` methods answer errors raised
+ * anything else the application already registers. Its `@Catch` methods receive errors raised
  * anywhere the framework dispatches: HTTP handlers and middlewares, `@On` events, and
- * `@MessagePattern` / `@EventPattern` handlers.
+ * `@MessagePattern` / `@EventPattern` handlers. They can answer an HTTP request or a message;
+ * in event scopes (`@On`, `@EventPattern`) they only observe, and the original failure continues.
  *
  * **Several `@ExceptionHandler` classes may exist** and their handlers are merged into one
  * resolution table, so error handling can be split by domain instead of piling into one file.
@@ -16,7 +17,7 @@ import { defineComponent } from '../../../ioc/component';
  * because nothing would decide which one answers.
  *
  * Declaring one changes nothing on its own - until a `@Catch` matches, the framework answers
- * exactly as it does today.
+ * with its defaults.
  *
  * @param {ComponentParams | string} params - Component parameters or component name
  * @returns {ClassDecorator} A class decorator that registers the class as an exception handler

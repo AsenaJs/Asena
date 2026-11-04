@@ -49,7 +49,10 @@ export interface HttpExceptionContext<C extends AsenaContext<any, any> = AsenaCo
   readonly context: C;
 }
 
-/** An error raised by an in-process `@On` handler, dispatched through `EventDispatchService`. */
+/**
+ * An error raised by an in-process `@On` handler, dispatched through `EventDispatchService`.
+ * Observe-only: the default error line is logged regardless, and a returned value is ignored with a warning.
+ */
 export interface EventExceptionContext {
   readonly scope: 'event';
   /** The dispatched event name, e.g. `user.created`. */
@@ -66,9 +69,9 @@ export interface EventExceptionContext {
 export interface MicroserviceExceptionContext {
   readonly scope: 'microservice';
   /**
-   * `message` is request/response - a reply is produced, so a handler's return value can become
-   * that reply. `event` is fire-and-forget, where the only choice is whether the failure is
-   * swallowed or rethrown to the transport.
+   * `message` is request/response - a handler's return value other than `undefined` becomes the
+   * reply. `event` is observe-only: the original failure always reaches the transport, so its
+   * retry / DLQ policy applies, and a returned value is ignored with a warning.
    */
   readonly kind: 'message' | 'event';
   readonly message: MessageContext;
@@ -87,7 +90,7 @@ export interface MicroserviceExceptionContext {
  * @Catch(DbConnectionError)
  * public db(error: DbConnectionError, ctx: ExceptionContext<Context>) {
  *   this.alerts.page(error);
- *   if (ctx.scope !== 'http') return;          // events and messages: framework default
+ *   if (ctx.scope !== 'http') return;          // messages: the original error; events: observed only
  *   return ctx.context.send({ error: 'Service Unavailable' }, 503);
  * }
  * ```
