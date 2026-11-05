@@ -12,6 +12,7 @@ import type { AsenaWebsocketAdapter } from './AsenaWebsocketAdapter';
 import type { ServerLogger } from '../logger';
 import type { AsenaContext } from './AsenaContext';
 import type { GlobalMiddlewareRouteConfig } from '../server/config';
+import type { DevtoolsBus } from '../devtools/DevtoolsBus';
 
 /**
  * Abstract class representing an adapter for the Asena framework.
@@ -137,6 +138,38 @@ export abstract class AsenaAdapter<C extends AsenaContext<any, any>, VS> {
    * @param notFoundHandler - Handler that produces the 404 response
    */
   public onNotFound?(notFoundHandler: NotFoundHandler<C>): Promise<void> | void;
+
+  /**
+   * Hands the adapter the server's devtools bus, so it can frame each HTTP request as a record for
+   * `asena console`.
+   *
+   * Called at most once, only in a process `asena console` spawned (the devtools hook is set and
+   * `process.send` exists), right after the adapter is resolved: before any `use()`,
+   * `registerRoute()`, `onError()`, `onNotFound()` or `registerWebsocketRoute()` call, and before
+   * `start()`. When it is never called the adapter must keep its request path exactly as it is: no
+   * wrapper, no extra branch. Published cores before 0.13 never call it.
+   *
+   * Declare the bus as a local structural interface rather than importing this type; the members
+   * an adapter may rely on are:
+   * - `enabled: boolean` - true for as long as records are collected;
+   * - `open(method, path)` - starts a record (method and pathname of the request);
+   * - `run(record, fn)` - runs `fn` with `record` as the current record, so core's own steps
+   *   (middlewares, validator, controller, `@Catch`, `@Config.onError`, `@NotFound`) land in it;
+   * - `step(kind, name)` - appends a step to the current record;
+   * - `close(record, status, answeredBy?)` - ends the record with the response status;
+   *   `answeredBy` defaults to the last step.
+   *
+   * Core already records every handler it prepared. An adapter steps only what runs outside them,
+   * with one of these kinds:
+   * - `adapter-default` - the adapter's own error or 404 response, named after the adapter;
+   * - `not-found` - a not-found answer core did not record (core records `@NotFound` and
+   *   `@Config.onNotFound`);
+   * - `validator` - a legacy `validator:` schema the adapter checks itself;
+   * - `middleware` - a middleware call core's prepared chain did not record.
+   *
+   * @param bus - The server's devtools bus
+   */
+  public attachDevtools?(bus: Pick<DevtoolsBus, 'enabled' | 'open' | 'run' | 'step' | 'close'>): void;
 
   /**
    * Configures server options.

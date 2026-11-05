@@ -213,6 +213,10 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
     if (this._adapter) {
       this._logger.info(`Adapter: ${green(this._adapter.name)} implemented`);
       this._adapter.setPort(this._port);
+
+      if (this.enabledDevtoolsBus) {
+        this._adapter.attachDevtools?.(devtoolsBus);
+      }
     } else {
       this._logger.info('Headless mode: no HTTP adapter configured');
       this.warnAdapterlessComponents();
