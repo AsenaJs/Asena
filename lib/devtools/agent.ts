@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { computeReadiness } from '../server/health/readiness';
+import { captureRequestOutput } from './capture';
 import type { DevtoolsAttachment, DevtoolsServerContext } from './context';
 import {
   agentMessage,
@@ -118,8 +119,10 @@ const runCommand = async (
  * and `AsenaServer.start()` calls it once the server is ready.
  *
  * Sends `hello` and the snapshot, then a metrics sample every second and every record the bus
- * closes, and answers the host's commands through the app's real dispatch paths. It opens no port
- * and registers nothing. Called without an IPC channel it does nothing and says so once.
+ * closes, with what the app wrote to the console and the std streams while that record was in
+ * scope, and answers the host's commands through the app's real dispatch paths. It opens no port
+ * and registers nothing; `detach` puts the console and stream functions back. Called without an
+ * IPC channel it does nothing and says so once.
  *
  * @param context - The server, as `AsenaServer.start()` hands it over
  * @param options - Channel and sample interval, for tests
@@ -165,6 +168,7 @@ export const attachDevtoolsAgent = (
   const unsubscribe = context.bus.subscribe((record) => {
     send(agentMessage('request', record));
   });
+  const releaseOutput = captureRequestOutput(context.bus);
 
   let lastCpu = process.cpuUsage();
   let lastAt = performance.now();
@@ -219,6 +223,7 @@ export const attachDevtoolsAgent = (
     detach: () => {
       clearInterval(sampler);
       unsubscribe();
+      releaseOutput();
       removeListener();
     },
   };

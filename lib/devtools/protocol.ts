@@ -207,6 +207,14 @@ export interface DevtoolsRequestStep {
   name: string;
 }
 
+export interface DevtoolsRequestLog {
+  stream: 'stdout' | 'stderr';
+  /** One write, verbatim; may span several lines (a stack trace stays one entry). */
+  text: string;
+  /** Epoch milliseconds. */
+  at: number;
+}
+
 export interface DevtoolsRequestRecord {
   id: string;
   /** Epoch milliseconds, so the host can attach the log lines written during the request. */
@@ -218,6 +226,10 @@ export interface DevtoolsRequestRecord {
   steps: DevtoolsRequestStep[];
   /** The step that produced the response. */
   answeredBy: DevtoolsRequestStep;
+  /** What the app wrote while this request was in scope, in order; capped. */
+  logs?: DevtoolsRequestLog[];
+  /** Set when the cap dropped lines. */
+  logsTruncated?: true;
 }
 
 export type DevtoolsCommand =

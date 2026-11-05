@@ -1,5 +1,8 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
-import type { DevtoolsRequestRecord, DevtoolsRequestStep, DevtoolsStepKind } from './protocol';
+import type { DevtoolsRequestLog, DevtoolsRequestRecord, DevtoolsRequestStep, DevtoolsStepKind } from './protocol';
+
+const MAX_LOG_ENTRIES = 100;
+const MAX_LOG_CHARS = 16 * 1024;
 
 /** A record between `open()` and `close()`. */
 export interface DevtoolsOpenRecord {
@@ -9,6 +12,10 @@ export interface DevtoolsOpenRecord {
   readonly path: string;
   readonly steps: DevtoolsRequestStep[];
   readonly startTime: number;
+  readonly logs: DevtoolsRequestLog[];
+  logChars: number;
+  logsTruncated: boolean;
+  closed: boolean;
 }
 
 export type DevtoolsRecordListener = (record: DevtoolsRequestRecord) => void;
@@ -96,7 +103,38 @@ export class DevtoolsBus {
       path,
       steps: [],
       startTime: performance.now(),
+      logs: [],
+      logChars: 0,
+      logsTruncated: false,
+      closed: false,
     };
+  }
+
+  /**
+   * Appends an output write to the record of the current async context, while it is open.
+   *
+   * @param render - Called only when a record takes the write
+   */
+  public captureOutput(stream: DevtoolsRequestLog['stream'], render: () => string): void {
+    const record = this.storage?.getStore();
+
+    if (!record || record.closed || record.logsTruncated) {
+      return;
+    }
+
+    if (record.logs.length === MAX_LOG_ENTRIES || record.logChars === MAX_LOG_CHARS) {
+      record.logsTruncated = true;
+
+      return;
+    }
+
+    const text = render();
+    const room = MAX_LOG_CHARS - record.logChars;
+    const kept = text.length > room ? text.slice(0, room) : text;
+
+    record.logs.push({ stream, text: kept, at: Date.now() });
+    record.logChars += kept.length;
+    record.logsTruncated = kept !== text;
   }
 
   /** Runs `fn` with `record` as the current record. Plain call when disabled. */
@@ -108,6 +146,8 @@ export class DevtoolsBus {
   public close(record: DevtoolsOpenRecord, status: number, answeredBy?: DevtoolsRequestStep): void {
     const listener = this.listener;
     const answer = answeredBy ?? record.steps.at(-1);
+
+    record.closed = true;
 
     if (!listener || !answer) {
       return;
@@ -122,6 +162,8 @@ export class DevtoolsBus {
       durationMs: performance.now() - record.startTime,
       steps: [...record.steps],
       answeredBy: answer,
+      ...(record.logs.length > 0 && { logs: [...record.logs] }),
+      ...(record.logsTruncated && { logsTruncated: true as const }),
     });
   }
 

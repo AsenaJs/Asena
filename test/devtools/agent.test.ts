@@ -202,14 +202,25 @@ describe('attachDevtoolsAgent', () => {
     expect(sent.length).toBe(countAfterDetach);
   });
 
-  test('without an IPC channel it stays inert and says so once', () => {
+  test('without an IPC channel it stays inert, patches no output function and says so once', () => {
     const previousSend = process.send;
     const warn = spyOn(console, 'warn').mockImplementation(() => {});
+    const outputFunctions = () => [
+      console.log,
+      console.warn,
+      console.trace,
+      process.stdout.write,
+      process.stderr.write,
+    ];
+    const before = outputFunctions();
 
     (process as any).send = undefined;
 
     try {
-      attachDevtoolsAgent(context).detach();
+      const inert = attachDevtoolsAgent(context);
+
+      expect(outputFunctions()).toEqual(before);
+      inert.detach();
       attachDevtoolsAgent(context).detach();
 
       expect(warn).toHaveBeenCalledTimes(1);
