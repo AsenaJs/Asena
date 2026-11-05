@@ -14,4 +14,4 @@
 
 `@Config.onError` and `@Config.onNotFound` are deprecated and will be removed in 1.0. They keep working as the last link of the chain and log a deprecation warning at boot.
 
-The new `@asenajs/asena/devtools` entry point holds the in-app agent that `asena console` attaches over IPC once the server is ready: it reports the app's components, routes, handlers and runtime metrics, runs schedules, events and messages through their real dispatch paths, and does nothing in a process the console did not spawn.
+The new `@asenajs/asena/devtools` entry point holds the in-app agent that `asena console` attaches over IPC once the server is ready: it reports the app's components, routes, handlers and runtime metrics, runs schedules, events and messages through their real dispatch paths, and does nothing in a process the console did not spawn. In such a process core also hands the adapter its devtools bus through the new optional `AsenaAdapter.attachDevtools()`, so an adapter can record each HTTP request for the console; adapters without the method work unchanged.
