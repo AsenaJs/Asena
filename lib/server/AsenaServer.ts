@@ -797,6 +797,10 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
           staticServe: await this.prepareStaticServeConfig(params.staticServe),
           validator: validatorInstance,
           validatorCache: params.validatorCache,
+          ...(params.validator && {
+            validatorName:
+              getOwnTypedMetadata<string>(ComponentConstants.NameKey, params.validator) || params.validator.name,
+          }),
           contextClass,
           contextContract: contextClass?.[ASENA_CONTEXT_CONTRACT],
           controllerName,
