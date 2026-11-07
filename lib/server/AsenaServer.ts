@@ -74,6 +74,13 @@ import { devtoolsBus } from '../devtools/DevtoolsBus';
 const describeError = (error: unknown): string =>
   error instanceof Error ? (error.stack ?? error.message) + describeCauses(error) : bun.inspect(error);
 
+// On globalThis because a hot reload re-evaluates this module while the previous server's signal
+// handlers stay installed, and the process must not exit under a stop still running.
+const SIGNAL_STOPS_RUNNING = Symbol.for('asena.signalStopsRunning');
+const signalStops = globalThis as unknown as Record<symbol, number>;
+
+const underFileWatcher = (): boolean => process.execArgv.includes('--hot') || process.execArgv.includes('--watch');
+
 /**
  * @description AsenaServer - Main server class for Asena framework
  * Now a core service managed by IoC container with field injection
@@ -543,7 +550,7 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
    * nobody holds, so a rejection inside it takes the process down with an unhandled rejection -
    * exactly how a telemetry flush against an unreachable collector turns Ctrl+C into exit 1.
    *
-   * @param {number} code - Exit code when a force-exit deadline is configured
+   * @param {number} code - Exit code when the process is ended here or by a force-exit deadline
    * @returns {void}
    */
   private shutdownThenExit(code: number): void {
@@ -569,6 +576,8 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
       forceTimer.unref?.();
     }
 
+    signalStops[SIGNAL_STOPS_RUNNING] = (signalStops[SIGNAL_STOPS_RUNNING] ?? 0) + 1;
+
     // A signal means "drain and go" - an explicit stop() keeps its own (force-close) default,
     // so test suites and programmatic callers see unchanged behavior.
     void this.stop({
@@ -579,8 +588,16 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
         this._logger.error(`${yellow('[AsenaServer]')} shutdown failed: ${describeError(error)}`);
       })
       .finally(() => {
+        signalStops[SIGNAL_STOPS_RUNNING] -= 1;
+
         if (code !== 0) {
           process.exit(code);
+        }
+
+        // Bun's file watcher holds the process after a clean stop, and an unref'd force timer never
+        // fires while it idles. Everywhere else a leaked handle must keep the process visibly alive.
+        if (underFileWatcher() && signalStops[SIGNAL_STOPS_RUNNING] === 0) {
+          process.exit(0);
         }
       });
   }

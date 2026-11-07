@@ -17,11 +17,14 @@ const fixture = (name: string) => join(import.meta.dir, 'fixtures', `${name}.ts`
  * caught it; it was found by reading the code. The rule that fell out: every boundary where a
  * failure is *contained* needs a test that makes it fail, not just one that makes it work.
  */
-const spawnWorker = (name = 'graceful-worker') =>
-  Bun.spawn(['bun', fixture(name)], {
+const spawnWorker = (name = 'graceful-worker', bunArgs: string[] = []) =>
+  Bun.spawn(['bun', ...bunArgs, fixture(name)], {
     stdout: 'pipe',
     stderr: 'pipe',
   });
+
+const exitCodeWithin = (worker: { exited: Promise<number> }, ms: number): Promise<number | 'still alive'> =>
+  Promise.race([worker.exited, Bun.sleep(ms).then(() => 'still alive' as const)]);
 
 /**
  * Accumulate a stream in the background.
@@ -189,4 +192,144 @@ describe('graceful shutdown', () => {
     // The 1000ms deadline, not the 5000ms default hook timeout and not never.
     expect(elapsed).toBeLessThan(5_000);
   }, 20_000);
+
+  test('a signal does not hide a leaked handle outside --hot and --watch', async () => {
+    const worker = spawnWorker('leaked-handle-worker');
+    const stdout = tail(worker.stdout);
+
+    try {
+      await stdout.waitFor('SERVER_STARTED');
+
+      worker.kill('SIGINT');
+
+      await stdout.waitFor('WORKER_STOPPED');
+
+      expect(await exitCodeWithin(worker, 1_500)).toBe('still alive');
+    } finally {
+      worker.kill('SIGKILL');
+      await worker.exited;
+    }
+  }, 20_000);
+});
+
+describe('graceful shutdown under a file watcher', () => {
+  const EXIT_BOUND_MS = 5_000;
+
+  const FLAGS = ['--hot', '--watch'];
+
+  /** Disposal kills the worker: one that survives a failed assertion would keep its watcher running. */
+  const startWorker = async (name: string, bunArgs: string, ready = 'SERVER_STARTED') => {
+    const worker = spawnWorker(name, bunArgs.split(' '));
+    const stdout = tail(worker.stdout);
+
+    await stdout.waitFor(ready);
+
+    return {
+      worker,
+      stdout,
+      [Symbol.asyncDispose]: async () => {
+        worker.kill('SIGKILL');
+        await worker.exited;
+      },
+    };
+  };
+
+  test.each([...FLAGS, 'run --hot', 'run --watch'])(
+    'bun %s: SIGINT runs the stop hooks and exits 0',
+    async (bunArgs) => {
+      await using run = await startWorker('graceful-worker', bunArgs);
+
+      run.worker.kill('SIGINT');
+
+      expect(await exitCodeWithin(run.worker, EXIT_BOUND_MS)).toBe(0);
+      await run.stdout.drained;
+      expect(run.stdout.text()).toContain('WORKER_STOPPED');
+    },
+    20_000,
+  );
+
+  test.each(FLAGS)(
+    'bun %s: SIGTERM does the same',
+    async (flag) => {
+      await using run = await startWorker('graceful-worker', flag);
+
+      run.worker.kill('SIGTERM');
+
+      expect(await exitCodeWithin(run.worker, EXIT_BOUND_MS)).toBe(0);
+      await run.stdout.drained;
+      expect(run.stdout.text()).toContain('WORKER_STOPPED');
+    },
+    20_000,
+  );
+
+  test.each(FLAGS)(
+    'bun %s: a rejected stop is logged and still exits 0',
+    async (flag) => {
+      await using run = await startWorker('rejecting-stop-server', flag);
+
+      run.worker.kill('SIGINT');
+
+      expect(await exitCodeWithin(run.worker, EXIT_BOUND_MS)).toBe(0);
+      await run.stdout.drained;
+      expect(run.stdout.text()).toContain('LOGGED_ERROR');
+      expect(run.stdout.text()).toContain('shutdown failed');
+    },
+    20_000,
+  );
+
+  test.each(FLAGS)(
+    'bun %s: a handle left behind does not hold the exit',
+    async (flag) => {
+      await using run = await startWorker('leaked-handle-worker', flag);
+
+      run.worker.kill('SIGINT');
+
+      expect(await exitCodeWithin(run.worker, EXIT_BOUND_MS)).toBe(0);
+      await run.stdout.drained;
+      expect(run.stdout.text()).toContain('WORKER_STOPPED');
+    },
+    20_000,
+  );
+
+  test.each(FLAGS)(
+    'bun %s: the exit waits for every server in the process',
+    async (flag) => {
+      await using run = await startWorker('two-servers-worker', flag);
+
+      run.worker.kill('SIGINT');
+
+      expect(await exitCodeWithin(run.worker, EXIT_BOUND_MS)).toBe(0);
+      await run.stdout.drained;
+      expect(run.stdout.text()).toContain('QUICK_STOPPED');
+      expect(run.stdout.text()).toContain('SLOW_STOPPED');
+    },
+    20_000,
+  );
+
+  test.each(FLAGS)(
+    'bun %s: a second signal does not wait for the stop',
+    async (flag) => {
+      await using run = await startWorker('unsettled-stop-worker', flag);
+
+      run.worker.kill('SIGINT');
+      await run.stdout.waitFor('WORKER_STOPPING');
+      run.worker.kill('SIGINT');
+
+      // The code is Bun's default for the signal (130 under --hot, 0 under --watch): stop() has
+      // already removed the handlers by the time the second one lands.
+      expect(await exitCodeWithin(run.worker, EXIT_BOUND_MS)).not.toBe('still alive');
+    },
+    20_000,
+  );
+
+  test.each(FLAGS)(
+    'bun %s: an explicit stop() does not exit',
+    async (flag) => {
+      await using run = await startWorker('explicit-stop-worker', flag, 'EXPLICIT_STOP_RETURNED');
+
+      expect(await exitCodeWithin(run.worker, 1_500)).toBe('still alive');
+      expect(run.stdout.text()).toContain('WORKER_STOPPED');
+    },
+    20_000,
+  );
 });

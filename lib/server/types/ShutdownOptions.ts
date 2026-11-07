@@ -38,6 +38,9 @@ export interface ShutdownOptions {
    * honest default: a process that will not exit is a bug worth seeing rather than papering
    * over. Exits non-zero, because a forced exit is not a clean one.
    *
+   * Under `bun --hot` and `bun --watch` the process exits with code 0 once the stop has settled,
+   * whatever this is set to: the file watcher would hold it open otherwise.
+   *
    * @default false
    */
   forceExitAfter?: number | false;
