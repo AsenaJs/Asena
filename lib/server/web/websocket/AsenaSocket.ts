@@ -352,6 +352,7 @@ export class AsenaSocket<T> {
    * Sets the binary data type used for binary messages.
    */
   public set binaryType(value: 'nodebuffer' | 'arraybuffer' | 'uint8array' | 'blob') {
+    this.ws.binaryType = value;
     this._binaryType = value;
   }
 
