@@ -69,4 +69,51 @@ describe('validatorName on registered routes', () => {
 
     expect('validatorName' in registeredRoute(app, '/orders/all')).toBe(false);
   });
+
+  test('a decorated subclass of a named validator carries its own name', async () => {
+    @Middleware({ validator: true })
+    class StrictCustomerQueryValidator extends CustomerQueryValidator {}
+
+    @Middleware({ validator: true, name: 'VipCustomerRules' })
+    class VipCustomerQueryValidator extends CustomerQueryValidator {}
+
+    @Controller('/customers')
+    class CustomerController {
+      @Get({ path: '/strict', validator: StrictCustomerQueryValidator })
+      public strict(context: AsenaContext<any, any>) {
+        return context.send([]);
+      }
+
+      @Get({ path: '/vip', validator: VipCustomerQueryValidator })
+      public vip(context: AsenaContext<any, any>) {
+        return context.send([]);
+      }
+    }
+
+    await using app = await bootWithMockAdapter([
+      CustomerController,
+      CustomerQueryValidator,
+      StrictCustomerQueryValidator,
+      VipCustomerQueryValidator,
+    ]);
+
+    expect(registeredRoute(app, '/customers/strict').validatorName).toBe('StrictCustomerQueryValidator');
+    expect(registeredRoute(app, '/customers/vip').validatorName).toBe('VipCustomerRules');
+  });
+
+  test('an undecorated subclass of a named validator fails the boot before any label exists', async () => {
+    class UndecoratedQueryValidator extends CustomerQueryValidator {}
+
+    @Controller('/customers')
+    class CustomerController {
+      @Get({ path: '/plain', validator: UndecoratedQueryValidator })
+      public plain(context: AsenaContext<any, any>) {
+        return context.send([]);
+      }
+    }
+
+    await expect(bootWithMockAdapter([CustomerController, CustomerQueryValidator])).rejects.toThrow(
+      "Validator 'UndecoratedQueryValidator' is not a component",
+    );
+  });
 });
