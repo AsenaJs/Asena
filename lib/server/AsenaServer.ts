@@ -527,18 +527,10 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
   /**
    * @description React to a shutdown signal.
    *
-   * A second signal while a shutdown is already running is a person pressing Ctrl+C again
-   * because the first one looked stuck; take them at their word and go.
-   *
    * @param {NodeJS.Signals} signal - The signal received
    * @returns {void}
    */
   private onShutdownSignal(signal: NodeJS.Signals): void {
-    if (this.stopping !== undefined) {
-      this._logger.warn(`${yellow('[AsenaServer]')} ${signal} received again, exiting immediately`);
-      process.exit(130);
-    }
-
     this._logger.info(`${blue('[AsenaServer]')} ${signal} received, shutting down`);
     this.shutdownThenExit(0);
   }

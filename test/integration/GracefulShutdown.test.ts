@@ -307,28 +307,48 @@ describe('graceful shutdown under a file watcher', () => {
   );
 
   test.each(FLAGS)(
-    'bun %s: a second signal does not wait for the stop',
-    async (flag) => {
-      await using run = await startWorker('unsettled-stop-worker', flag);
-
-      run.worker.kill('SIGINT');
-      await run.stdout.waitFor('WORKER_STOPPING');
-      run.worker.kill('SIGINT');
-
-      // The code is Bun's default for the signal (130 under --hot, 0 under --watch): stop() has
-      // already removed the handlers by the time the second one lands.
-      expect(await exitCodeWithin(run.worker, EXIT_BOUND_MS)).not.toBe('still alive');
-    },
-    20_000,
-  );
-
-  test.each(FLAGS)(
     'bun %s: an explicit stop() does not exit',
     async (flag) => {
       await using run = await startWorker('explicit-stop-worker', flag, 'EXPLICIT_STOP_RETURNED');
 
       expect(await exitCodeWithin(run.worker, 1_500)).toBe('still alive');
       expect(run.stdout.text()).toContain('WORKER_STOPPED');
+    },
+    20_000,
+  );
+});
+
+describe('a second signal while a signal stop runs', () => {
+  // stop() has removed the handlers by then, so the code is Bun's own for the signal; under
+  // --watch Bun handles SIGINT itself and exits 0.
+  test.each([
+    { mode: 'plain', bunArgs: [], signal: 'SIGINT', code: 130 },
+    { mode: 'plain', bunArgs: [], signal: 'SIGTERM', code: 143 },
+    { mode: '--hot', bunArgs: ['--hot'], signal: 'SIGINT', code: 130 },
+    { mode: '--hot', bunArgs: ['--hot'], signal: 'SIGTERM', code: 143 },
+    { mode: '--watch', bunArgs: ['--watch'], signal: 'SIGINT', code: 0 },
+    { mode: '--watch', bunArgs: ['--watch'], signal: 'SIGTERM', code: 143 },
+  ] as const)(
+    '$mode: a second $signal exits $code before the stop hook finishes',
+    async ({ bunArgs, signal, code }) => {
+      const worker = spawnWorker('slow-stop-worker', [...bunArgs]);
+      const stdout = tail(worker.stdout);
+
+      try {
+        await stdout.waitFor('SERVER_STARTED');
+
+        worker.kill(signal);
+        await stdout.waitFor('WORKER_STOPPING');
+        worker.kill(signal);
+
+        // Under the hook's 2 s, so a swallowed signal shows up as 'still alive'.
+        expect(await exitCodeWithin(worker, 1_500)).toBe(code);
+        await stdout.drained;
+        expect(stdout.text()).not.toContain('WORKER_STOPPED');
+      } finally {
+        worker.kill('SIGKILL');
+        await worker.exited;
+      }
     },
     20_000,
   );

@@ -1,6 +1,7 @@
 /**
- * A headless worker whose stop hook stays pending far longer than any test waits, run as a real
- * process by GracefulShutdown.test.ts: the window in which a second signal arrives.
+ * A headless worker whose stop hook takes two seconds, run as a real process by
+ * GracefulShutdown.test.ts: the window in which a second signal arrives. `WORKER_STOPPED` is
+ * printed only if the hook got to finish.
  *
  * Not a *.test.ts file, so the test runner does not pick it up on its own.
  */
@@ -12,10 +13,12 @@ import { silentLogger } from '../../../lib/test/harness/silentLogger';
 @Service()
 class SlowToLetGo {
   @OnStop()
-  public stop(): Promise<void> {
+  public async stop(): Promise<void> {
     console.log('WORKER_STOPPING');
 
-    return new Promise<void>(() => {});
+    await Bun.sleep(2_000);
+
+    console.log('WORKER_STOPPED');
   }
 }
 
