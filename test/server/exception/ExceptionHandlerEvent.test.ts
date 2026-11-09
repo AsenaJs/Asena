@@ -139,6 +139,68 @@ describe('@Catch for @On handlers', () => {
     expect(returnValueWarnings(logger)).toHaveLength(1);
   });
 
+  test('routes the rejection of a thenable that is not a native Promise', async () => {
+    const seen: unknown[] = [];
+    const failure = new QuotaExceeded('quota');
+
+    @ExceptionHandler()
+    class Errors {
+      @Catch(QuotaExceeded)
+      public quota(error: unknown) {
+        seen.push(error);
+      }
+    }
+
+    @EventService()
+    class UserEvents {
+      @On('user.synced')
+      public onSynced() {
+        return {
+          then(_resolve: (value: unknown) => void, reject: (reason: unknown) => void) {
+            reject(failure);
+          },
+        };
+      }
+    }
+
+    const { emitter } = await boot([Errors, UserEvents]);
+
+    emitter.emit('user.synced');
+    await flush();
+
+    expect(seen).toEqual([failure]);
+    expect(consoleError).toHaveBeenCalledWith(
+      '[EventDispatchService] Async error in handler for event "user.synced":',
+      failure,
+    );
+  });
+
+  test('treats a then getter that throws as a sync failure of the handler', async () => {
+    const failure = new QuotaExceeded('quota');
+
+    @EventService()
+    class UserEvents {
+      @On('user.synced')
+      public onSynced() {
+        return Object.defineProperty({}, 'then', {
+          get() {
+            throw failure;
+          },
+        });
+      }
+    }
+
+    const { emitter } = await boot([UserEvents]);
+
+    expect(emitter.emit('user.synced')).toBe(true);
+    await flush();
+
+    expect(consoleError).toHaveBeenCalledWith(
+      '[EventDispatchService] Sync error in handler for event "user.synced":',
+      failure,
+    );
+  });
+
   test('resolves the most specific type along the prototype chain', async () => {
     const calls: string[] = [];
 
