@@ -388,6 +388,32 @@ describe('attachDevtoolsAgent', () => {
     expect(sent.length).toBe(countAfterDetach);
   });
 
+  // The commands run any schedule and publish to real brokers; a production process started under a
+  // console-like parent must not hand them out.
+  test('refuses to attach when NODE_ENV is production, and says so once', () => {
+    const { channel, sent, listeners } = fakeChannel();
+    const warn = spyOn(console, 'warn').mockImplementation(() => {});
+    const previousEnv = process.env.NODE_ENV;
+    const before = [console.log, process.stdout.write, process.stderr.write];
+
+    process.env.NODE_ENV = 'production';
+
+    try {
+      attachDevtoolsAgent(context, { channel }).detach();
+      attachDevtoolsAgent(context, { channel }).detach();
+
+      expect(sent).toEqual([]);
+      expect(listeners.size).toBe(0);
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(String(warn.mock.calls[0][0])).toContain('NODE_ENV is production');
+    } finally {
+      process.env.NODE_ENV = previousEnv;
+      warn.mockRestore();
+    }
+
+    expect([console.log, process.stdout.write, process.stderr.write]).toEqual(before);
+  });
+
   test('without an IPC channel it stays inert, patches no output function and says so once', () => {
     const previousSend = process.send;
     const warn = spyOn(console, 'warn').mockImplementation(() => {});

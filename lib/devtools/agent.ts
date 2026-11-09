@@ -85,7 +85,16 @@ const claimCommands = (claimant: CommandListener): (() => void) => {
   };
 };
 
-let warnedInert = false;
+const warned = new Set<string>();
+
+const inert = (reason: string): DevtoolsAttachment => {
+  if (!warned.has(reason)) {
+    warned.add(reason);
+    console.warn(`[devtools] agent not attached: ${reason}`);
+  }
+
+  return { detach: () => undefined };
+};
 
 // Walks up rather than using a fixed depth: the file runs from lib/ in tests and from dist/lib/ when published.
 const readCoreVersion = (): string => {
@@ -177,7 +186,7 @@ const runCommand = async (
  * scope, and answers the host's commands through the app's real dispatch paths; with several
  * attachments in one process, only the most recent one answers commands. It opens no port
  * and registers nothing; `detach` puts the console and stream functions back. Called without an
- * IPC channel it does nothing and says so once.
+ * IPC channel, or with `NODE_ENV=production`, it does nothing and says so once.
  *
  * @param context - The server, as `AsenaServer.start()` hands it over
  * @param options - Channel and sample interval, for tests
@@ -187,13 +196,12 @@ export const attachDevtoolsAgent = (
   context: DevtoolsServerContext,
   options: DevtoolsAgentOptions = {},
 ): DevtoolsAttachment => {
-  if (!options.channel && typeof process.send !== 'function') {
-    if (!warnedInert) {
-      warnedInert = true;
-      console.warn('[devtools] agent not attached: this process has no IPC channel (start it with `asena console`)');
-    }
+  if (process.env.NODE_ENV === 'production') {
+    return inert('NODE_ENV is production; the console is a development tool');
+  }
 
-    return { detach: () => undefined };
+  if (!options.channel && typeof process.send !== 'function') {
+    return inert('this process has no IPC channel (start it with `asena console`)');
   }
 
   const channel = options.channel ?? processChannel;
