@@ -16,7 +16,7 @@ export interface ExceptionRegistryView {
   whoCatches(error: unknown): string | undefined;
 }
 
-interface IdentityMatch {
+export interface IdentityMatch {
   type: ExceptionType;
   entry: CatchEntry;
 }
@@ -153,6 +153,11 @@ export class ExceptionRegistry {
     }
 
     return this.catchAll;
+  }
+
+  /** The typed `@Catch` an instance of `type` would reach by identity - no brand, no catch-all. */
+  public matchClass(type: ExceptionType): IdentityMatch | undefined {
+    return this.walk(type.prototype);
   }
 
   /** `@Catch(Error)` must not shadow `@Catch(HttpException)` for a branded exception from another class tree. */

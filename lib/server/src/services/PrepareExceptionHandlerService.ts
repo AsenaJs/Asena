@@ -14,6 +14,7 @@ import type {
 } from '../../exception/types';
 import type { NotFoundRequest } from '../../../adapter/types/ErrorHandler';
 import { devtoolsBus } from '../../../devtools/DevtoolsBus';
+import { HttpException } from '../../../adapter/types/HttpException';
 
 /** A resolved `@NotFound()` method, with where it came from for the cardinality error. */
 interface NotFoundEntry {
@@ -104,13 +105,30 @@ export class PrepareExceptionHandlerService implements ICoreService {
       });
     }
 
+    this.announceHttpExceptionCatcher(catchAll);
+  }
+
+  /**
+   * A handler that receives `HttpException` without naming it silently widens: an application that
+   * used to get the adapter's 400 / 401 envelopes now gets whatever this handler returns.
+   */
+  private announceHttpExceptionCatcher(catchAll: string | undefined): void {
+    const advice = `ValidationError and auth 401s — add @Catch(HttpException) if the adapter's envelopes should be kept.`;
+    const typed = this.registry.matchClass(HttpException);
+
+    if (typed) {
+      if (typed.type !== HttpException) {
+        this.logger.info(
+          `@Catch(${typed.type.name}) ${yellow(typed.entry.source)}() will also receive HttpException, ${advice}`,
+        );
+      }
+
+      return;
+    }
+
     if (catchAll) {
-      // Worth a line at boot because it is the one registration that silently widens: a catch-all
-      // also swallows ValidationError and HttpException, so an application that used to get the
-      // adapter's 400 envelope now gets whatever this handler returns.
       this.logger.info(
-        `@Catch() catch-all ${yellow(catchAll)}() will receive every error, including ValidationError and ` +
-          `HttpException — narrow it with @Catch(HttpException) if the adapter's envelopes should be kept.`,
+        `@Catch() catch-all ${yellow(catchAll)}() will receive every error, including HttpException, ${advice}`,
       );
     }
   }
