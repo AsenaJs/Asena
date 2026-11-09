@@ -215,6 +215,21 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
       this.enabledDevtoolsBus = true;
     }
 
+    try {
+      await this.boot(options);
+    } catch (error) {
+      this.releaseDevtoolsBus();
+
+      throw error;
+    }
+  }
+
+  /**
+   * @description Everything start() does once the devtools bus is decided
+   * @param {AsenaStartOptions} options - Optional transport overrides forwarded to the adapter
+   * @returns {Promise<void>}
+   */
+  private async boot(options?: AsenaStartOptions): Promise<void> {
     await this.resolveAdapter();
 
     if (this._adapter) {
@@ -377,6 +392,15 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
       }
     };
 
+    // Before anything it can reach is torn down: a console command arriving mid-teardown would
+    // otherwise run a job or publish against a closed pool and a disposed ulak.
+    await release('devtools agent', () => {
+      const attachment = this.devtools;
+
+      this.devtools = undefined;
+      attachment?.detach();
+    });
+
     await release('cron runner', () => this.cronRunner.stopAll());
     // Adapter before the hooks: in-flight HTTP handlers may still call ulak.send(), so
     // transports must outlive the HTTP surface that uses them
@@ -393,13 +417,7 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
     // Last: the probe outlives the drain it is reporting on.
     await release('health server', () => this.healthServer?.stop());
 
-    await release('devtools agent', () => {
-      this.devtools?.detach();
-
-      if (this.enabledDevtoolsBus) {
-        devtoolsBus.disable();
-      }
-    });
+    await release('devtools bus', () => this.releaseDevtoolsBus());
 
     if (failures.length > 0) {
       throw new AggregateError(failures, `Server shutdown completed with ${failures.length} failure(s)`);
@@ -676,7 +694,21 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
       }
     } catch (error) {
       this._logger.warn(`${yellow('[AsenaServer]')} devtools agent failed to attach: ${describeError(error)}`);
+      this.releaseDevtoolsBus();
     }
+  }
+
+  /**
+   * @description Disable the bus if this server enabled it, at most once per enable().
+   * @returns {void}
+   */
+  private releaseDevtoolsBus(): void {
+    if (!this.enabledDevtoolsBus) {
+      return;
+    }
+
+    this.enabledDevtoolsBus = false;
+    devtoolsBus.disable();
   }
 
   /**
