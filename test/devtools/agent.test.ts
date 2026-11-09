@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test';
-import { attachDevtoolsAgent, type DevtoolsChannel } from '../../lib/devtools/agent';
+import { attachDevtoolsAgent, startDevtoolsAgent, type DevtoolsChannel } from '../../lib/devtools/agent';
 import type { DevtoolsAttachment, DevtoolsServerContext } from '../../lib/devtools/context';
 import { buildDevtoolsSnapshot } from '../../lib/devtools/snapshot';
 import { hostMessage, type DevtoolsAgentMessage, type DevtoolsCommand } from '../../lib/devtools/protocol';
@@ -75,7 +75,7 @@ describe('attachDevtoolsAgent', () => {
   test('announces itself, then sends the snapshot', () => {
     const { channel, sent } = fakeChannel();
 
-    attachment = attachDevtoolsAgent(context, { channel });
+    attachment = startDevtoolsAgent(context, { channel });
 
     expect(sent.map((message) => message.type)).toEqual(['hello', 'snapshot']);
     expect(sent.every((message) => message.v === 1)).toBe(true);
@@ -94,7 +94,7 @@ describe('attachDevtoolsAgent', () => {
   test('samples metrics on the interval, readiness by the health probe rule', async () => {
     const { channel, sent } = fakeChannel();
 
-    attachment = attachDevtoolsAgent(context, { channel, sampleIntervalMs: 10 });
+    attachment = startDevtoolsAgent(context, { channel, sampleIntervalMs: 10 });
 
     for (let waited = 0; payloadsOf(sent, 'metrics').length < 2 && waited < 2000; waited += 10) {
       await Bun.sleep(10);
@@ -139,7 +139,7 @@ describe('attachDevtoolsAgent', () => {
     );
 
     try {
-      attachment = attachDevtoolsAgent(context, { channel, sampleIntervalMs: 5 });
+      attachment = startDevtoolsAgent(context, { channel, sampleIntervalMs: 5 });
       broken = true;
 
       const whileBroken = payloadsOf(sent, 'metrics').length;
@@ -167,7 +167,7 @@ describe('attachDevtoolsAgent', () => {
       deliver(hostMessage('command', { id, command: 'emitEvent', event: 'pantry.restocked', data: {} }));
 
     // hello and the snapshot fill the two slots.
-    attachment = attachDevtoolsAgent(context, { channel, sampleIntervalMs: 5, maxPendingMessages: 2 });
+    attachment = startDevtoolsAgent(context, { channel, sampleIntervalMs: 5, maxPendingMessages: 2 });
     emitEvent('e1');
     emitEvent('e2');
     emitEvent('e3');
@@ -201,7 +201,7 @@ describe('attachDevtoolsAgent', () => {
     const runsBefore = NightlyRestock.runs;
     const consoleError = spyOn(console, 'error').mockImplementation(() => {});
 
-    attachment = attachDevtoolsAgent(context, { channel });
+    attachment = startDevtoolsAgent(context, { channel });
 
     try {
       command('c1', { command: 'runSchedule', name: 'NightlyRestock' });
@@ -250,7 +250,7 @@ describe('attachDevtoolsAgent', () => {
     const { channel, sent, deliver } = fakeChannel();
     const runsBefore = NightlyRestock.runs;
 
-    attachment = attachDevtoolsAgent(context, { channel });
+    attachment = startDevtoolsAgent(context, { channel });
     deliver({ v: 1, type: 'command', payload: null });
     deliver({ v: 1, type: 'command', payload: 'runSchedule' });
     deliver({ v: 1, type: 'command', payload: { command: 'runSchedule', name: 'NightlyRestock' } });
@@ -265,7 +265,7 @@ describe('attachDevtoolsAgent', () => {
     const emit = spyOn(context.ulak, 'emit');
     const send = spyOn(context.ulak, 'send');
 
-    attachment = attachDevtoolsAgent(context, { channel });
+    attachment = startDevtoolsAgent(context, { channel });
 
     try {
       deliver(
@@ -307,8 +307,8 @@ describe('attachDevtoolsAgent', () => {
   test('only the most recent attachment answers commands; the previous one takes over when it detaches', async () => {
     const { channel, sent, deliver } = fakeChannel();
     const runsBefore = NightlyRestock.runs;
-    const older = attachDevtoolsAgent(context, { channel });
-    const newer = attachDevtoolsAgent(context, { channel });
+    const older = startDevtoolsAgent(context, { channel });
+    const newer = startDevtoolsAgent(context, { channel });
 
     try {
       deliver(hostMessage('command', { id: 'once', command: 'runSchedule', name: 'NightlyRestock' }));
@@ -335,7 +335,7 @@ describe('attachDevtoolsAgent', () => {
     const { channel, sent, deliver } = fakeChannel();
     const runsBefore = NightlyRestock.runs;
 
-    attachment = attachDevtoolsAgent(context, { channel });
+    attachment = startDevtoolsAgent(context, { channel });
     await server.stop();
     deliver(hostMessage('command', { id: 'late', command: 'runSchedule', name: 'NightlyRestock' }));
     await Bun.sleep(20);
@@ -349,7 +349,7 @@ describe('attachDevtoolsAgent', () => {
   test('forwards the records the bus closes as request messages', async () => {
     const { channel, sent, deliver } = fakeChannel();
 
-    attachment = attachDevtoolsAgent(context, { channel });
+    attachment = startDevtoolsAgent(context, { channel });
     deliver(hostMessage('command', { id: 'r1', command: 'emitEvent', event: 'pantry.restocked', data: {} }));
     deliver(hostMessage('command', { id: 'r2', command: 'runSchedule', name: 'NightlyRestock' }));
     await Bun.sleep(10);
@@ -377,7 +377,7 @@ describe('attachDevtoolsAgent', () => {
   test('detach releases the IPC listener, the sampler and the bus subscription', async () => {
     const { channel, sent, listeners, deliver } = fakeChannel();
 
-    attachDevtoolsAgent(context, { channel, sampleIntervalMs: 5 }).detach();
+    startDevtoolsAgent(context, { channel, sampleIntervalMs: 5 }).detach();
 
     const countAfterDetach = sent.length;
 
@@ -399,8 +399,8 @@ describe('attachDevtoolsAgent', () => {
     process.env.NODE_ENV = 'production';
 
     try {
-      attachDevtoolsAgent(context, { channel }).detach();
-      attachDevtoolsAgent(context, { channel }).detach();
+      startDevtoolsAgent(context, { channel }).detach();
+      startDevtoolsAgent(context, { channel }).detach();
 
       expect(sent).toEqual([]);
       expect(listeners.size).toBe(0);

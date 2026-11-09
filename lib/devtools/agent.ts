@@ -15,7 +15,11 @@ import {
 } from './protocol';
 import { buildDevtoolsSnapshot } from './snapshot';
 
-/** How the agent talks to the console host. Defaults to the process IPC channel. */
+/**
+ * How the agent talks to the console host: the process IPC channel, or a test double. The peer is
+ * trusted with every command, so this never leaves the package.
+ * @internal
+ */
 export interface DevtoolsChannel {
   /** Throws when the message cannot be serialised; otherwise calls `flushed` once it has left the process. */
   send(message: DevtoolsAgentMessage, flushed: () => void): void;
@@ -23,6 +27,7 @@ export interface DevtoolsChannel {
   onMessage(listener: (message: unknown) => void): () => void;
 }
 
+/** @internal Test seams; the console calls {@link attachDevtoolsAgent} with the context alone. */
 export interface DevtoolsAgentOptions {
   channel?: DevtoolsChannel;
   /** @default 1000 */
@@ -189,10 +194,12 @@ const runCommand = async (
  * IPC channel, or with `NODE_ENV=production`, it does nothing and says so once.
  *
  * @param context - The server, as `AsenaServer.start()` hands it over
- * @param options - Channel and sample interval, for tests
  * @returns What the server calls on stop: it releases the IPC listener so the process can exit
  */
-export const attachDevtoolsAgent = (
+export const attachDevtoolsAgent = (context: DevtoolsServerContext): DevtoolsAttachment => startDevtoolsAgent(context);
+
+/** @internal {@link attachDevtoolsAgent} with its test seams. */
+export const startDevtoolsAgent = (
   context: DevtoolsServerContext,
   options: DevtoolsAgentOptions = {},
 ): DevtoolsAttachment => {
