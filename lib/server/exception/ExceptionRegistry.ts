@@ -15,10 +15,9 @@ export interface IdentityMatch {
  * ## How a handler is chosen
  *
  * 1. **Identity, walking the prototype chain upward.** The first `@Catch` whose `prototype` is on
- *    the thrown value's prototype chain wins - `instanceof` semantics, so `util.inherits`-style
- *    errors match too - and it is by definition the most specific one - the same
- *    answer Spring's `ExceptionDepthComparator` produces, without having to collect candidates
- *    and sort them.
+ *    the thrown value's prototype chain wins; this is `instanceof` semantics, so
+ *    `util.inherits`-style errors match too. The first match is the most specific one, the same
+ *    answer Spring's `ExceptionDepthComparator` gives without collecting and sorting candidates.
  * 2. **The `HttpException` brand**, if `@Catch(HttpException)` was declared and step 1 found
  *    nothing or only an ancestor of `HttpException` such as `Error`. See
  *    {@link ExceptionRegistry.brandEntry} for why this exists at all.
