@@ -667,7 +667,6 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
         cron: this.cronRunner,
         events: await this._coreContainer.resolve<EventEmitter>(ICoreServiceNames.EVENT_EMITTER),
         globalMiddlewares: this.globalMiddlewareConfigs,
-        exceptions: this.prepareExceptionHandlerService.view,
         bus: devtoolsBus,
       });
 

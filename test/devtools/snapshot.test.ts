@@ -13,6 +13,7 @@ import { HTTP_EXCEPTION } from '../../lib/adapter/types/HttpException';
 import { createMockAdapter } from '../utils/createMockContext';
 import { AdminPages, AppConfig, CorsHeaders, fixtureComponents, ItemDraft, ItemMissing } from './fixtures/app';
 import type { DevtoolsServerContext } from '../../lib/devtools/context';
+import type { ExceptionRegistryView } from '../../lib/server/exception/ExceptionRegistry';
 import { installDevtoolsHook } from './helpers';
 
 const SNAPSHOT_FILE = join(import.meta.dir, 'fixtures', 'snapshot.json');
@@ -275,16 +276,17 @@ describe('buildDevtoolsSnapshot', () => {
           : entry.types.map((type) => `${handler.component}.${entry.method} <- ${type.name}`),
       ),
     );
-    const fromRegistry = context.exceptions.catches.map(
+    const registry: ExceptionRegistryView = (app.server as any).prepareExceptionHandlerService.view;
+    const fromRegistry = registry.catches.map(
       ({ type, source }) => `${source} <- ${type === 'catch-all' ? type : type.name}`,
     );
 
     expect(fromRegistry.sort()).toEqual(fromSnapshot.sort());
-    expect(context.exceptions.notFound).toBe(`ApiExceptionHandler.${snapshot.exceptionHandlers[0].notFound}`);
-    expect(context.exceptions.whoCatches(new ItemMissing())).toBe('ApiExceptionHandler.known');
-    expect(context.exceptions.whoCatches('thrown string')).toBe('ApiExceptionHandler.fallback');
-    expect(Object.isFrozen(context.exceptions.catches)).toBe(true);
-    expect(Object.isFrozen(context.exceptions.catches[0])).toBe(true);
+    expect(registry.notFound).toBe(`ApiExceptionHandler.${snapshot.exceptionHandlers[0].notFound}`);
+    expect(registry.whoCatches(new ItemMissing())).toBe('ApiExceptionHandler.known');
+    expect(registry.whoCatches('thrown string')).toBe('ApiExceptionHandler.fallback');
+    expect(Object.isFrozen(registry.catches)).toBe(true);
+    expect(Object.isFrozen(registry.catches[0])).toBe(true);
   });
 
   test('describes the @Config and its global middlewares in declaration order', () => {

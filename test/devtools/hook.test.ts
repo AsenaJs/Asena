@@ -48,6 +48,17 @@ describe('devtools hook in AsenaServer.start()', () => {
     expect(context.adapter).toBe('MockAdapter');
     expect(context.container).toBe(app.server.coreContainer.container);
     expect(context.ulak).toBe(await app.server.coreContainer.resolve('__Ulak__'));
+    expect(Object.keys(context).sort()).toEqual([
+      'adapter',
+      'bus',
+      'container',
+      'cron',
+      'events',
+      'globalMiddlewares',
+      'lifecycle',
+      'port',
+      'ulak',
+    ]);
 
     await context.cron.runNow('MorningReport');
     expect(MorningReport.runs).toBe(1);
