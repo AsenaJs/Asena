@@ -238,6 +238,27 @@ describe('ExceptionRegistry', () => {
       expect(registry.resolve(new TypeError())).toBeUndefined();
     });
 
+    it('forgets a cached miss when a matching handler is registered later', () => {
+      const registry = new ExceptionRegistry();
+
+      expect(registry.resolve(new UserNotFoundError())).toBeUndefined();
+
+      registry.register([DomainError], entry('domain'));
+
+      expect(registry.resolve(new UserNotFoundError())?.source).toBe('domain');
+    });
+
+    it('forgets a cached ancestor match when a narrower handler is registered later', () => {
+      const registry = new ExceptionRegistry();
+
+      registry.register([DomainError], entry('domain'));
+      expect(registry.resolve(new UserNotFoundError())?.source).toBe('domain');
+
+      registry.register([UserNotFoundError], entry('specific'));
+
+      expect(registry.resolve(new UserNotFoundError())?.source).toBe('specific');
+    });
+
     it('reports emptiness so the adapter is never wired up for nothing', () => {
       const registry = new ExceptionRegistry();
 

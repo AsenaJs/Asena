@@ -83,7 +83,7 @@ export class ExceptionRegistry {
    * property - `HttpException` sets it in the constructor, so two errors sharing a constructor
    * can disagree about carrying it, and a constructor-keyed cache would answer for both.
    */
-  private readonly identityCache = new WeakMap<Function, IdentityMatch | null>();
+  private identityCache = new WeakMap<Function, IdentityMatch | null>();
 
   /**
    * Registers a handler for the given types.
@@ -92,6 +92,8 @@ export class ExceptionRegistry {
    * @param entry - The bound method and where it came from
    */
   public register(types: ExceptionType[], entry: CatchEntry): void {
+    this.identityCache = new WeakMap();
+
     if (!types.length) {
       this.catchAll = entry;
       return;
