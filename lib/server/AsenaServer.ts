@@ -156,10 +156,6 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
   // Kept for the devtools snapshot, which must not call the @Config again.
   private globalMiddlewareConfigs: GlobalMiddlewareConfig[] = [];
 
-  // The resolved @Config, kept so prepareExceptionHandling() can place its deprecated onError /
-  // onNotFound hooks at the end of the chain rather than dispatching them itself.
-  private configInstance?: AsenaConfig;
-
   // Optional health endpoint (mainly for headless deployments / K8s probes)
   private _health?: HealthOptions;
 
@@ -270,9 +266,6 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
     // Phase 7: Application setup
     this._coreContainer.setPhase(CoreBootstrapPhase.APPLICATION_SETUP);
     await this.prepareConfigs();
-    // After the config so its deprecated hooks can close the chain, before the microservice and
-    // event services so they wire their handlers against a populated registry.
-    await this.prepareExceptionHandling();
     await this.prepareMicroservices();
     await this.prepareEventService.prepare();
     await this.prepareScheduleService.prepare();
@@ -1112,6 +1105,8 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
     const configInstance = await this.prepareConfigService.prepare();
 
     if (!configInstance) {
+      await this.prepareExceptionHandling(undefined);
+
       return;
     }
 
@@ -1125,10 +1120,8 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
       }
     }
 
-    // onError() and onNotFound() are no longer wired here. Both are now the last link of the
-    // chain prepareExceptionHandling() composes, so that @Catch and @NotFound handlers get first
-    // refusal - see that method.
-    this.configInstance = configInstance;
+    // Where onError() and onNotFound() reached the adapter before 0.13: ahead of use() and transport().
+    await this.prepareExceptionHandling(configInstance);
 
     // Pattern-based global middleware registration
     if (typeof configInstance.globalMiddlewares === 'function') {
@@ -1184,9 +1177,9 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
   /**
    * @description Build the exception handling chain and hand it to the adapter
    *
-   * Runs after prepareConfigs() so the deprecated `@Config` hooks are available to sit at the end
-   * of the chain, and before prepareMicroservices() / prepareEventService so those wire their
-   * handlers against a registry that is already populated.
+   * Called from prepareConfigs() at the point where the `@Config` hooks reached the adapter before
+   * 0.13 - after serveOptions(), ahead of use() and transport() - and so also before
+   * prepareMicroservices() / prepareEventService, which wire their handlers against this registry.
    *
    * Resolution order, for both errors and unmatched routes:
    *
@@ -1203,12 +1196,12 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
    * application that has not adopted any of this keeps its previous code path down to the
    * synchronous call.
    *
+   * @param {AsenaConfig} config - The resolved @Config, if there is one
    * @returns {Promise<void>}
    */
-  private async prepareExceptionHandling(): Promise<void> {
+  private async prepareExceptionHandling(config: AsenaConfig | undefined): Promise<void> {
     await this.prepareExceptionHandlerService.prepare();
 
-    const config = this.configInstance;
     const hasConfigOnError = typeof config?.onError === 'function';
     const hasConfigOnNotFound = typeof config?.onNotFound === 'function';
 
