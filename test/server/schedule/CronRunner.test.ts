@@ -198,6 +198,12 @@ describe('CronRunner', () => {
         throw failure;
       });
 
+      await expect(cronRunner.runNow('flaky')).rejects.toBe(failure);
+
+      const manualRun = logger.error.mock.calls;
+
+      logger.error.mockClear();
+
       (Bun.cron as any).parse = (_expression: string, from: number) => new Date(from + 1);
 
       try {
@@ -211,13 +217,115 @@ describe('CronRunner', () => {
         cronRunner.stopAll();
       }
 
-      const timedRun = logger.error.mock.calls[0];
+      expect(manualRun).toEqual([['[Schedule] Error in "flaky":', failure]]);
+      expect(logger.error.mock.calls[0]).toEqual(manualRun[0]);
+    });
 
-      logger.error.mockClear();
+    // The agent can still deliver a command while the server tears down; the job's resources may already be gone.
+    test('refuses once stopAll() ran', async () => {
+      const handler = mock(() => {});
 
-      await expect(cronRunner.runNow('flaky')).rejects.toBe(failure);
-      expect(timedRun).toEqual(['[Schedule] Error in "flaky":', failure]);
-      expect(logger.error.mock.calls).toEqual([timedRun]);
+      cronRunner.registerJob('nightly', '@daily', handler);
+      cronRunner.startAll();
+      cronRunner.stopAll();
+
+      await expect(cronRunner.runNow('nightly')).rejects.toThrow('stopped');
+      expect(handler).not.toHaveBeenCalled();
+    });
+
+    test('runs again after startAll() follows stopAll()', async () => {
+      const handler = mock(() => {});
+
+      cronRunner.registerJob('nightly', '@daily', handler);
+      cronRunner.stopAll();
+      cronRunner.startAll();
+
+      await cronRunner.runNow('nightly');
+
+      expect(handler).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  // A job holding a lock or walking a table must not run twice at once because someone pressed "run now".
+  describe('no overlapping runs of one job', () => {
+    const blockingJob = () => {
+      let release!: () => void;
+      const gate = new Promise<void>((resolve) => (release = resolve));
+      const handler = mock(() => gate);
+
+      return { handler, release };
+    };
+
+    test('runNow refuses while the timed run of the same job is in flight', async () => {
+      const { handler, release } = blockingJob();
+      const originalParse = Bun.cron.parse;
+
+      cronRunner.registerJob('nightly', '@daily', handler);
+      (Bun.cron as any).parse = (_expression: string, from: number) => new Date(from + 1);
+
+      try {
+        cronRunner.startAll();
+
+        for (let waited = 0; handler.mock.calls.length === 0 && waited < 2000; waited += 5) {
+          await Bun.sleep(5);
+        }
+      } finally {
+        (Bun.cron as any).parse = originalParse;
+      }
+
+      expect(handler).toHaveBeenCalledTimes(1);
+
+      const overlapping = cronRunner.runNow('nightly');
+
+      release();
+
+      await expect(overlapping).rejects.toThrow('already running');
+      expect(handler).toHaveBeenCalledTimes(1);
+    });
+
+    test('a second runNow refuses while the first is in flight, and the job runs again once it settled', async () => {
+      const { handler, release } = blockingJob();
+
+      cronRunner.registerJob('nightly', '@daily', handler);
+
+      const first = cronRunner.runNow('nightly');
+      const second = cronRunner.runNow('nightly');
+
+      release();
+
+      await expect(second).rejects.toThrow('already running');
+      await first;
+      await cronRunner.runNow('nightly');
+
+      expect(handler).toHaveBeenCalledTimes(2);
+    });
+
+    test('a timed run that comes due while runNow is in flight is skipped, not stacked', async () => {
+      const { handler, release } = blockingJob();
+      const logger = (cronRunner as any).logger;
+      const originalParse = Bun.cron.parse;
+
+      cronRunner.registerJob('nightly', '@daily', handler);
+
+      const manual = cronRunner.runNow('nightly');
+
+      (Bun.cron as any).parse = (_expression: string, from: number) => new Date(from + 1);
+
+      try {
+        cronRunner.startAll();
+
+        for (let waited = 0; logger.warn.mock.calls.length === 0 && waited < 2000; waited += 5) {
+          await Bun.sleep(5);
+        }
+      } finally {
+        (Bun.cron as any).parse = originalParse;
+      }
+
+      expect(handler).toHaveBeenCalledTimes(1);
+      expect(logger.warn.mock.calls[0][0]).toContain('"nightly"');
+
+      release();
+      await manual;
     });
   });
 

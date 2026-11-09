@@ -24,6 +24,7 @@ import type {
   Route,
 } from '../adapter';
 import * as path from 'node:path';
+import { constants as osConstants } from 'node:os';
 import type { MiddlewareClass, ValidatorClass } from './web/middleware';
 import { ComponentConstants } from '../ioc';
 import * as bun from 'bun';
@@ -74,10 +75,45 @@ import { devtoolsBus } from '../devtools/DevtoolsBus';
 const describeError = (error: unknown): string =>
   error instanceof Error ? (error.stack ?? error.message) + describeCauses(error) : bun.inspect(error);
 
-// On globalThis because a hot reload re-evaluates this module while the previous server's signal
-// handlers stay installed, and the process must not exit under a stop still running.
-const SIGNAL_STOPS_RUNNING = Symbol.for('asena.signalStopsRunning');
-const signalStops = globalThis as unknown as Record<symbol, number>;
+interface ProcessShutdown {
+  /** Every stop() still running in the process, explicit ones included. */
+  running: Set<Promise<void>>;
+  /** Whether a signal-triggered stop rejected. */
+  failed: boolean;
+  /** The listeners that turn a second signal during the drain into an exit. */
+  forceExit: Map<NodeJS.Signals, () => void>;
+}
+
+// On globalThis because a hot reload re-evaluates this module while the previous server's stop and
+// signal handlers are still live, and the process must not exit under a stop still running.
+const PROCESS_SHUTDOWN = Symbol.for('asena.processShutdown');
+
+const processShutdown = (): ProcessShutdown => {
+  const holder = globalThis as unknown as Record<symbol, ProcessShutdown | undefined>;
+
+  return (holder[PROCESS_SHUTDOWN] ??= { running: new Set(), failed: false, forceExit: new Map() });
+};
+
+const trackStop = (stopping: Promise<void>): void => {
+  const { running } = processShutdown();
+  const settled = (): void => {
+    running.delete(stopping);
+  };
+
+  running.add(stopping);
+  stopping.then(settled, settled);
+};
+
+const settleRunningStops = async (): Promise<void> => {
+  const { running } = processShutdown();
+
+  while (running.size > 0) {
+    await Promise.allSettled(running);
+  }
+};
+
+// The @OnStop ceiling's default: how long another listener of the signal may take before the exit.
+const OTHER_LISTENERS_GRACE_MS = 5000;
 
 const underFileWatcher = (): boolean => process.execArgv.includes('--hot') || process.execArgv.includes('--watch');
 
@@ -156,10 +192,6 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
   // Kept for the devtools snapshot, which must not call the @Config again.
   private globalMiddlewareConfigs: GlobalMiddlewareConfig[] = [];
 
-  // The resolved @Config, kept so prepareExceptionHandling() can place its deprecated onError /
-  // onNotFound hooks at the end of the chain rather than dispatching them itself.
-  private configInstance?: AsenaConfig;
-
   // Optional health endpoint (mainly for headless deployments / K8s probes)
   private _health?: HealthOptions;
 
@@ -215,6 +247,21 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
       this.enabledDevtoolsBus = true;
     }
 
+    try {
+      await this.boot(options);
+    } catch (error) {
+      this.releaseDevtoolsBus();
+
+      throw error;
+    }
+  }
+
+  /**
+   * @description Everything start() does once the devtools bus is decided
+   * @param {AsenaStartOptions} options - Optional transport overrides forwarded to the adapter
+   * @returns {Promise<void>}
+   */
+  private async boot(options?: AsenaStartOptions): Promise<void> {
     await this.resolveAdapter();
 
     if (this._adapter) {
@@ -255,9 +302,6 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
     // Phase 7: Application setup
     this._coreContainer.setPhase(CoreBootstrapPhase.APPLICATION_SETUP);
     await this.prepareConfigs();
-    // After the config so its deprecated hooks can close the chain, before the microservice and
-    // event services so they wire their handlers against a populated registry.
-    await this.prepareExceptionHandling();
     await this.prepareMicroservices();
     await this.prepareEventService.prepare();
     await this.prepareScheduleService.prepare();
@@ -340,6 +384,7 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
     if (this.stopping === undefined) {
       this.stoppingCloseActive = closeActiveConnections;
       this.stopping = this.runStop(closeActiveConnections, drainTimeout, hookTimeout);
+      trackStop(this.stopping);
     }
 
     return this.stopping;
@@ -377,6 +422,15 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
       }
     };
 
+    // Before anything it can reach is torn down: a console command arriving mid-teardown would
+    // otherwise run a job or publish against a closed pool and a disposed ulak.
+    await release('devtools agent', () => {
+      const attachment = this.devtools;
+
+      this.devtools = undefined;
+      attachment?.detach();
+    });
+
     await release('cron runner', () => this.cronRunner.stopAll());
     // Adapter before the hooks: in-flight HTTP handlers may still call ulak.send(), so
     // transports must outlive the HTTP surface that uses them
@@ -393,13 +447,7 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
     // Last: the probe outlives the drain it is reporting on.
     await release('health server', () => this.healthServer?.stop());
 
-    await release('devtools agent', () => {
-      this.devtools?.detach();
-
-      if (this.enabledDevtoolsBus) {
-        devtoolsBus.disable();
-      }
-    });
+    await release('devtools bus', () => this.releaseDevtoolsBus());
 
     if (failures.length > 0) {
       throw new AggregateError(failures, `Server shutdown completed with ${failures.length} failure(s)`);
@@ -532,7 +580,48 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
    */
   private onShutdownSignal(signal: NodeJS.Signals): void {
     this._logger.info(`${blue('[AsenaServer]')} ${signal} received, shutting down`);
-    this.shutdownThenExit(0);
+    this.armForceExit();
+    this.shutdownThenExit(0, signal);
+  }
+
+  /**
+   * @description Make a second signal during the drain end the process.
+   *
+   * The handlers are gone once stop() starts, but the runtime's default action only applies while
+   * nothing else listens: another library's hook would otherwise leave a hung drain to SIGKILL.
+   * Added while the first signal is being emitted, so that signal does not reach them.
+   * @returns {void}
+   */
+  private armForceExit(): void {
+    const { forceExit } = processShutdown();
+
+    for (const signal of this.resolveSignals()) {
+      if (forceExit.has(signal)) {
+        continue;
+      }
+
+      const listener = (): void => {
+        this._logger.warn(`${yellow('[AsenaServer]')} ${signal} received again during shutdown, exiting now`);
+        process.exit(128 + (osConstants.signals[signal] ?? 0));
+      };
+
+      forceExit.set(signal, listener);
+      process.on(signal, listener);
+    }
+  }
+
+  /**
+   * @description Remove the second-signal listeners once no stop is running.
+   * @returns {void}
+   */
+  private disarmForceExit(): void {
+    const { forceExit } = processShutdown();
+
+    for (const [signal, listener] of forceExit) {
+      process.off(signal, listener);
+    }
+
+    forceExit.clear();
   }
 
   /**
@@ -543,9 +632,10 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
    * exactly how a telemetry flush against an unreachable collector turns Ctrl+C into exit 1.
    *
    * @param {number} code - Exit code when the process is ended here or by a force-exit deadline
+   * @param {NodeJS.Signals} signal - The signal that asked for the shutdown, if one did
    * @returns {void}
    */
-  private shutdownThenExit(code: number): void {
+  private shutdownThenExit(code: number, signal?: NodeJS.Signals): void {
     const forceExitAfter = this._shutdown?.forceExitAfter ?? false;
     let forceTimer: Timer | undefined;
 
@@ -568,7 +658,7 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
       forceTimer.unref?.();
     }
 
-    signalStops[SIGNAL_STOPS_RUNNING] = (signalStops[SIGNAL_STOPS_RUNNING] ?? 0) + 1;
+    const shutdown = processShutdown();
 
     // A signal means "drain and go" - an explicit stop() keeps its own (force-close) default,
     // so test suites and programmatic callers see unchanged behavior.
@@ -578,20 +668,50 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
     })
       .catch((error: unknown) => {
         this._logger.error(`${yellow('[AsenaServer]')} shutdown failed: ${describeError(error)}`);
+        shutdown.failed = true;
       })
-      .finally(() => {
-        signalStops[SIGNAL_STOPS_RUNNING] -= 1;
-
+      .finally(async () => {
         if (code !== 0) {
           process.exit(code);
         }
 
+        await settleRunningStops();
+
         // Bun's file watcher holds the process after a clean stop, and an unref'd force timer never
         // fires while it idles. Everywhere else a leaked handle must keep the process visibly alive.
-        if (underFileWatcher() && signalStops[SIGNAL_STOPS_RUNNING] === 0) {
-          process.exit(0);
+        if (underFileWatcher()) {
+          this.exitAfterOtherListeners(signal, shutdown.failed ? 1 : 0);
+
+          return;
+        }
+
+        if (shutdown.running.size === 0) {
+          this.disarmForceExit();
+          shutdown.failed = false;
         }
       });
+  }
+
+  /**
+   * @description End the process under a file watcher, once other listeners of the signal had their turn.
+   *
+   * Another listener - a telemetry exporter's own hook - may still be flushing. `beforeExit` fires
+   * under the watcher once the event loop has nothing left, which is when that flush is done; the
+   * unref'd grace timer bounds a listener that never settles or a handle left behind.
+   * @param {NodeJS.Signals} signal - The signal that asked for the shutdown, if one did
+   * @param {number} code - Exit code
+   * @returns {void}
+   */
+  private exitAfterOtherListeners(signal: NodeJS.Signals | undefined, code: number): void {
+    const ours = new Set<unknown>(processShutdown().forceExit.values());
+    const others = signal ? process.listeners(signal).filter((listener) => !ours.has(listener)) : [];
+
+    if (others.length === 0) {
+      process.exit(code);
+    }
+
+    process.once('beforeExit', () => process.exit(code));
+    setTimeout(() => process.exit(code), this._shutdown?.timeout ?? OTHER_LISTENERS_GRACE_MS).unref?.();
   }
 
   /**
@@ -675,7 +795,21 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
       }
     } catch (error) {
       this._logger.warn(`${yellow('[AsenaServer]')} devtools agent failed to attach: ${describeError(error)}`);
+      this.releaseDevtoolsBus();
     }
+  }
+
+  /**
+   * @description Disable the bus if this server enabled it, at most once per enable().
+   * @returns {void}
+   */
+  private releaseDevtoolsBus(): void {
+    if (!this.enabledDevtoolsBus) {
+      return;
+    }
+
+    this.enabledDevtoolsBus = false;
+    devtoolsBus.disable();
   }
 
   /**
@@ -1079,6 +1213,8 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
     const configInstance = await this.prepareConfigService.prepare();
 
     if (!configInstance) {
+      await this.prepareExceptionHandling(undefined);
+
       return;
     }
 
@@ -1092,10 +1228,8 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
       }
     }
 
-    // onError() and onNotFound() are no longer wired here. Both are now the last link of the
-    // chain prepareExceptionHandling() composes, so that @Catch and @NotFound handlers get first
-    // refusal - see that method.
-    this.configInstance = configInstance;
+    // Where onError() and onNotFound() reached the adapter before 0.13: ahead of use() and transport().
+    await this.prepareExceptionHandling(configInstance);
 
     // Pattern-based global middleware registration
     if (typeof configInstance.globalMiddlewares === 'function') {
@@ -1151,9 +1285,9 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
   /**
    * @description Build the exception handling chain and hand it to the adapter
    *
-   * Runs after prepareConfigs() so the deprecated `@Config` hooks are available to sit at the end
-   * of the chain, and before prepareMicroservices() / prepareEventService so those wire their
-   * handlers against a registry that is already populated.
+   * Called from prepareConfigs() at the point where the `@Config` hooks reached the adapter before
+   * 0.13 - after serveOptions(), ahead of use() and transport() - and so also before
+   * prepareMicroservices() / prepareEventService, which wire their handlers against this registry.
    *
    * Resolution order, for both errors and unmatched routes:
    *
@@ -1170,12 +1304,12 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
    * application that has not adopted any of this keeps its previous code path down to the
    * synchronous call.
    *
+   * @param {AsenaConfig} config - The resolved @Config, if there is one
    * @returns {Promise<void>}
    */
-  private async prepareExceptionHandling(): Promise<void> {
+  private async prepareExceptionHandling(config: AsenaConfig | undefined): Promise<void> {
     await this.prepareExceptionHandlerService.prepare();
 
-    const config = this.configInstance;
     const hasConfigOnError = typeof config?.onError === 'function';
     const hasConfigOnNotFound = typeof config?.onNotFound === 'function';
 
@@ -1247,7 +1381,8 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
       return;
     }
 
-    const chain = async (error: Error, context: AsenaContext<any, any>): Promise<Response | undefined> => {
+    // `unknown`: an adapter may forward `throw 'boom'`, and the registry routes it to @Catch() as thrown.
+    const chain = async (error: unknown, context: AsenaContext<any, any>): Promise<Response | undefined> => {
       const result = await service.dispatch(error, { scope: 'http', context });
 
       if (result instanceof Response) {
@@ -1267,7 +1402,8 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
       if (hasConfigOnError) {
         devtoolsBus.step('config-onError', onErrorStep);
 
-        const fromConfig = await config.onError(error, context);
+        // Passed as received, as the lone hook is: a value wrapped here would differ from 0.12's.
+        const fromConfig = await config.onError(error as Error, context);
 
         if (fromConfig instanceof Response) {
           return fromConfig;

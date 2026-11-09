@@ -10,6 +10,7 @@ interface ScheduledJob {
   handler: () => Promise<void> | void;
   timer: Timer | null;
   running: boolean;
+  inFlight: boolean;
 }
 
 /**
@@ -32,6 +33,8 @@ export class CronRunner implements ICoreService {
 
   private jobs: ScheduledJob[] = [];
 
+  private stopped = false;
+
   /**
    * Register a new scheduled job.
    * Job won't start until startAll() is called.
@@ -47,6 +50,7 @@ export class CronRunner implements ICoreService {
       handler,
       timer: null,
       running: false,
+      inFlight: false,
     });
   }
 
@@ -55,6 +59,8 @@ export class CronRunner implements ICoreService {
    * Idempotent - already running jobs are skipped.
    */
   public startAll(): void {
+    this.stopped = false;
+
     for (const job of this.jobs) {
       if (job.running) continue;
 
@@ -68,6 +74,8 @@ export class CronRunner implements ICoreService {
    * Stop all running jobs and clear timers.
    */
   public stopAll(): void {
+    this.stopped = true;
+
     for (const job of this.jobs) {
       this.stopJob(job);
     }
@@ -78,13 +86,22 @@ export class CronRunner implements ICoreService {
    * the same way. Its schedule is left as it is.
    *
    * @param name - The job name, as registered
-   * @throws When no job has that name, or with the job's own failure after it is logged
+   * @throws When no job has that name, when `stopAll()` ran, when the job is already running, or
+   *         with the job's own failure after it is logged
    */
   public async runNow(name: string): Promise<void> {
     const job = this.jobs.find((candidate) => candidate.name === name);
 
     if (!job) {
       throw new Error(`No @Schedule job named "${name}"`);
+    }
+
+    if (this.stopped) {
+      throw new Error(`@Schedule job "${name}" not run: the scheduler is stopped`);
+    }
+
+    if (job.inFlight) {
+      throw new Error(`@Schedule job "${name}" not run: it is already running`);
     }
 
     const failure = await this.execute(job);
@@ -151,6 +168,13 @@ export class CronRunner implements ICoreService {
     job.timer = setTimeout(() => {
       if (!job.running) return;
 
+      if (job.inFlight) {
+        this.logger.warn(`[Schedule] Skipped "${job.name}": the previous run has not finished`);
+        this.scheduleNext(job);
+
+        return;
+      }
+
       void this.execute(job).then(() => {
         this.scheduleNext(job);
       });
@@ -159,6 +183,8 @@ export class CronRunner implements ICoreService {
 
   /** @returns The failure, already logged, or `undefined` when the job succeeded */
   private async execute(job: ScheduledJob): Promise<{ error: unknown } | undefined> {
+    job.inFlight = true;
+
     try {
       await (devtoolsBus.enabled
         ? devtoolsBus.observe('@Schedule', job.name, `${job.name}.execute`, job.handler)
@@ -169,6 +195,8 @@ export class CronRunner implements ICoreService {
       this.logger.error(`[Schedule] Error in "${job.name}":`, error);
 
       return { error };
+    } finally {
+      job.inFlight = false;
     }
   }
 }
