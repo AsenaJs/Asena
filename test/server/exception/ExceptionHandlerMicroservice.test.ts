@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'bun:test';
+import { describe, expect, jest, test } from 'bun:test';
 import { Config, ExceptionHandler, MessageController } from '../../../lib/server/decorators';
 import { Catch, type ExceptionContext } from '../../../lib/server/exception';
 import {
@@ -637,6 +637,84 @@ describe('@Catch for @EventPattern', () => {
 
     await expect(transport.events.get('shipped')!({}, messageContext('shipped'))).rejects.toBe(failure);
     expect(returnValueWarnings(logger)).toHaveLength(0);
+  });
+
+  test('a @Catch that never settles holds the failure back for 5 s at most, then the transport gets it', async () => {
+    const transport = new RecordingTransport();
+    const failure = new OutOfStock();
+
+    @ExceptionHandler()
+    class Errors {
+      @Catch(OutOfStock)
+      public outOfStock() {
+        return new Promise(() => {});
+      }
+    }
+
+    @MessageController({ transport: 'orders' })
+    class OrderEvents {
+      @EventPattern('shipped')
+      public async shipped() {
+        throw failure;
+      }
+    }
+
+    const { logger } = await bootWith(transport, [Errors, OrderEvents]);
+    const flushMicrotasks = async () => {
+      for (let turn = 0; turn < 20; turn++) await Promise.resolve();
+    };
+
+    jest.useFakeTimers();
+
+    try {
+      let outcome: unknown = 'pending';
+
+      Promise.resolve(transport.events.get('shipped')!({}, messageContext('shipped'))).catch(
+        (error: unknown) => (outcome = error),
+      );
+
+      await flushMicrotasks();
+      jest.advanceTimersByTime(4_999);
+      await flushMicrotasks();
+      expect(outcome).toBe('pending');
+
+      jest.advanceTimersByTime(1);
+      await flushMicrotasks();
+      expect(outcome).toBe(failure);
+      expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('@EventPattern OrderEvents.shipped()'));
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  test('a @Catch that settles in time leaves no timer behind', async () => {
+    const transport = new RecordingTransport();
+    const failure = new OutOfStock();
+
+    @ExceptionHandler()
+    class Errors {
+      @Catch(OutOfStock)
+      public outOfStock() {}
+    }
+
+    @MessageController({ transport: 'orders' })
+    class OrderEvents {
+      @EventPattern('shipped')
+      public async shipped() {
+        throw failure;
+      }
+    }
+
+    await bootWith(transport, [Errors, OrderEvents]);
+
+    jest.useFakeTimers();
+
+    try {
+      await expect(transport.events.get('shipped')!({}, messageContext('shipped'))).rejects.toBe(failure);
+      expect(jest.getTimerCount()).toBe(0);
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   test('observes a synchronous throw too, and still rethrows the original', async () => {

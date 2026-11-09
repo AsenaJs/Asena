@@ -9,7 +9,11 @@ import type { Ulak } from '../../messaging';
 import type { MessageHandlerMetadata, MessagingInterceptor } from '../../microservice';
 import type { DestroyOptions, MessageContext, MicroserviceTransport } from '../../microservice';
 import type { PrepareExceptionHandlerService } from './PrepareExceptionHandlerService';
+import type { MicroserviceExceptionContext } from '../../exception/types';
 import { devtoolsBus } from '../../../devtools/DevtoolsBus';
+
+const EVENT_CATCH_TIMEOUT_MS = 5_000;
+const EVENT_CATCH_TIMEOUT = Symbol('event-catch-timeout');
 
 /**
  * @description PrepareMicroserviceService - Registers microservice message handlers during bootstrap
@@ -256,9 +260,9 @@ export class PrepareMicroserviceService implements ICoreService {
    * Outside the interceptor chain, as the http error handler sits outside middleware. For a
    * message, any value other than `undefined` or a `Response` becomes a successful reply; `undefined`
    * and a `Response` (declined with a warning) rethrow the original error, and an error the `@Catch`
-   * throws replaces it. An event is observe-only: the
-   * `@Catch` runs, then the original error reaches the transport so its retry / DLQ policy still
-   * applies. An unmatched error reaches the transport untouched, synchronously when thrown so.
+   * throws replaces it. An event is observe-only: the `@Catch` runs (waited on for 5 s at most),
+   * then the original error reaches the transport so its retry / DLQ policy still applies. An
+   * unmatched error reaches the transport untouched, synchronously when thrown so.
    */
   private routeFailures(
     handler: (data: any, context: MessageContext) => Promise<any>,
@@ -274,7 +278,7 @@ export class PrepareMicroserviceService implements ICoreService {
       const context = { scope: 'microservice', kind, message, data, source, transport } as const;
 
       if (kind === 'event') {
-        await this.exceptions.observe(error, context).catch(() => undefined);
+        await this.observeWithin(error, context);
 
         throw error;
       }
@@ -303,6 +307,30 @@ export class PrepareMicroserviceService implements ICoreService {
 
       return Promise.resolve(pending).catch((error: unknown) => recover(error, data, context));
     };
+  }
+
+  /**
+   * Let the `@Catch` observe an `@EventPattern` failure, but not hold the consumer's ack / retry /
+   * DLQ decision hostage: past the bound the original failure goes on, and the `@Catch` keeps running.
+   */
+  private async observeWithin(error: unknown, context: MicroserviceExceptionContext): Promise<void> {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const timedOut = new Promise<typeof EVENT_CATCH_TIMEOUT>((resolve) => {
+      timer = setTimeout(() => resolve(EVENT_CATCH_TIMEOUT), EVENT_CATCH_TIMEOUT_MS);
+    });
+
+    try {
+      const outcome = await Promise.race([this.exceptions.observe(error, context).catch(() => undefined), timedOut]);
+
+      if (outcome === EVENT_CATCH_TIMEOUT) {
+        this.logger.warn(
+          `@Catch for @EventPattern ${context.source}() did not settle within ${EVENT_CATCH_TIMEOUT_MS} ms — ` +
+            'the original failure goes to the transport now; the @Catch keeps running.',
+        );
+      }
+    } finally {
+      clearTimeout(timer);
+    }
   }
 
   /**
