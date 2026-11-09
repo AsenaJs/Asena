@@ -3,6 +3,7 @@ import type { DevtoolsRequestLog, DevtoolsRequestRecord, DevtoolsRequestStep, De
 
 const MAX_LOG_ENTRIES = 100;
 const MAX_LOG_CHARS = 16 * 1024;
+const MAX_STEPS = 100;
 
 /** A record between `open()` and `close()`. */
 export interface DevtoolsOpenRecord {
@@ -35,7 +36,9 @@ export class DevtoolsBus {
 
   private contractNames?: WeakMap<object, string>;
 
-  private listener?: DevtoolsRecordListener;
+  private readonly listeners = new Set<DevtoolsRecordListener>();
+
+  private users = 0;
 
   private sequence = 0;
 
@@ -44,31 +47,46 @@ export class DevtoolsBus {
     return this.storage !== undefined;
   }
 
+  /** Each server that enables the bus disables it once; the bus stays on until the last one does. */
   public enable(): void {
+    this.users += 1;
     this.storage ??= new AsyncLocalStorage();
     this.contractNames ??= new WeakMap();
   }
 
   public disable(): void {
-    this.storage = undefined;
-    this.contractNames = undefined;
-    this.listener = undefined;
+    if (this.users === 0) {
+      return;
+    }
+
+    this.users -= 1;
+
+    if (this.users === 0) {
+      this.storage = undefined;
+      this.contractNames = undefined;
+      this.listeners.clear();
+    }
   }
 
-  /** One listener at a time: the agent. @returns Unsubscribe */
+  /** @returns Unsubscribe */
   public subscribe(listener: DevtoolsRecordListener): () => void {
-    this.listener = listener;
+    this.listeners.add(listener);
 
     return () => {
-      if (this.listener === listener) {
-        this.listener = undefined;
-      }
+      this.listeners.delete(listener);
     };
   }
 
   /** Appends a step to the record of the current async context, if one is open. */
   public step(kind: DevtoolsStepKind, name: string): void {
-    this.storage?.getStore()?.steps.push({ kind, name });
+    const record = this.storage?.getStore();
+
+    if (!record || record.closed) {
+      return;
+    }
+
+    // Past the cap the newest step replaces the last one kept: the last step is the default answeredBy.
+    record.steps.splice(Math.min(record.steps.length, MAX_STEPS - 1), 1, { kind, name });
   }
 
   /** Hands `fn` back untouched when disabled; otherwise a pass-through that records the step first. */
@@ -142,18 +160,17 @@ export class DevtoolsBus {
     return this.storage ? this.storage.run(record, fn) : fn();
   }
 
-  /** Delivers the finished record to the listener, if there is one. */
+  /** Delivers the finished record to every listener. */
   public close(record: DevtoolsOpenRecord, status: number, answeredBy?: DevtoolsRequestStep): void {
-    const listener = this.listener;
     const answer = answeredBy ?? record.steps.at(-1);
 
     record.closed = true;
 
-    if (!listener || !answer) {
+    if (this.listeners.size === 0 || !answer) {
       return;
     }
 
-    listener({
+    const finished: DevtoolsRequestRecord = {
       id: record.id,
       startedAt: record.startedAt,
       method: record.method,
@@ -164,7 +181,15 @@ export class DevtoolsBus {
       answeredBy: answer,
       ...(record.logs.length > 0 && { logs: [...record.logs] }),
       ...(record.logsTruncated && { logsTruncated: true as const }),
-    });
+    };
+
+    for (const listener of this.listeners) {
+      try {
+        listener(finished);
+      } catch {
+        // Reporting a dispatch must not fail it, nor keep the record from the other listeners.
+      }
+    }
   }
 
   /**

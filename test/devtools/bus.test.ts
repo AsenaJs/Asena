@@ -133,6 +133,111 @@ describe('DevtoolsBus', () => {
 
     expect(listener).not.toHaveBeenCalled();
   });
+
+  test('every subscriber gets each record, and unsubscribing one leaves the others', () => {
+    const bus = new DevtoolsBus();
+    const first: string[] = [];
+    const second: string[] = [];
+    const answer = { kind: 'controller', name: 'X.y' } as const;
+
+    bus.enable();
+
+    const unsubscribeFirst = bus.subscribe((record) => first.push(record.path));
+
+    bus.subscribe((record) => second.push(record.path));
+    bus.close(bus.open('GET', '/both'), 200, answer);
+    unsubscribeFirst();
+    bus.close(bus.open('GET', '/second-only'), 200, answer);
+
+    expect(first).toEqual(['/both']);
+    expect(second).toEqual(['/both', '/second-only']);
+  });
+
+  test('a throwing subscriber neither starves the others nor fails the dispatch it reports on', () => {
+    const bus = new DevtoolsBus();
+    const delivered: string[] = [];
+    const broken = () => {
+      throw new Error('listener broke');
+    };
+
+    bus.enable();
+    bus.subscribe(broken);
+    bus.subscribe((record) => delivered.push(record.path));
+    bus.subscribe(() => broken());
+
+    expect(bus.observe('@On', 'stocked', 'Shelf.stocked', () => 'done')).toBe('done');
+    expect(delivered).toEqual(['stocked']);
+  });
+
+  test('enable and disable are reference counted: the bus stays on until the last user disables it', () => {
+    const bus = new DevtoolsBus();
+    const listener = mock(() => {});
+    const fn = () => 1;
+
+    bus.enable();
+    bus.enable();
+    bus.subscribe(listener);
+    bus.disable();
+
+    expect(bus.enabled).toBe(true);
+    expect(bus.wrap('controller', 'A.b', fn)).not.toBe(fn);
+    bus.close(bus.open('GET', '/'), 200, { kind: 'controller', name: 'X.y' });
+    expect(listener).toHaveBeenCalledTimes(1);
+
+    bus.disable();
+
+    expect(bus.enabled).toBe(false);
+
+    bus.disable();
+    bus.enable();
+
+    expect(bus.enabled).toBe(true);
+  });
+
+  test('a step on a closed record is ignored', () => {
+    const bus = new DevtoolsBus();
+    const records: DevtoolsRequestRecord[] = [];
+
+    bus.enable();
+    bus.subscribe((record) => records.push(record));
+
+    const record = bus.open('GET', '/late-step');
+    let lateStep!: () => void;
+
+    bus.run(record, () => {
+      bus.step('controller', 'Shelf.list');
+      lateStep = () => bus.run(record, () => bus.step('catch', 'Errors.late'));
+    });
+    bus.close(record, 200);
+    lateStep();
+
+    expect(record.steps).toEqual([{ kind: 'controller', name: 'Shelf.list' }]);
+    expect(records[0].steps).toEqual([{ kind: 'controller', name: 'Shelf.list' }]);
+  });
+
+  test('steps are capped like logs, and the step that answered is still the last one', () => {
+    const bus = new DevtoolsBus();
+    const records: DevtoolsRequestRecord[] = [];
+
+    bus.enable();
+    bus.subscribe((record) => records.push(record));
+
+    const record = bus.open('GET', '/looping');
+
+    bus.run(record, () => {
+      for (let hop = 0; hop < 250; hop += 1) {
+        bus.step('middleware', `Hop.${hop}`);
+      }
+
+      bus.step('controller', 'Shelf.list');
+    });
+    bus.close(record, 200);
+
+    expect(records[0].steps).toHaveLength(100);
+    expect(records[0].steps[0]).toEqual({ kind: 'middleware', name: 'Hop.0' });
+    expect(records[0].steps.at(-1)).toEqual({ kind: 'controller', name: 'Shelf.list' });
+    expect(records[0].answeredBy).toEqual({ kind: 'controller', name: 'Shelf.list' });
+  });
 });
 
 const acceptAnything: RequestSchema = {
@@ -354,6 +459,23 @@ describe('DevtoolsBus without the console', () => {
 
       expect(devtoolsBus.enabled).toBe(true);
       await app.stop();
+      expect(devtoolsBus.enabled).toBe(false);
+    } finally {
+      restore();
+    }
+  });
+
+  test('with two servers on the console, stopping one leaves the bus on for the other', async () => {
+    const restore = installDevtoolsHook(() => undefined);
+
+    try {
+      const first = await bootWithMockAdapter(shelfApp);
+      const second = await bootWithMockAdapter(shelfApp);
+
+      await first.stop();
+      expect(devtoolsBus.enabled).toBe(true);
+
+      await second.stop();
       expect(devtoolsBus.enabled).toBe(false);
     } finally {
       restore();
