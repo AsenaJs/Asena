@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { computeReadiness } from '../server/health/readiness';
+import { LifecycleState } from '../server/lifecycle/LifecycleState';
 import { captureRequestOutput } from './capture';
 import type { DevtoolsAttachment, DevtoolsServerContext } from './context';
 import {
@@ -127,6 +128,10 @@ const runCommand = async (
 
   try {
     id = request.id;
+
+    if (context.lifecycle.state !== LifecycleState.STARTED) {
+      return failed(id, 'The server is stopping; the command was not run');
+    }
 
     switch (request.command) {
       case 'runSchedule':

@@ -245,6 +245,23 @@ describe('attachDevtoolsAgent', () => {
     }
   });
 
+  // Teardown closes pools, transports and ulak before the agent detaches; a command run then hits a
+  // half-stopped app, and runNow would even run a job the cron runner has already stopped.
+  test('refuses commands once the server is stopping, without running them', async () => {
+    const { channel, sent, deliver } = fakeChannel();
+    const runsBefore = NightlyRestock.runs;
+
+    attachment = attachDevtoolsAgent(context, { channel });
+    await server.stop();
+    deliver(hostMessage('command', { id: 'late', command: 'runSchedule', name: 'NightlyRestock' }));
+    await Bun.sleep(20);
+
+    expect(NightlyRestock.runs).toBe(runsBefore);
+    expect(payloadsOf(sent, 'commandResult')).toEqual([
+      { id: 'late', ok: false, error: { name: 'Error', message: 'The server is stopping; the command was not run' } },
+    ]);
+  });
+
   test('forwards the records the bus closes as request messages', async () => {
     const { channel, sent, deliver } = fakeChannel();
 
