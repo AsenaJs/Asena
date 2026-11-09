@@ -298,12 +298,19 @@ const isEnvelope = (value: unknown, types: readonly string[]): boolean => {
 
   const { v, type, payload } = value as Record<string, unknown>;
 
-  return v === DEVTOOLS_PROTOCOL_VERSION && typeof type === 'string' && types.includes(type) && payload !== undefined;
+  return (
+    v === DEVTOOLS_PROTOCOL_VERSION &&
+    typeof type === 'string' &&
+    types.includes(type) &&
+    typeof payload === 'object' &&
+    payload !== null
+  );
 };
 
-/** Envelope check only: the payload is trusted to match its type once the version agrees. */
+/** Envelope check: an object payload is trusted to match its type once the version agrees. */
 export const isDevtoolsAgentMessage = (value: unknown): value is DevtoolsAgentMessage =>
   isEnvelope(value, AGENT_MESSAGE_TYPES);
 
+/** Envelope check, plus the string `id` the agent answers under; the command's own fields are the agent's to check. */
 export const isDevtoolsHostMessage = (value: unknown): value is DevtoolsHostMessage =>
-  isEnvelope(value, HOST_MESSAGE_TYPES);
+  isEnvelope(value, HOST_MESSAGE_TYPES) && typeof (value as { payload: { id?: unknown } }).payload.id === 'string';

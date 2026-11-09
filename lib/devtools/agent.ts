@@ -75,13 +75,21 @@ const describeTransports = (context: DevtoolsServerContext): DevtoolsTransport[]
     connected: transport.isConnected,
   }));
 
+const failed = (id: string, message: string): DevtoolsCommandResult => ({
+  id,
+  ok: false,
+  error: { name: 'Error', message },
+});
+
 const runCommand = async (
   context: DevtoolsServerContext,
   request: DevtoolsCommandRequest,
 ): Promise<DevtoolsCommandResult> => {
-  const { id } = request;
+  let id = '';
 
   try {
+    id = request.id;
+
     switch (request.command) {
       case 'runSchedule':
         await context.cron.runNow(request.name);
@@ -96,18 +104,15 @@ const runCommand = async (
           return { id, ok: true, result: { reply } };
         }
 
+        if (request.kind !== 'event') {
+          return failed(id, `Unknown sendMessage kind ${JSON.stringify(request.kind)}`);
+        }
+
         await context.ulak.emit(request.pattern, request.data, { transport: request.transport });
 
         return { id, ok: true, result: { emitted: true } };
       default:
-        return {
-          id,
-          ok: false,
-          error: {
-            name: 'Error',
-            message: `Unknown command ${JSON.stringify((request as { command: unknown }).command)}`,
-          },
-        };
+        return failed(id, `Unknown command ${JSON.stringify((request as { command: unknown }).command)}`);
     }
   } catch (error) {
     return { id, ok: false, error: describeFailure(error) };
@@ -206,17 +211,19 @@ export const attachDevtoolsAgent = (
       return;
     }
 
-    void runCommand(context, message.payload).then((result) => {
-      if (!send(agentMessage('commandResult', result)) && result.ok) {
-        send(
-          agentMessage('commandResult', {
-            id: result.id,
-            ok: false,
-            error: { name: 'DataCloneError', message: 'The result could not be sent over IPC' },
-          }),
-        );
-      }
-    });
+    void runCommand(context, message.payload)
+      .then((result) => {
+        if (!send(agentMessage('commandResult', result)) && result.ok) {
+          send(
+            agentMessage('commandResult', {
+              id: result.id,
+              ok: false,
+              error: { name: 'DataCloneError', message: 'The result could not be sent over IPC' },
+            }),
+          );
+        }
+      })
+      .catch(() => undefined);
   });
 
   return {

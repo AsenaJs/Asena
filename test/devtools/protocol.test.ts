@@ -86,4 +86,19 @@ describe('devtools protocol', () => {
       false,
     );
   });
+
+  // The agent reads the payload's fields, so a payload it cannot read must never pass the guard.
+  test('rejects a payload that is not an object, and a command without a string id', () => {
+    for (const payload of [null, 'runSchedule', 42, true]) {
+      expect(isDevtoolsHostMessage({ v: 1, type: 'command', payload })).toBe(false);
+      expect(isDevtoolsAgentMessage({ v: 1, type: 'hello', payload })).toBe(false);
+    }
+
+    expect(isDevtoolsHostMessage({ v: 1, type: 'command', payload: { command: 'runSchedule', name: 'Nightly' } })).toBe(
+      false,
+    );
+    expect(
+      isDevtoolsHostMessage({ v: 1, type: 'command', payload: { id: 7, command: 'runSchedule', name: 'Nightly' } }),
+    ).toBe(false);
+  });
 });

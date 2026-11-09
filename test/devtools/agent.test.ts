@@ -160,6 +160,64 @@ describe('attachDevtoolsAgent', () => {
     });
   });
 
+  // A version-skewed or buggy host must never take the app down: before, `payload: null` became an
+  // unhandled rejection and a command without an id still ran.
+  test('ignores a host message whose payload is not a command with an id', async () => {
+    const { channel, sent, deliver } = fakeChannel();
+    const runsBefore = NightlyRestock.runs;
+
+    attachment = attachDevtoolsAgent(context, { channel });
+    deliver({ v: 1, type: 'command', payload: null });
+    deliver({ v: 1, type: 'command', payload: 'runSchedule' });
+    deliver({ v: 1, type: 'command', payload: { command: 'runSchedule', name: 'NightlyRestock' } });
+    await Bun.sleep(20);
+
+    expect(payloadsOf(sent, 'commandResult')).toEqual([]);
+    expect(NightlyRestock.runs).toBe(runsBefore);
+  });
+
+  test('refuses a sendMessage whose kind is neither message nor event, instead of emitting', async () => {
+    const { channel, sent, deliver } = fakeChannel();
+    const emit = spyOn(context.ulak, 'emit');
+    const send = spyOn(context.ulak, 'send');
+
+    attachment = attachDevtoolsAgent(context, { channel });
+
+    try {
+      deliver(
+        hostMessage('command', {
+          id: 'k1',
+          command: 'sendMessage',
+          transport: 'default',
+          pattern: 'pantry.audit',
+          kind: 'bogus',
+        } as any),
+      );
+      deliver(
+        hostMessage('command', {
+          id: 'k2',
+          command: 'sendMessage',
+          transport: 'default',
+          pattern: 'pantry.audit',
+        } as any),
+      );
+      await Bun.sleep(20);
+
+      expect(emit).not.toHaveBeenCalled();
+      expect(send).not.toHaveBeenCalled();
+    } finally {
+      emit.mockRestore();
+      send.mockRestore();
+    }
+
+    const results = payloadsOf(sent, 'commandResult');
+
+    expect(results).toEqual([
+      { id: 'k1', ok: false, error: { name: 'Error', message: 'Unknown sendMessage kind "bogus"' } },
+      { id: 'k2', ok: false, error: { name: 'Error', message: 'Unknown sendMessage kind undefined' } },
+    ]);
+  });
+
   test('forwards the records the bus closes as request messages', async () => {
     const { channel, sent, deliver } = fakeChannel();
 
