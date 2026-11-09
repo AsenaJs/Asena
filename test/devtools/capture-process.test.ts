@@ -73,6 +73,7 @@ describe('request-scoped output capture on the real Bun runtime', () => {
   test('a dispatch record carries each write once, verbatim, and the streams still get every byte', async () => {
     const received: DevtoolsAgentMessage[] = [];
     let outsideWritten = false;
+    let inspected: number | undefined;
 
     child = Bun.spawn({
       cmd: [process.execPath, fixture('log-capture-child.ts')],
@@ -81,10 +82,14 @@ describe('request-scoped output capture on the real Bun runtime', () => {
       stdout: 'pipe',
       stderr: 'pipe',
       ipc(message) {
+        const signal = message as { fixture?: string; count?: number };
+
         if (isDevtoolsAgentMessage(message)) {
           received.push(message);
-        } else if ((message as { fixture?: string }).fixture === 'outside-written') {
+        } else if (signal.fixture === 'outside-written') {
           outsideWritten = true;
+        } else if (signal.fixture === 'inspected') {
+          inspected = signal.count;
         }
       },
     });
@@ -111,12 +116,19 @@ describe('request-scoped output capture on the real Bun runtime', () => {
       ['stdout', 'trace line'],
       ['stderr', 'warn line'],
       ['stderr', expect.stringContaining('|')],
+      ['stdout', '{'],
+      ['stdout', expect.stringMatching(/^┌/)],
+      ['stderr', 'assert line'],
+      ['stdout', 'inspect line custom #1'],
       ['stdout', 'raw stdout'],
       ['stderr', 'raw stderr'],
       ['stdout', 'after await'],
     ]);
     expect(logs[5].text).toContain('error: boom\n');
     expect(logs[5].text).toContain('log-capture-child.ts');
+    expect(logs[6].text).toContain('dir: "line"');
+    expect(logs[7].text).toContain('table');
+    expect(inspected).toBe(1);
 
     const written = (stream: 'stdout' | 'stderr') =>
       logs
@@ -130,5 +142,97 @@ describe('request-scoped output capture on the real Bun runtime', () => {
     expect(stdout.match(wrapperFrame)).toHaveLength(1);
     expect(stdout.replace(wrapperFrame, '')).toBe(`outside console\noutside write\n${written('stdout')}`);
     expect(stderr).toBe(written('stderr'));
+  }, 20_000);
+
+  test('a console wrapper the app installs before start redacts the record as it redacts the terminal', async () => {
+    const received: DevtoolsAgentMessage[] = [];
+    let ready = false;
+
+    child = Bun.spawn({
+      cmd: [process.execPath, fixture('redaction-child.ts')],
+      cwd: ROOT,
+      stdin: 'ignore',
+      stdout: 'pipe',
+      stderr: 'pipe',
+      ipc(message) {
+        if (isDevtoolsAgentMessage(message)) {
+          received.push(message);
+        } else if ((message as { fixture?: string }).fixture === 'ready') {
+          ready = true;
+        }
+      },
+    });
+
+    const recordOf = () =>
+      received.find((message) => message.type === 'request')?.payload as DevtoolsRequestRecord | undefined;
+
+    await waitFor(() => ready, 10_000, 'the child to boot');
+    child.send(hostMessage('command', { id: 'run-1', command: 'runSchedule', name: 'TokenJob' }));
+    await waitFor(() => recordOf() !== undefined, 5_000, 'the request record');
+    child.kill('SIGTERM');
+    expect(await child.exited).toBe(0);
+
+    const stdout = await new Response(child.stdout).text();
+
+    expect(stdout).toContain('issued token=[redacted] for shelf\n');
+    expect(stdout).not.toContain('SECRET');
+    expect(recordOf()!.logs).toEqual([
+      { stream: 'stdout', text: 'issued token=[redacted] for shelf\n', at: expect.any(Number) },
+    ]);
+  }, 20_000);
+
+  test('a capture released and taken again still records what the app wrapper redacted', async () => {
+    let runs: unknown;
+
+    child = Bun.spawn({
+      cmd: [process.execPath, fixture('reattach-child.ts')],
+      cwd: ROOT,
+      stdin: 'ignore',
+      stdout: 'pipe',
+      stderr: 'pipe',
+      ipc(message) {
+        if ((message as { fixture?: string }).fixture === 'logs') {
+          runs = (message as { runs: unknown }).runs;
+        }
+      },
+    });
+
+    expect(await child.exited).toBe(0);
+
+    const stdout = await new Response(child.stdout).text();
+
+    expect(stdout).toBe('/first token=[redacted]\n/again token=[redacted]\n');
+    expect(runs).toEqual([
+      [{ stream: 'stdout', text: '/first token=[redacted]\n', at: expect.any(Number) }],
+      [{ stream: 'stdout', text: '/again token=[redacted]\n', at: expect.any(Number) }],
+    ]);
+  }, 20_000);
+
+  test('a console method the app replaced before the capture loaded never records its raw arguments', async () => {
+    let logs: unknown;
+
+    child = Bun.spawn({
+      cmd: [process.execPath, fixture('wrapped-first-child.ts')],
+      cwd: ROOT,
+      stdin: 'ignore',
+      stdout: 'pipe',
+      stderr: 'pipe',
+      ipc(message) {
+        if ((message as { fixture?: string }).fixture === 'logs') {
+          logs = (message as { logs: unknown }).logs;
+        }
+      },
+    });
+
+    expect(await child.exited).toBe(0);
+
+    const [stdout, stderr] = await Promise.all([new Response(child.stdout).text(), new Response(child.stderr).text()]);
+
+    expect(stdout).toBe('log token=[redacted]\ninfo line\n');
+    expect(stderr).toBe('warn token=[redacted]\n');
+    expect(logs).toEqual([
+      { stream: 'stderr', text: 'warn token=[redacted]\n', at: expect.any(Number) },
+      { stream: 'stdout', text: 'info line\n', at: expect.any(Number) },
+    ]);
   }, 20_000);
 });

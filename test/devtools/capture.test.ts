@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test';
+import { format } from 'node:util';
 import { captureRequestOutput } from '../../lib/devtools/capture';
 import { DevtoolsBus } from '../../lib/devtools/DevtoolsBus';
 import { attachDevtoolsAgent } from '../../lib/devtools/agent';
@@ -9,7 +10,7 @@ import { silentLogger } from '../../lib/test/harness/silentLogger';
 import { installDevtoolsHook } from './helpers';
 import { consoleAppComponents } from './fixtures/console-app';
 
-const METHODS = ['log', 'info', 'debug', 'trace', 'warn', 'error'] as const;
+const METHODS = ['log', 'info', 'debug', 'trace', 'warn', 'error', 'dir', 'table', 'assert'] as const;
 
 type Sink = { calls: Array<[string, unknown[]]>; restore: () => void };
 
@@ -194,8 +195,9 @@ describe('request-scoped output capture', () => {
     expect(records[0].logsTruncated).toBe(true);
   });
 
-  test('covers every console method and both streams, on the stream Bun prints them to', () => {
+  test('covers every console method that prints and both streams, on the stream Bun prints them to', () => {
     const record = bus.open('GET', '/all');
+    const rows = [{ shelf: 'A', books: 3 }];
 
     bus.run(record, () => {
       console.log('plain', 42);
@@ -204,60 +206,193 @@ describe('request-scoped output capture', () => {
       console.trace('traced');
       console.warn('careful');
       console.error('failed');
+      console.dir({ shelf: 'A' });
+      console.dir('dir string');
+      console.table(rows);
+      console.table(rows, ['books']);
+      console.assert(true, 'holds, so nothing is printed');
+      console.assert(false, 'broken %s', 'invariant');
+      console.assert(false);
       process.stdout.write(new TextEncoder().encode('bytes\n'));
       process.stderr.write('raw\n');
     });
     bus.close(record, 200, answer);
 
-    const logs = logsOf('/all')!;
-
-    expect(logs.map(({ stream }) => stream)).toEqual([
-      'stdout',
-      'stdout',
-      'stdout',
-      'stdout',
-      'stderr',
-      'stderr',
-      'stdout',
-      'stderr',
-    ]);
-    expect(logs.map(({ text }) => text)).toEqual([
-      'plain 42\n',
-      'n=7\n',
-      'debug\n',
-      expect.stringMatching(/^traced\n {6}at .*capture\.test\.ts/),
-      'careful\n',
-      'failed\n',
-      'bytes\n',
-      'raw\n',
+    expect(logsOf('/all')).toEqual([
+      { stream: 'stdout', text: 'plain 42\n' },
+      { stream: 'stdout', text: 'n=7\n' },
+      { stream: 'stdout', text: 'debug\n' },
+      { stream: 'stdout', text: expect.stringMatching(/^traced\n {6}at .*capture\.test\.ts/) },
+      { stream: 'stderr', text: 'careful\n' },
+      { stream: 'stderr', text: 'failed\n' },
+      { stream: 'stdout', text: `${Bun.inspect({ shelf: 'A' })}\n` },
+      { stream: 'stdout', text: 'dir string\n' },
+      { stream: 'stdout', text: Bun.inspect.table(rows) },
+      { stream: 'stdout', text: Bun.inspect.table(rows, ['books']) },
+      { stream: 'stderr', text: 'broken invariant\n' },
+      { stream: 'stderr', text: 'Assertion failed\n' },
+      { stream: 'stdout', text: 'bytes\n' },
+      { stream: 'stderr', text: 'raw\n' },
     ]);
   });
 
-  test('the original stream still receives every write, with the same arguments', () => {
+  test('the original stream receives every write, and a console call its own arguments when they are plain data', () => {
     const bytes = new TextEncoder().encode('bytes\n');
     const record = bus.open('GET', '/forward');
     const callback = () => undefined;
+    const rows = [{ shelf: 'A' }];
+    const shelf = { shelf: 'A', tags: ['new', null], meta: Object.create(null) };
+    const options = { depth: 1 };
 
     bus.run(record, () => {
-      console.log('plain', 42);
+      console.log('plain', 42, shelf);
       console.trace('traced');
+      console.dir(shelf, options);
+      console.table(rows);
+      console.assert(true, 'holds');
+      console.assert(false, 'broken');
       process.stdout.write(bytes);
       process.stderr.write('raw\n', 'utf8', callback);
     });
     bus.close(record, 200, answer);
 
     expect(sink.calls).toEqual([
-      ['console.log', ['plain', 42]],
+      ['console.log', ['plain', 42, shelf]],
       ['console.trace', ['traced']],
+      ['console.dir', [shelf, options]],
+      ['console.table', [rows]],
+      ['console.assert', [true, 'holds']],
+      ['console.assert', [false, 'broken']],
       ['stdout', [bytes]],
       ['stderr', ['raw\n', 'utf8', callback]],
     ]);
+    expect(sink.calls[0][1][2]).toBe(shelf);
+  });
+
+  test('a console call whose arguments could run code when inspected gets the text the record holds', () => {
+    class Shelf {
+      public name = 'A';
+    }
+    const withGetter = {
+      get books() {
+        return 3;
+      },
+    };
+    const withSymbol = { [Symbol('tag')]: 1 };
+    const named = () => undefined;
+    const record = bus.open('GET', '/rendered');
+
+    bus.run(record, () => {
+      console.log('instance', new Shelf());
+      console.log('getter', withGetter);
+      console.log('nested', { inner: withGetter });
+      console.log('symbol', withSymbol);
+      console.log('proxy', new Proxy({}, {}));
+      console.log('function', named);
+      console.info('%s=%d', 'n', 7);
+    });
+    bus.close(record, 200, answer);
+
+    expect(sink.calls.map(([method]) => method)).toEqual([...Array(6).fill('console.log'), 'console.info']);
+    expect(sink.calls.map(([, args]) => args)).toEqual(
+      logsOf('/rendered')!.map(({ text }) => ['%s', text.slice(0, -1)]),
+    );
+  });
+
+  test('renders each console argument once: a custom inspector is not run a second time for the capture', () => {
+    let inspected = 0;
+    const lazy = {
+      [Bun.inspect.custom]() {
+        inspected += 1;
+
+        return `Lazy#${inspected}`;
+      },
+    };
+    const printed: string[] = [];
+
+    release();
+    // Prints the way Bun's console does: every non-string argument goes through Bun.inspect.
+    console.log = (...args: unknown[]) => {
+      printed.push(format(...args.map((arg) => (typeof arg === 'string' ? arg : Bun.inspect(arg)))));
+    };
+    release = captureRequestOutput(bus);
+
+    const record = bus.open('GET', '/lazy');
+
+    bus.run(record, () => console.log('entity', lazy));
+    bus.close(record, 200, answer);
+
+    expect(inspected).toBe(1);
+    expect(logsOf('/lazy')).toEqual([{ stream: 'stdout', text: 'entity Lazy#1\n' }]);
+    expect(printed).toEqual(['entity Lazy#1']);
+  });
+
+  test('a multibyte character split across two byte writes is captured whole, per record', () => {
+    const bytes = (text: string) => new TextEncoder().encode(text);
+    const accented = bytes('é\n');
+    const umlaut = bytes('ü\n');
+    const first = bus.open('GET', '/split-a');
+    const second = bus.open('GET', '/split-b');
+
+    bus.run(first, () => process.stdout.write(accented.subarray(0, 1)));
+    bus.run(second, () => process.stdout.write(umlaut.subarray(0, 1)));
+    bus.run(first, () => process.stdout.write(accented.subarray(1)));
+    bus.run(second, () => process.stdout.write(umlaut.subarray(1)));
+    bus.close(first, 200, answer);
+    bus.close(second, 200, answer);
+
+    expect(logsOf('/split-a')).toEqual([{ stream: 'stdout', text: 'é\n' }]);
+    expect(logsOf('/split-b')).toEqual([{ stream: 'stdout', text: 'ü\n' }]);
+  });
+
+  test('two captures on one bus record each write once', () => {
+    const second = captureRequestOutput(bus);
+    const record = bus.open('GET', '/twice');
+
+    try {
+      bus.run(record, () => {
+        console.log('console line');
+        process.stdout.write('stream line\n');
+      });
+    } finally {
+      second();
+    }
+
+    bus.close(record, 200, answer);
+
+    expect(logsOf('/twice')).toEqual([
+      { stream: 'stdout', text: 'console line\n' },
+      { stream: 'stdout', text: 'stream line\n' },
+    ]);
+  });
+
+  test('released out of order, the originals come back only when the last capture releases', () => {
+    release();
+
+    const muted = outputFunctions();
+    const first = captureRequestOutput(bus);
+    const second = captureRequestOutput(bus);
+
+    first();
+    first();
+
+    const record = bus.open('GET', '/still-held');
+
+    bus.run(record, () => console.log('second still holds'));
+    bus.close(record, 200, answer);
+
+    expect(logsOf('/still-held')).toEqual([{ stream: 'stdout', text: 'second still holds\n' }]);
+    expect(outputFunctions()).not.toEqual(muted);
+
+    second();
+
+    expect(outputFunctions()).toEqual(muted);
   });
 
   test('captures a console line once even where console.log writes through process.stdout.write', () => {
     release();
     console.log = (...args: unknown[]) => {
-      process.stdout.write(`${args.join(' ')}\n`);
+      process.stdout.write(`${format(...args)}\n`);
     };
     release = captureRequestOutput(bus);
 
