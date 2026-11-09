@@ -113,3 +113,53 @@ describe('where the error hooks reach the adapter', () => {
     expect(order).toEqual(['onError']);
   });
 });
+
+// Hono forwards only `instanceof Error` to onError today; an adapter that forwards the rest must reach @Catch() intact.
+describe('a non-Error thrown on HTTP', () => {
+  test('reaches @Catch() as the value that was thrown', async () => {
+    const received: unknown[] = [];
+
+    @ExceptionHandler()
+    class Handlers {
+      @Catch()
+      public everything(error: unknown, ctx: any) {
+        received.push(error);
+
+        return ctx.context.send('caught', 500);
+      }
+    }
+
+    const { errorHandler } = await boot([Handlers]);
+    const response = await errorHandler('boom', { send: (body: string) => new Response(body) });
+
+    expect(received).toEqual(['boom']);
+    expect(await response!.text()).toBe('caught');
+  });
+
+  test('is not caught by @Catch(Error), and config.onError still gets it as thrown', async () => {
+    const seenByConfig: unknown[] = [];
+
+    @ExceptionHandler()
+    class Handlers {
+      @Catch(Error)
+      public errorsOnly(_error: Error, ctx: any) {
+        return ctx.context.send('errors-only', 500);
+      }
+    }
+
+    @Config()
+    class LegacyConfig {
+      public onError(error: Error, context: AsenaContext<any, any>) {
+        seenByConfig.push(error);
+
+        return context.send('config', 500);
+      }
+    }
+
+    const { errorHandler } = await boot([Handlers, LegacyConfig]);
+    const response = await errorHandler(42, { send: (body: string) => new Response(body) });
+
+    expect(await response!.text()).toBe('config');
+    expect(seenByConfig).toEqual([42]);
+  });
+});

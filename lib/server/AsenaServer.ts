@@ -1273,7 +1273,8 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
       return;
     }
 
-    const chain = async (error: Error, context: AsenaContext<any, any>): Promise<Response | undefined> => {
+    // `unknown`: an adapter may forward `throw 'boom'`, and the registry routes it to @Catch() as thrown.
+    const chain = async (error: unknown, context: AsenaContext<any, any>): Promise<Response | undefined> => {
       const result = await service.dispatch(error, { scope: 'http', context });
 
       if (result instanceof Response) {
@@ -1293,7 +1294,8 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
       if (hasConfigOnError) {
         devtoolsBus.step('config-onError', onErrorStep);
 
-        const fromConfig = await config.onError(error, context);
+        // Passed as received, as the lone hook is: a value wrapped here would differ from 0.12's.
+        const fromConfig = await config.onError(error as Error, context);
 
         if (fromConfig instanceof Response) {
           return fromConfig;
