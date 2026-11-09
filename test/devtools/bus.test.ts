@@ -120,6 +120,33 @@ describe('DevtoolsBus', () => {
     ]);
   });
 
+  // A @Schedule handler is the user's own method: it may return a non-native thenable, and the
+  // record must report how it settles, not close as a success the moment it is returned.
+  test('observe frames a non-native thenable by how it settles', async () => {
+    const bus = new DevtoolsBus();
+    const records: DevtoolsRequestRecord[] = [];
+    const failure = new Error('later');
+    const thenable = (settle: (resolve: (v: unknown) => void, reject: (e: unknown) => void) => void) => ({
+      then: (resolve: (v: unknown) => void, reject: (e: unknown) => void) =>
+        setTimeout(() => settle(resolve, reject), 1),
+    });
+
+    bus.enable();
+    bus.subscribe((record) => records.push(record));
+
+    const rejected = bus.observe('@Schedule', 'rejects', 'Job.execute', () => thenable((_, reject) => reject(failure)));
+    const resolved = bus.observe('@Schedule', 'resolves', 'Job.execute', () => thenable((resolve) => resolve('done')));
+
+    expect(records).toEqual([]);
+    await expect(Promise.resolve(rejected)).rejects.toBe(failure);
+    expect(await resolved).toBe('done');
+
+    expect(records.map(({ path, status }) => [path, status]).sort()).toEqual([
+      ['rejects', 500],
+      ['resolves', 200],
+    ]);
+  });
+
   test('without a listener, closing a record delivers nothing', () => {
     const bus = new DevtoolsBus();
     const listener = mock(() => {});

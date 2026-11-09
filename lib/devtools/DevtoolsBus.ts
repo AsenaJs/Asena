@@ -1,5 +1,6 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import type { DevtoolsRequestLog, DevtoolsRequestRecord, DevtoolsRequestStep, DevtoolsStepKind } from './protocol';
+import { isThenable } from '../utils/isThenable';
 
 const MAX_LOG_ENTRIES = 100;
 const MAX_LOG_CHARS = 16 * 1024;
@@ -221,13 +222,13 @@ export class DevtoolsBus {
       throw error;
     }
 
-    if (!(result instanceof Promise)) {
+    if (!isThenable(result)) {
       this.close(record, 200);
 
       return result;
     }
 
-    return result.then(
+    return Promise.resolve(result).then(
       (value) => {
         this.close(record, 200);
 

@@ -7,11 +7,7 @@ import type { PrepareExceptionHandlerService } from '../src/services/PrepareExce
 import { PatternHandlerIndex } from './PatternHandlerIndex';
 import { devtoolsBus } from '../../devtools/DevtoolsBus';
 import type { EventHandler, EventSubscription } from './types';
-
-const isThenable = (value: unknown): value is PromiseLike<unknown> =>
-  value !== null &&
-  (typeof value === 'object' || typeof value === 'function') &&
-  typeof (value as { then?: unknown }).then === 'function';
+import { isThenable } from '../../utils/isThenable';
 
 /**
  * @description Internal event dispatch service
@@ -130,9 +126,8 @@ export class EventDispatchService implements ICoreService {
       try {
         const result = sub.handler(eventName, data);
 
-        // Smart async detection: If Promise, handle errors but DON'T await
-        // Benchmark showed await Promise.resolve(syncHandler()) is 13x slower!
-        if (result instanceof Promise || isThenable(result)) {
+        // Wrapping every result in Promise.resolve() measured ~80x slower for sync handlers.
+        if (isThenable(result)) {
           Promise.resolve(result).catch((error) => {
             void this.handleFailure(sub, eventName, data, error, 'Async');
           });
