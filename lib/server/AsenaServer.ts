@@ -24,6 +24,7 @@ import type {
   Route,
 } from '../adapter';
 import * as path from 'node:path';
+import { constants as osConstants } from 'node:os';
 import type { MiddlewareClass, ValidatorClass } from './web/middleware';
 import { ComponentConstants } from '../ioc';
 import * as bun from 'bun';
@@ -74,10 +75,45 @@ import { devtoolsBus } from '../devtools/DevtoolsBus';
 const describeError = (error: unknown): string =>
   error instanceof Error ? (error.stack ?? error.message) + describeCauses(error) : bun.inspect(error);
 
-// On globalThis because a hot reload re-evaluates this module while the previous server's signal
-// handlers stay installed, and the process must not exit under a stop still running.
-const SIGNAL_STOPS_RUNNING = Symbol.for('asena.signalStopsRunning');
-const signalStops = globalThis as unknown as Record<symbol, number>;
+interface ProcessShutdown {
+  /** Every stop() still running in the process, explicit ones included. */
+  running: Set<Promise<void>>;
+  /** Whether a signal-triggered stop rejected. */
+  failed: boolean;
+  /** The listeners that turn a second signal during the drain into an exit. */
+  forceExit: Map<NodeJS.Signals, () => void>;
+}
+
+// On globalThis because a hot reload re-evaluates this module while the previous server's stop and
+// signal handlers are still live, and the process must not exit under a stop still running.
+const PROCESS_SHUTDOWN = Symbol.for('asena.processShutdown');
+
+const processShutdown = (): ProcessShutdown => {
+  const holder = globalThis as unknown as Record<symbol, ProcessShutdown | undefined>;
+
+  return (holder[PROCESS_SHUTDOWN] ??= { running: new Set(), failed: false, forceExit: new Map() });
+};
+
+const trackStop = (stopping: Promise<void>): void => {
+  const { running } = processShutdown();
+  const settled = (): void => {
+    running.delete(stopping);
+  };
+
+  running.add(stopping);
+  stopping.then(settled, settled);
+};
+
+const settleRunningStops = async (): Promise<void> => {
+  const { running } = processShutdown();
+
+  while (running.size > 0) {
+    await Promise.allSettled(running);
+  }
+};
+
+// The @OnStop ceiling's default: how long another listener of the signal may take before the exit.
+const OTHER_LISTENERS_GRACE_MS = 5000;
 
 const underFileWatcher = (): boolean => process.execArgv.includes('--hot') || process.execArgv.includes('--watch');
 
@@ -348,6 +384,7 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
     if (this.stopping === undefined) {
       this.stoppingCloseActive = closeActiveConnections;
       this.stopping = this.runStop(closeActiveConnections, drainTimeout, hookTimeout);
+      trackStop(this.stopping);
     }
 
     return this.stopping;
@@ -543,7 +580,48 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
    */
   private onShutdownSignal(signal: NodeJS.Signals): void {
     this._logger.info(`${blue('[AsenaServer]')} ${signal} received, shutting down`);
-    this.shutdownThenExit(0);
+    this.armForceExit();
+    this.shutdownThenExit(0, signal);
+  }
+
+  /**
+   * @description Make a second signal during the drain end the process.
+   *
+   * The handlers are gone once stop() starts, but the runtime's default action only applies while
+   * nothing else listens: another library's hook would otherwise leave a hung drain to SIGKILL.
+   * Added while the first signal is being emitted, so that signal does not reach them.
+   * @returns {void}
+   */
+  private armForceExit(): void {
+    const { forceExit } = processShutdown();
+
+    for (const signal of this.resolveSignals()) {
+      if (forceExit.has(signal)) {
+        continue;
+      }
+
+      const listener = (): void => {
+        this._logger.warn(`${yellow('[AsenaServer]')} ${signal} received again during shutdown, exiting now`);
+        process.exit(128 + (osConstants.signals[signal] ?? 0));
+      };
+
+      forceExit.set(signal, listener);
+      process.on(signal, listener);
+    }
+  }
+
+  /**
+   * @description Remove the second-signal listeners once no stop is running.
+   * @returns {void}
+   */
+  private disarmForceExit(): void {
+    const { forceExit } = processShutdown();
+
+    for (const [signal, listener] of forceExit) {
+      process.off(signal, listener);
+    }
+
+    forceExit.clear();
   }
 
   /**
@@ -554,9 +632,10 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
    * exactly how a telemetry flush against an unreachable collector turns Ctrl+C into exit 1.
    *
    * @param {number} code - Exit code when the process is ended here or by a force-exit deadline
+   * @param {NodeJS.Signals} signal - The signal that asked for the shutdown, if one did
    * @returns {void}
    */
-  private shutdownThenExit(code: number): void {
+  private shutdownThenExit(code: number, signal?: NodeJS.Signals): void {
     const forceExitAfter = this._shutdown?.forceExitAfter ?? false;
     let forceTimer: Timer | undefined;
 
@@ -579,7 +658,7 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
       forceTimer.unref?.();
     }
 
-    signalStops[SIGNAL_STOPS_RUNNING] = (signalStops[SIGNAL_STOPS_RUNNING] ?? 0) + 1;
+    const shutdown = processShutdown();
 
     // A signal means "drain and go" - an explicit stop() keeps its own (force-close) default,
     // so test suites and programmatic callers see unchanged behavior.
@@ -589,20 +668,50 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
     })
       .catch((error: unknown) => {
         this._logger.error(`${yellow('[AsenaServer]')} shutdown failed: ${describeError(error)}`);
+        shutdown.failed = true;
       })
-      .finally(() => {
-        signalStops[SIGNAL_STOPS_RUNNING] -= 1;
-
+      .finally(async () => {
         if (code !== 0) {
           process.exit(code);
         }
 
+        await settleRunningStops();
+
         // Bun's file watcher holds the process after a clean stop, and an unref'd force timer never
         // fires while it idles. Everywhere else a leaked handle must keep the process visibly alive.
-        if (underFileWatcher() && signalStops[SIGNAL_STOPS_RUNNING] === 0) {
-          process.exit(0);
+        if (underFileWatcher()) {
+          this.exitAfterOtherListeners(signal, shutdown.failed ? 1 : 0);
+
+          return;
+        }
+
+        if (shutdown.running.size === 0) {
+          this.disarmForceExit();
+          shutdown.failed = false;
         }
       });
+  }
+
+  /**
+   * @description End the process under a file watcher, once other listeners of the signal had their turn.
+   *
+   * Another listener - a telemetry exporter's own hook - may still be flushing. `beforeExit` fires
+   * under the watcher once the event loop has nothing left, which is when that flush is done; the
+   * unref'd grace timer bounds a listener that never settles or a handle left behind.
+   * @param {NodeJS.Signals} signal - The signal that asked for the shutdown, if one did
+   * @param {number} code - Exit code
+   * @returns {void}
+   */
+  private exitAfterOtherListeners(signal: NodeJS.Signals | undefined, code: number): void {
+    const ours = new Set<unknown>(processShutdown().forceExit.values());
+    const others = signal ? process.listeners(signal).filter((listener) => !ours.has(listener)) : [];
+
+    if (others.length === 0) {
+      process.exit(code);
+    }
+
+    process.once('beforeExit', () => process.exit(code));
+    setTimeout(() => process.exit(code), this._shutdown?.timeout ?? OTHER_LISTENERS_GRACE_MS).unref?.();
   }
 
   /**
