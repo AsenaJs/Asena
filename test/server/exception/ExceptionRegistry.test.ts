@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'bun:test';
 import { inherits } from 'node:util';
-import { ExceptionRegistry } from '../../../lib/server/exception';
-import type { CatchEntry } from '../../../lib/server/exception';
+import { ExceptionRegistry } from '../../../lib/server/exception/ExceptionRegistry';
+import type { CatchEntry } from '../../../lib/server/exception/types';
 import { HTTP_EXCEPTION, HttpException, NotFoundException } from '../../../lib/adapter';
 
 /** A stand-in handler. Only identity matters here, so the body is irrelevant. */
