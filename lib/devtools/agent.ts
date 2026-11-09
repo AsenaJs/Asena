@@ -40,6 +40,44 @@ const processChannel: DevtoolsChannel = {
   },
 };
 
+interface CommandListener {
+  listen(): void;
+  unlisten(): void;
+}
+
+// On globalThis rather than in module scope: a `--hot` reload evaluates a fresh copy of this module.
+const COMMAND_LISTENERS = Symbol.for('asena.devtools.commandListeners');
+
+/**
+ * Only the most recent live attachment listens for host commands, so one command runs once however
+ * many servers the process holds. When it detaches, the one before it listens again.
+ *
+ * @returns Releases the claim
+ */
+const claimCommands = (claimant: CommandListener): (() => void) => {
+  const slot = globalThis as Record<symbol, unknown>;
+  const stack = (slot[COMMAND_LISTENERS] ??= []) as CommandListener[];
+
+  stack.at(-1)?.unlisten();
+  stack.push(claimant);
+  claimant.listen();
+
+  return () => {
+    const index = stack.indexOf(claimant);
+
+    if (index === -1) {
+      return;
+    }
+
+    stack.splice(index, 1);
+
+    if (index === stack.length) {
+      claimant.unlisten();
+      stack.at(-1)?.listen();
+    }
+  };
+};
+
 let warnedInert = false;
 
 // Walks up rather than using a fixed depth: the file runs from lib/ in tests and from dist/lib/ when published.
@@ -125,7 +163,8 @@ const runCommand = async (
  *
  * Sends `hello` and the snapshot, then a metrics sample every second and every record the bus
  * closes, with what the app wrote to the console and the std streams while that record was in
- * scope, and answers the host's commands through the app's real dispatch paths. It opens no port
+ * scope, and answers the host's commands through the app's real dispatch paths; with several
+ * attachments in one process, only the most recent one answers commands. It opens no port
  * and registers nothing; `detach` puts the console and stream functions back. Called without an
  * IPC channel it does nothing and says so once.
  *
@@ -206,7 +245,7 @@ export const attachDevtoolsAgent = (
 
   sampler.unref();
 
-  const removeListener = channel.onMessage((message) => {
+  const onCommand = (message: unknown): void => {
     if (!isDevtoolsHostMessage(message) || message.type !== 'command') {
       return;
     }
@@ -224,6 +263,17 @@ export const attachDevtoolsAgent = (
         }
       })
       .catch(() => undefined);
+  };
+
+  let removeListener: (() => void) | undefined;
+  const releaseCommands = claimCommands({
+    listen: () => {
+      removeListener ??= channel.onMessage(onCommand);
+    },
+    unlisten: () => {
+      removeListener?.();
+      removeListener = undefined;
+    },
   });
 
   return {
@@ -231,7 +281,7 @@ export const attachDevtoolsAgent = (
       clearInterval(sampler);
       unsubscribe();
       releaseOutput();
-      removeListener();
+      releaseCommands();
     },
   };
 };

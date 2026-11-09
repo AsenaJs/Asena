@@ -218,6 +218,33 @@ describe('attachDevtoolsAgent', () => {
     ]);
   });
 
+  // Two servers in one process, or a `--hot` reload that leaves the previous one running, share one
+  // IPC channel: a command must run once, not once per attachment.
+  test('only the most recent attachment answers commands; the previous one takes over when it detaches', async () => {
+    const { channel, sent, deliver } = fakeChannel();
+    const runsBefore = NightlyRestock.runs;
+    const older = attachDevtoolsAgent(context, { channel });
+    const newer = attachDevtoolsAgent(context, { channel });
+
+    try {
+      deliver(hostMessage('command', { id: 'once', command: 'runSchedule', name: 'NightlyRestock' }));
+      await Bun.sleep(20);
+
+      expect(NightlyRestock.runs).toBe(runsBefore + 1);
+      expect(payloadsOf(sent, 'commandResult').map((result) => result.id)).toEqual(['once']);
+
+      newer.detach();
+      deliver(hostMessage('command', { id: 'after', command: 'runSchedule', name: 'NightlyRestock' }));
+      await Bun.sleep(20);
+
+      expect(NightlyRestock.runs).toBe(runsBefore + 2);
+      expect(payloadsOf(sent, 'commandResult').map((result) => result.id)).toEqual(['once', 'after']);
+    } finally {
+      newer.detach();
+      older.detach();
+    }
+  });
+
   test('forwards the records the bus closes as request messages', async () => {
     const { channel, sent, deliver } = fakeChannel();
 
