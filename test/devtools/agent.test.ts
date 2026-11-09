@@ -111,6 +111,45 @@ describe('attachDevtoolsAgent', () => {
     expect(metrics.at(-1)!.readiness).toEqual({ status: 'up', transports: { default: 'connected' } });
   });
 
+  // Teardown destroys the transports while the sampler still ticks; a third-party isConnected getter
+  // that dereferences a destroyed client must not become an uncaught exception from a timer.
+  test('skips a metrics tick whose transport getter throws, and samples again once it recovers', async () => {
+    const { channel, sent } = fakeChannel();
+    let broken = false;
+    const transport = {
+      get isConnected() {
+        if (broken) {
+          throw new Error('client destroyed');
+        }
+
+        return true;
+      },
+    };
+    const transports = spyOn(context.ulak, 'getMicroserviceTransports').mockImplementation(
+      () => new Map([['default', transport as any]]),
+    );
+
+    try {
+      attachment = attachDevtoolsAgent(context, { channel, sampleIntervalMs: 5 });
+      broken = true;
+
+      const whileBroken = payloadsOf(sent, 'metrics').length;
+
+      await Bun.sleep(40);
+      expect(payloadsOf(sent, 'metrics').length).toBe(whileBroken);
+
+      broken = false;
+
+      for (let waited = 0; payloadsOf(sent, 'metrics').length === whileBroken && waited < 2000; waited += 10) {
+        await Bun.sleep(10);
+      }
+
+      expect(payloadsOf(sent, 'metrics').at(-1)!.transports).toEqual([{ name: 'default', connected: true }]);
+    } finally {
+      transports.mockRestore();
+    }
+  });
+
   test('answers commands through the real dispatch paths, with the correlation id', async () => {
     const { channel, sent, deliver } = fakeChannel();
     const command = (id: string, body: DevtoolsCommand) => deliver(hostMessage('command', { id, ...body }));

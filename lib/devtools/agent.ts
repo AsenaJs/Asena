@@ -245,7 +245,15 @@ export const attachDevtoolsAgent = (
   };
 
   const sampler = setInterval(() => {
-    send(agentMessage('metrics', sample()));
+    let metrics: DevtoolsMetrics;
+
+    try {
+      metrics = sample();
+    } catch {
+      return;
+    }
+
+    send(agentMessage('metrics', metrics));
   }, interval);
 
   sampler.unref();
