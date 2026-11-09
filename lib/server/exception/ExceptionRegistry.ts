@@ -16,7 +16,7 @@ export interface ExceptionRegistryView {
   whoCatches(error: unknown): string | undefined;
 }
 
-interface IdentityMatch {
+export interface IdentityMatch {
   type: ExceptionType;
   entry: CatchEntry;
 }
@@ -29,8 +29,9 @@ interface IdentityMatch {
  *
  * ## How a handler is chosen
  *
- * 1. **Identity, walking the prototype chain upward.** The first `@Catch` found on the thrown
- *    value's constructor chain wins, which is by definition the most specific one - the same
+ * 1. **Identity, walking the prototype chain upward.** The first `@Catch` whose `prototype` is on
+ *    the thrown value's prototype chain wins - `instanceof` semantics, so `util.inherits`-style
+ *    errors match too - and it is by definition the most specific one - the same
  *    answer Spring's `ExceptionDepthComparator` produces, without having to collect candidates
  *    and sort them.
  * 2. **The `HttpException` brand**, if `@Catch(HttpException)` was declared and step 1 found
@@ -44,8 +45,8 @@ interface IdentityMatch {
  * to completion before step 2 is considered.
  */
 export class ExceptionRegistry {
-  /** Exception class -> the handler that answers it. Populated at boot, never after. */
-  private readonly byType = new Map<ExceptionType, CatchEntry>();
+  /** `type.prototype` -> the class and the handler that answers it. Populated at boot, never after. */
+  private readonly byPrototype = new Map<unknown, IdentityMatch>();
 
   /**
    * `@Catch()` with no arguments.
@@ -75,15 +76,15 @@ export class ExceptionRegistry {
   private brandEntry?: CatchEntry;
 
   /**
-   * Memoises step 1 per constructor: chain walks are short (2-4 links) but they run on a path
+   * Memoises step 1 per prototype: chain walks are short (2-4 links) but they run on a path
    * that a request storm hits repeatedly. `WeakMap` so a class going out of scope still gets
    * collected.
    *
    * Only the identity result is cached. The brand cannot be, because it is an *instance*
-   * property - `HttpException` sets it in the constructor, so two errors sharing a constructor
-   * can disagree about carrying it, and a constructor-keyed cache would answer for both.
+   * property - `HttpException` sets it in the constructor, so two errors sharing a prototype
+   * can disagree about carrying it, and a prototype-keyed cache would answer for both.
    */
-  private readonly identityCache = new WeakMap<Function, IdentityMatch | null>();
+  private identityCache = new WeakMap<object, IdentityMatch | null>();
 
   /**
    * Registers a handler for the given types.
@@ -92,15 +93,17 @@ export class ExceptionRegistry {
    * @param entry - The bound method and where it came from
    */
   public register(types: ExceptionType[], entry: CatchEntry): void {
+    this.identityCache = new WeakMap();
+
     if (!types.length) {
       this.catchAll = entry;
       return;
     }
 
     for (const type of types) {
-      this.byType.set(type, entry);
+      this.byPrototype.set(type.prototype, { type, entry });
 
-      // Recorded separately, not instead of - `byType` still holds it so an exception that *is*
+      // Recorded separately, not instead of - `byPrototype` still holds it so an exception that *is*
       // identity-matched as an HttpException short-circuits without touching the brand.
       if (type === HttpException) {
         this.brandEntry = entry;
@@ -110,7 +113,7 @@ export class ExceptionRegistry {
 
   /** Every registration, in registration order, the catch-all last. A copy: the registry stays sealed. */
   public entries(): readonly ExceptionRegistryEntry[] {
-    const entries: ExceptionRegistryEntry[] = [...this.byType].map(([type, entry]) =>
+    const entries: ExceptionRegistryEntry[] = [...this.byPrototype.values()].map(({ type, entry }) =>
       Object.freeze({ type, source: entry.source }),
     );
 
@@ -123,7 +126,7 @@ export class ExceptionRegistry {
 
   /** Whether anything at all was registered. Used to decide if the adapter needs wiring up. */
   public get isEmpty(): boolean {
-    return this.byType.size === 0 && !this.catchAll;
+    return this.byPrototype.size === 0 && !this.catchAll;
   }
 
   /**
@@ -152,44 +155,49 @@ export class ExceptionRegistry {
     return this.catchAll;
   }
 
+  /** The typed `@Catch` an instance of `type` would reach by identity - no brand, no catch-all. */
+  public matchClass(type: ExceptionType): IdentityMatch | undefined {
+    return this.walk(type.prototype);
+  }
+
   /** `@Catch(Error)` must not shadow `@Catch(HttpException)` for a branded exception from another class tree. */
   private isBroaderThanHttpException(type: ExceptionType): boolean {
     return HttpException.prototype instanceof type;
   }
 
   private resolveByIdentity(error: unknown): IdentityMatch | undefined {
-    // `throw null`, `throw undefined` and primitives have no constructor to walk. They are not a
+    // `throw null`, `throw undefined` and primitives are not `instanceof` anything. They are not a
     // failure to handle - they are precisely what the catch-all exists for.
-    const ctor = (error as { constructor?: Function } | null | undefined)?.constructor;
-
-    if (typeof ctor !== 'function') {
+    if ((typeof error !== 'object' && typeof error !== 'function') || error === null) {
       return undefined;
     }
 
-    const cached = this.identityCache.get(ctor);
+    const prototype: object | null = Object.getPrototypeOf(error);
+
+    if (prototype === null) {
+      return undefined;
+    }
+
+    const cached = this.identityCache.get(prototype);
 
     if (cached !== undefined) {
       return cached ?? undefined;
     }
 
-    const found = this.walk(ctor);
+    const found = this.walk(prototype);
 
     // `null` records a miss, so a type nobody catches is not re-walked on every request.
-    this.identityCache.set(ctor, found ?? null);
+    this.identityCache.set(prototype, found ?? null);
 
     return found;
   }
 
-  private walk(ctor: Function): IdentityMatch | undefined {
-    for (
-      let current: unknown = ctor;
-      typeof current === 'function' && current !== Function.prototype;
-      current = Object.getPrototypeOf(current)
-    ) {
-      const entry = this.byType.get(current as ExceptionType);
+  private walk(prototype: object | null): IdentityMatch | undefined {
+    for (let current = prototype; current !== null; current = Object.getPrototypeOf(current)) {
+      const match = this.byPrototype.get(current);
 
-      if (entry) {
-        return { type: current as ExceptionType, entry };
+      if (match) {
+        return match;
       }
     }
 

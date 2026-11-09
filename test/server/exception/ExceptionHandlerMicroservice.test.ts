@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'bun:test';
+import { describe, expect, jest, test } from 'bun:test';
 import { Config, ExceptionHandler, MessageController } from '../../../lib/server/decorators';
 import { Catch, type ExceptionContext } from '../../../lib/server/exception';
 import {
@@ -148,6 +148,33 @@ describe('@Catch for @MessagePattern', () => {
     await bootWith(transport, [Errors, OrderHandler]);
 
     expect(await transport.send('order.create')).toBe('fallback');
+  });
+
+  test('names the handler by component name, as the devtools snapshot does', async () => {
+    const transport = new RecordingTransport();
+    const sources: string[] = [];
+
+    @ExceptionHandler()
+    class Errors {
+      @Catch(OutOfStock)
+      public outOfStock(_error: Error, ctx: ExceptionContext) {
+        sources.push((ctx as { source: string }).source);
+        return 'fallback';
+      }
+    }
+
+    @MessageController({ name: 'Orders', transport: 'orders' })
+    class OrderHandler {
+      @MessagePattern('create')
+      public create() {
+        throw new OutOfStock();
+      }
+    }
+
+    await bootWith(transport, [Errors, OrderHandler]);
+    await transport.messages.get('create')!({}, messageContext('create'));
+
+    expect(sources).toEqual(['Orders.create']);
   });
 
   test('resolves the most specific type along the prototype chain', async () => {
@@ -361,7 +388,36 @@ describe('@Catch for @MessagePattern', () => {
     expect(logger.warn.mock.calls.length).toBe(warningsAtBoot);
   });
 
-  test('a @Catch that throws is contained: its error is logged and the original is rethrown', async () => {
+  test('logs the original error at debug level when a @Catch replies, since the transport never sees it', async () => {
+    const transport = new RecordingTransport();
+    const failure = new OutOfStock('sku-1');
+
+    @ExceptionHandler()
+    class Errors {
+      @Catch(OutOfStock)
+      public outOfStock() {
+        return { error: 'out of stock' };
+      }
+    }
+
+    @MessageController({ transport: 'orders' })
+    class OrderHandler {
+      @MessagePattern('create')
+      public async create() {
+        throw failure;
+      }
+    }
+
+    const { logger } = await bootWith(transport, [Errors, OrderHandler]);
+
+    await transport.messages.get('create')!({}, messageContext('create'));
+
+    const lines = (logger.debug.mock.calls as unknown[][]).filter(([message]) => String(message).includes('@Catch'));
+
+    expect(lines).toEqual([[expect.stringContaining('Errors.outOfStock()'), failure]]);
+  });
+
+  test('a @Catch that throws replaces the failure: the transport sees the error the @Catch threw', async () => {
     const transport = new RecordingTransport();
     const failure = new OutOfStock('original');
     const handlerFailure = new Error('handler broke');
@@ -369,7 +425,7 @@ describe('@Catch for @MessagePattern', () => {
     @ExceptionHandler()
     class Errors {
       @Catch(OutOfStock)
-      public outOfStock() {
+      public async outOfStock() {
         throw handlerFailure;
       }
     }
@@ -384,11 +440,59 @@ describe('@Catch for @MessagePattern', () => {
 
     const { logger } = await bootWith(transport, [Errors, OrderHandler]);
 
-    await expect(transport.messages.get('create')!({}, messageContext('create'))).rejects.toBe(failure);
-    expect(logger.error).toHaveBeenCalledWith(
-      '@Catch handler Errors.outOfStock() threw an error, falling back to the framework default:',
-      handlerFailure,
-    );
+    await expect(transport.messages.get('create')!({}, messageContext('create'))).rejects.toBe(handlerFailure);
+    expect(logger.error).not.toHaveBeenCalled();
+  });
+
+  test('a @Catch that throws a sanitized error keeps the original message from the caller', async () => {
+    const transport = new InMemoryTransport();
+
+    @ExceptionHandler()
+    class Errors {
+      @Catch(OutOfStock)
+      public outOfStock() {
+        throw new Error('Service unavailable');
+      }
+    }
+
+    @MessageController({ transport: 'orders' })
+    class OrderHandler {
+      @MessagePattern('create')
+      public async create() {
+        throw new OutOfStock('insert into stock violates constraint stock_sku_fkey');
+      }
+    }
+
+    await bootWith(transport, [Errors, OrderHandler]);
+
+    const error = await transport.send<never>('create').catch((caught: UlakError) => caught);
+
+    expect(error.code).toBe(UlakErrorCode.REMOTE_ERROR);
+    expect(error.message).toBe('Handler for pattern "create" failed: Service unavailable');
+  });
+
+  test('a @Catch returning null replies null: only undefined declines', async () => {
+    const transport = new InMemoryTransport();
+
+    @ExceptionHandler()
+    class Errors {
+      @Catch(OutOfStock)
+      public outOfStock() {
+        return null;
+      }
+    }
+
+    @MessageController({ transport: 'orders' })
+    class OrderHandler {
+      @MessagePattern('create')
+      public async create() {
+        throw new OutOfStock();
+      }
+    }
+
+    await bootWith(transport, [Errors, OrderHandler]);
+
+    expect(await transport.send('create')).toBeNull();
   });
 
   test('sits outside the interceptor chain, so an interceptor still sees the failure', async () => {
@@ -472,6 +576,45 @@ describe('@Catch for @EventPattern', () => {
     ]);
   });
 
+  test('does not route a failure the @Catch itself published back into @Catch, so it cannot loop', async () => {
+    const transport = new InMemoryTransport();
+    const auditDown = new Error('audit down');
+    const cap = 50;
+    let catches = 0;
+
+    @ExceptionHandler()
+    class Errors {
+      @Catch()
+      public async fallback() {
+        catches += 1;
+
+        if (catches < cap) {
+          await transport.emit('audit.failed');
+        }
+      }
+    }
+
+    @MessageController({ transport: 'orders' })
+    class OrderEvents {
+      @EventPattern('order.shipped')
+      public async shipped() {
+        throw new OutOfStock();
+      }
+
+      @EventPattern('audit.failed')
+      public async audit() {
+        throw auditDown;
+      }
+    }
+
+    const { logger } = await bootWith(transport, [Errors, OrderEvents]);
+
+    await transport.emit('order.shipped');
+
+    expect(catches).toBe(1);
+    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('Errors.fallback()'), auditDown);
+  });
+
   test('a @Catch that returns nothing declines, so the transport still sees the original failure', async () => {
     const transport = new RecordingTransport();
     const failure = new OutOfStock();
@@ -494,6 +637,84 @@ describe('@Catch for @EventPattern', () => {
 
     await expect(transport.events.get('shipped')!({}, messageContext('shipped'))).rejects.toBe(failure);
     expect(returnValueWarnings(logger)).toHaveLength(0);
+  });
+
+  test('a @Catch that never settles holds the failure back for 5 s at most, then the transport gets it', async () => {
+    const transport = new RecordingTransport();
+    const failure = new OutOfStock();
+
+    @ExceptionHandler()
+    class Errors {
+      @Catch(OutOfStock)
+      public outOfStock() {
+        return new Promise(() => {});
+      }
+    }
+
+    @MessageController({ transport: 'orders' })
+    class OrderEvents {
+      @EventPattern('shipped')
+      public async shipped() {
+        throw failure;
+      }
+    }
+
+    const { logger } = await bootWith(transport, [Errors, OrderEvents]);
+    const flushMicrotasks = async () => {
+      for (let turn = 0; turn < 20; turn++) await Promise.resolve();
+    };
+
+    jest.useFakeTimers();
+
+    try {
+      let outcome: unknown = 'pending';
+
+      Promise.resolve(transport.events.get('shipped')!({}, messageContext('shipped'))).catch(
+        (error: unknown) => (outcome = error),
+      );
+
+      await flushMicrotasks();
+      jest.advanceTimersByTime(4_999);
+      await flushMicrotasks();
+      expect(outcome).toBe('pending');
+
+      jest.advanceTimersByTime(1);
+      await flushMicrotasks();
+      expect(outcome).toBe(failure);
+      expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('@EventPattern OrderEvents.shipped()'));
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  test('a @Catch that settles in time leaves no timer behind', async () => {
+    const transport = new RecordingTransport();
+    const failure = new OutOfStock();
+
+    @ExceptionHandler()
+    class Errors {
+      @Catch(OutOfStock)
+      public outOfStock() {}
+    }
+
+    @MessageController({ transport: 'orders' })
+    class OrderEvents {
+      @EventPattern('shipped')
+      public async shipped() {
+        throw failure;
+      }
+    }
+
+    await bootWith(transport, [Errors, OrderEvents]);
+
+    jest.useFakeTimers();
+
+    try {
+      await expect(transport.events.get('shipped')!({}, messageContext('shipped'))).rejects.toBe(failure);
+      expect(jest.getTimerCount()).toBe(0);
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   test('observes a synchronous throw too, and still rethrows the original', async () => {
@@ -582,7 +803,7 @@ describe('@Catch for @EventPattern', () => {
 });
 
 describe('when containing a throwing @Catch fails too', () => {
-  test('the transport still sees the original failure', async () => {
+  test('the transport still sees the original @EventPattern failure', async () => {
     const transport = new RecordingTransport();
     const failure = new OutOfStock();
     const logger = createLogger();
@@ -600,9 +821,9 @@ describe('when containing a throwing @Catch fails too', () => {
     }
 
     @MessageController({ transport: 'orders' })
-    class OrderHandler {
-      @MessagePattern('create')
-      public async create() {
+    class OrderEvents {
+      @EventPattern('shipped')
+      public async shipped() {
         throw failure;
       }
     }
@@ -614,9 +835,9 @@ describe('when containing a throwing @Catch fails too', () => {
       }
     }
 
-    await bootExceptionApp([TransportConfig, Errors, OrderHandler], { logger });
+    await bootExceptionApp([TransportConfig, Errors, OrderEvents], { logger });
 
-    await expect(transport.messages.get('create')!({}, messageContext('create'))).rejects.toBe(failure);
+    await expect(transport.events.get('shipped')!({}, messageContext('shipped'))).rejects.toBe(failure);
   });
 });
 

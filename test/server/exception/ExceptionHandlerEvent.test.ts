@@ -75,6 +75,35 @@ describe('@Catch for @On handlers', () => {
     expect(returnValueWarnings(logger)[0]).toContain('Errors.quota()');
   });
 
+  test('names the @On and the @Catch by component name, as the devtools snapshot does', async () => {
+    const seen: ExceptionContext[] = [];
+
+    @ExceptionHandler('NamedErrors')
+    class Errors {
+      @Catch(QuotaExceeded)
+      public quota(_error: unknown, ctx: ExceptionContext) {
+        seen.push(ctx);
+        return true;
+      }
+    }
+
+    @EventService({ name: 'NamedUserEvents', prefix: 'user' })
+    class UserEvents {
+      @On('created')
+      public onCreated() {
+        throw new QuotaExceeded('quota');
+      }
+    }
+
+    const { emitter, logger } = await boot([Errors, UserEvents]);
+
+    emitter.emit('user.created');
+    await flush();
+
+    expect(seen.map((ctx) => (ctx as { source?: string }).source)).toEqual(['NamedUserEvents.onCreated']);
+    expect(returnValueWarnings(logger)[0]).toContain('NamedErrors.quota()');
+  });
+
   test('hands an async rejection to the matching @Catch, and still logs the default line', async () => {
     const seen: unknown[] = [];
     const failure = new QuotaExceeded('quota');
@@ -108,6 +137,68 @@ describe('@Catch for @On handlers', () => {
       failure,
     );
     expect(returnValueWarnings(logger)).toHaveLength(1);
+  });
+
+  test('routes the rejection of a thenable that is not a native Promise', async () => {
+    const seen: unknown[] = [];
+    const failure = new QuotaExceeded('quota');
+
+    @ExceptionHandler()
+    class Errors {
+      @Catch(QuotaExceeded)
+      public quota(error: unknown) {
+        seen.push(error);
+      }
+    }
+
+    @EventService()
+    class UserEvents {
+      @On('user.synced')
+      public onSynced() {
+        return {
+          then(_resolve: (value: unknown) => void, reject: (reason: unknown) => void) {
+            reject(failure);
+          },
+        };
+      }
+    }
+
+    const { emitter } = await boot([Errors, UserEvents]);
+
+    emitter.emit('user.synced');
+    await flush();
+
+    expect(seen).toEqual([failure]);
+    expect(consoleError).toHaveBeenCalledWith(
+      '[EventDispatchService] Async error in handler for event "user.synced":',
+      failure,
+    );
+  });
+
+  test('treats a then getter that throws as a sync failure of the handler', async () => {
+    const failure = new QuotaExceeded('quota');
+
+    @EventService()
+    class UserEvents {
+      @On('user.synced')
+      public onSynced() {
+        return Object.defineProperty({}, 'then', {
+          get() {
+            throw failure;
+          },
+        });
+      }
+    }
+
+    const { emitter } = await boot([UserEvents]);
+
+    expect(emitter.emit('user.synced')).toBe(true);
+    await flush();
+
+    expect(consoleError).toHaveBeenCalledWith(
+      '[EventDispatchService] Sync error in handler for event "user.synced":',
+      failure,
+    );
   });
 
   test('resolves the most specific type along the prototype chain', async () => {
@@ -409,5 +500,56 @@ describe('@Catch for @On handlers', () => {
 
     expect(seen).toEqual([{ scope: 'event', event: 'raw.event', data: 7 }]);
     expect('source' in seen[0]).toBe(false);
+  });
+
+  test('does not route a failure the @Catch itself set off back into @Catch, so it cannot loop', async () => {
+    // Without the guard this runs in microtasks only: the cap is what keeps the red run finite.
+    const cap = 1000;
+    const reporterDown = new Error('reporter down');
+    let catches = 0;
+    let emitter!: EventEmitter;
+
+    @ExceptionHandler()
+    class Errors {
+      @Catch()
+      public fallback() {
+        catches += 1;
+
+        if (catches < cap) {
+          emitter.emit('app.error');
+        }
+      }
+    }
+
+    @EventService()
+    class Events {
+      @On('job.run')
+      public run() {
+        throw new Error('job failed');
+      }
+
+      @On('app.error')
+      public async report() {
+        throw reporterDown;
+      }
+    }
+
+    const app = await boot([Errors, Events]);
+
+    emitter = app.emitter;
+
+    const catchesWhenTimerFired = new Promise<number>((resolve) => setTimeout(() => resolve(catches), 0));
+
+    emitter.emit('job.run');
+
+    expect(await catchesWhenTimerFired).toBe(1);
+    await flush();
+
+    expect(catches).toBe(1);
+    expect(consoleError).toHaveBeenCalledWith(
+      '[EventDispatchService] Async error in handler for event "app.error":',
+      reporterDown,
+    );
+    expect(app.logger.warn).toHaveBeenCalledWith(expect.stringContaining('Errors.fallback()'), reporterDown);
   });
 });

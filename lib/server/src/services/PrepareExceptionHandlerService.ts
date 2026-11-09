@@ -1,7 +1,8 @@
+import { AsyncLocalStorage } from 'node:async_hooks';
 import type { Container, ICoreService } from '../../../ioc';
 import { ComponentConstants, ComponentType, CoreService, ICoreServiceNames } from '../../../ioc';
 import { Inject } from '../../../ioc/component';
-import { getChainedTypedMetadata, getOwnTypedMetadata } from '../../../utils';
+import { getChainedTypedMetadata, getOwnTypedMetadata, getTypedMetadata } from '../../../utils';
 import { type ServerLogger, yellow } from '../../../logger';
 import { ExceptionRegistry, type ExceptionRegistryView } from '../../exception/ExceptionRegistry';
 import type {
@@ -14,6 +15,7 @@ import type {
 } from '../../exception/types';
 import type { NotFoundRequest } from '../../../adapter/types/ErrorHandler';
 import { devtoolsBus } from '../../../devtools/DevtoolsBus';
+import { HttpException } from '../../../adapter/types/HttpException';
 
 /** A resolved `@NotFound()` method, with where it came from for the cardinality error. */
 interface NotFoundEntry {
@@ -49,6 +51,9 @@ export class PrepareExceptionHandlerService implements ICoreService {
   private logger!: ServerLogger;
 
   private readonly registry = new ExceptionRegistry();
+
+  /** The `source` of the `@Catch` whose work is running, if any. Entered on the error path only. */
+  private readonly runningCatch = new AsyncLocalStorage<string>();
 
   private notFound?: NotFoundEntry;
 
@@ -104,20 +109,58 @@ export class PrepareExceptionHandlerService implements ICoreService {
       });
     }
 
+    this.announceHttpExceptionCatcher(catchAll);
+  }
+
+  /**
+   * A handler that receives `HttpException` without naming it silently widens: an application that
+   * used to get the adapter's 400 / 401 envelopes now gets whatever this handler returns.
+   */
+  private announceHttpExceptionCatcher(catchAll: string | undefined): void {
+    const advice = `ValidationError and auth 401s — add @Catch(HttpException) if the adapter's envelopes should be kept.`;
+    const typed = this.registry.matchClass(HttpException);
+
+    if (typed) {
+      if (typed.type !== HttpException) {
+        this.logger.info(
+          `@Catch(${typed.type.name}) ${yellow(typed.entry.source)}() will also receive HttpException, ${advice}`,
+        );
+      }
+
+      return;
+    }
+
     if (catchAll) {
-      // Worth a line at boot because it is the one registration that silently widens: a catch-all
-      // also swallows ValidationError and HttpException, so an application that used to get the
-      // adapter's 400 envelope now gets whatever this handler returns.
       this.logger.info(
-        `@Catch() catch-all ${yellow(catchAll)}() will receive every error, including ValidationError and ` +
-          `HttpException — narrow it with @Catch(HttpException) if the adapter's envelopes should be kept.`,
+        `@Catch() catch-all ${yellow(catchAll)}() will receive every error, including HttpException, ${advice}`,
       );
     }
   }
 
   /** Whether some `@Catch` would receive this value. Synchronous, so a caller can keep its default path in the same tick. */
   public handles(error: unknown): boolean {
-    return this.registry.resolve(error) !== undefined;
+    return this.match(error) !== undefined;
+  }
+
+  /**
+   * The `@Catch` for a thrown value, unless it was raised by work a running `@Catch` started: a
+   * catch-all that emits into a failing listener would otherwise receive its own failure forever.
+   */
+  private match(error: unknown): CatchEntry | undefined {
+    const entry = this.registry.resolve(error);
+    const running = this.runningCatch.getStore();
+
+    if (entry && running !== undefined) {
+      this.logger.warn(
+        `An error was raised by work that @Catch handler ${running}() started — it is not routed to @Catch ` +
+          'again, so a handler cannot loop on its own failures; the framework default handles it:',
+        error,
+      );
+
+      return undefined;
+    }
+
+    return entry;
   }
 
   /**
@@ -129,9 +172,19 @@ export class PrepareExceptionHandlerService implements ICoreService {
    *          declined by returning nothing, or the handler itself threw
    */
   public async dispatch(error: unknown, context: ExceptionContext<any>): Promise<unknown> {
-    const entry = this.registry.resolve(error);
+    const entry = this.match(error);
 
-    return entry ? this.invoke(entry, error, context) : undefined;
+    if (!entry) {
+      return undefined;
+    }
+
+    const result = await this.invoke(entry, error, context);
+
+    if (result instanceof Response) {
+      this.recordAnswered(entry, error);
+    }
+
+    return result;
   }
 
   /**
@@ -140,7 +193,7 @@ export class PrepareExceptionHandlerService implements ICoreService {
    * A returned value is reported, since it can only mean the handler expected it to count.
    */
   public async observe(error: unknown, context: ExceptionContext<any>): Promise<void> {
-    const entry = this.registry.resolve(error);
+    const entry = this.match(error);
 
     if (!entry) {
       return;
@@ -158,20 +211,25 @@ export class PrepareExceptionHandlerService implements ICoreService {
 
   /**
    * Run the `@Catch` chain for a `@MessagePattern` failure, where the return value becomes the
-   * reply. A `Response` is an HTTP answer, never a message reply: it is reported and declined, so
-   * the caller sees the original failure instead of a serialized `Response` posing as success.
+   * reply - `null` included, only `undefined` declines. A `Response` is an HTTP answer, never a
+   * message reply: it is reported and declined, so the caller sees the original failure instead of
+   * a serialized `Response` posing as success.
    *
-   * @returns The reply, or `undefined` when nothing matched, the handler declined, threw, or
+   * Unlike the other scopes, a handler that throws is not contained: what it throws replaces the
+   * original failure, which is how a handler sends the caller a sanitized error.
+   *
+   * @returns The reply, or `undefined` when nothing matched, the handler declined, or it
    *          returned a `Response`
+   * @throws Whatever the handler threw
    */
   public async reply(error: unknown, context: MicroserviceExceptionContext): Promise<unknown> {
-    const entry = this.registry.resolve(error);
+    const entry = this.match(error);
 
     if (!entry) {
       return undefined;
     }
 
-    const result = await this.invoke(entry, error, context);
+    const result = await this.call(entry, error, context);
 
     if (result instanceof Response) {
       this.logger.warn(
@@ -183,14 +241,27 @@ export class PrepareExceptionHandlerService implements ICoreService {
       return undefined;
     }
 
+    if (result !== undefined) {
+      this.recordAnswered(entry, error);
+    }
+
     return result;
   }
 
-  private async invoke(entry: CatchEntry, error: unknown, context: ExceptionContext<any>): Promise<unknown> {
+  /** Whoever answers is who records: once a `@Catch` answers, the adapter or transport never logs the error. */
+  private recordAnswered(entry: CatchEntry, error: unknown): void {
+    this.logger.debug?.(`@Catch handler ${entry.source}() answered:`, error);
+  }
+
+  private async call(entry: CatchEntry, error: unknown, context: ExceptionContext<any>): Promise<unknown> {
     devtoolsBus.step('catch', entry.source);
 
+    return this.runningCatch.run(entry.source, () => entry.handler(error, context));
+  }
+
+  private async invoke(entry: CatchEntry, error: unknown, context: ExceptionContext<any>): Promise<unknown> {
     try {
-      return await entry.handler(error, context);
+      return await this.call(entry, error, context);
     } catch (handlerError) {
       // Treated as a decline, so the framework still answers and still records the *original*
       // failure. A handler that throws must not be able to make the request disappear.
@@ -234,7 +305,8 @@ export class PrepareExceptionHandlerService implements ICoreService {
     seenTypes: Map<ExceptionType, string>,
     claimCatchAll: (source: string) => void,
   ): void {
-    const className = instance.constructor.name;
+    const className =
+      getTypedMetadata<string>(ComponentConstants.NameKey, instance.constructor) || instance.constructor.name;
 
     // Chained, not plain getTypedMetadata: @Catch writes to the class declaring the method, so a
     // handler inherited from a base class lives on that base. Same reasoning as

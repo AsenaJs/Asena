@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'bun:test';
-import { ExceptionRegistry } from '../../../lib/server/exception';
-import type { CatchEntry } from '../../../lib/server/exception';
+import { inherits } from 'node:util';
+import { ExceptionRegistry } from '../../../lib/server/exception/ExceptionRegistry';
+import type { CatchEntry } from '../../../lib/server/exception/types';
 import { HTTP_EXCEPTION, HttpException, NotFoundException } from '../../../lib/adapter';
 
 /** A stand-in handler. Only identity matters here, so the body is irrelevant. */
@@ -64,6 +65,34 @@ describe('ExceptionRegistry', () => {
       registry.register([AbstractDomainError], entry('abstract'));
 
       expect(registry.resolve(new ConcreteDomainError())?.source).toBe('abstract');
+    });
+
+    it('matches a util.inherits-style error the way instanceof does', () => {
+      // Function-based inheritance links the prototypes but not the constructors, so a walk up
+      // the constructor chain never reaches Error even though `instanceof Error` is true.
+      function LibraryError(this: Error, message: string) {
+        Error.call(this, message);
+      }
+      inherits(LibraryError, Error);
+
+      const registry = new ExceptionRegistry();
+
+      registry.register([Error], entry('error'));
+      registry.register([], entry('catchAll'));
+
+      const thrown = new (LibraryError as any)('library');
+
+      expect(thrown instanceof Error).toBe(true);
+      expect(registry.resolve(thrown)?.source).toBe('error');
+    });
+
+    it('ignores a constructor property that the prototype chain does not back', () => {
+      const registry = new ExceptionRegistry();
+
+      registry.register([DomainError], entry('domain'));
+      registry.register([], entry('catchAll'));
+
+      expect(registry.resolve({ constructor: DomainError })?.source).toBe('catchAll');
     });
 
     it('registers one handler for several types', () => {
@@ -236,6 +265,27 @@ describe('ExceptionRegistry', () => {
       registry.register([DomainError], entry('domain'));
 
       expect(registry.resolve(new TypeError())).toBeUndefined();
+    });
+
+    it('forgets a cached miss when a matching handler is registered later', () => {
+      const registry = new ExceptionRegistry();
+
+      expect(registry.resolve(new UserNotFoundError())).toBeUndefined();
+
+      registry.register([DomainError], entry('domain'));
+
+      expect(registry.resolve(new UserNotFoundError())?.source).toBe('domain');
+    });
+
+    it('forgets a cached ancestor match when a narrower handler is registered later', () => {
+      const registry = new ExceptionRegistry();
+
+      registry.register([DomainError], entry('domain'));
+      expect(registry.resolve(new UserNotFoundError())?.source).toBe('domain');
+
+      registry.register([UserNotFoundError], entry('specific'));
+
+      expect(registry.resolve(new UserNotFoundError())?.source).toBe('specific');
     });
 
     it('reports emptiness so the adapter is never wired up for nothing', () => {

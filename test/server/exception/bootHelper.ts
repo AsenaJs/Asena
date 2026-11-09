@@ -14,6 +14,7 @@ export const createLogger = () => ({
   error: mock(() => {}),
   warn: mock(() => {}),
   profile: mock(() => {}),
+  debug: mock(() => {}),
 });
 
 export interface BootOptions {

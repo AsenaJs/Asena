@@ -3,7 +3,7 @@ import { AsenaServerFactory } from '../../../lib/server';
 import { ExceptionHandler } from '../../../lib/server/decorators';
 import { Catch, NotFound } from '../../../lib/server/exception';
 import { Implements } from '../../../lib/ioc/component/decorators';
-import type { AsenaContext, NotFoundRequest } from '../../../lib/adapter';
+import { type AsenaContext, HttpException, type NotFoundRequest } from '../../../lib/adapter';
 import { createMockAdapter } from '../../utils/createMockContext';
 
 class OrderFailure extends Error {}
@@ -209,6 +209,46 @@ describe('exception handler cardinality', () => {
 
     expect(notice).toContain('LoudFallback.fallback');
     expect(notice).toContain('ValidationError');
+  });
+
+  test('announces a @Catch(Error) at boot, since HttpException, ValidationError and auth 401s reach it too', async () => {
+    @ExceptionHandler()
+    class BroadErrors {
+      @Catch(Error)
+      public anyError() {}
+    }
+
+    const { logger } = await boot([BroadErrors]);
+
+    const notice = logger.info.mock.calls
+      .map((call: any[]) => call[0])
+      .find((m: string) => m.includes('BroadErrors.anyError'));
+
+    expect(notice).toContain('HttpException');
+    expect(notice).toContain('ValidationError');
+    expect(notice).toContain('401');
+  });
+
+  test('stays quiet about @Catch(Error) and the catch-all when @Catch(HttpException) keeps them', async () => {
+    @ExceptionHandler()
+    class SplitErrors {
+      @Catch(Error)
+      public anyError() {}
+
+      @Catch(HttpException)
+      public http() {}
+
+      @Catch()
+      public fallback() {}
+    }
+
+    const { logger } = await boot([SplitErrors]);
+
+    const notices = logger.info.mock.calls
+      .map((call: any[]) => String(call[0]))
+      .filter((m: string) => m.includes('HttpException'));
+
+    expect(notices).toEqual([]);
   });
 
   test('rejects an undefined @Catch argument at decoration time', async () => {

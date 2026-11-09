@@ -6,16 +6,13 @@ import type { AsenaContext } from '../AsenaContext';
  * **Returning nothing declines**: the adapter answers with its own default and writes the log
  * line, because whoever answers is who records. Both adapters have implemented that since 0.9.0 -
  * `Ergenecore.respondToError` filters on `instanceof Response`, `HonoAdapter.onError` on
- * truthiness.
- *
- * The return type does not say so, and deliberately stays narrow. Widening it to
- * `Response | void` breaks the hono adapter at compile time: `HonoErrorHandler` is this very type
- * and is handed straight to hono's `app.onError`, whose own signature requires
- * `Response | Promise<Response>` - and `Promise<Response | void>` is not assignable to that. A
- * caller that needs to decline casts at its own call site instead, which keeps the cost at the
- * one boundary that needs it rather than on every adapter.
+ * truthiness. An adapter must therefore await the result and check it is a `Response`, never hand
+ * the handler to a framework that expects one.
  */
-export type ErrorHandler<C extends AsenaContext<any, any>> = (error: Error, context: C) => Response | Promise<Response>;
+export type ErrorHandler<C extends AsenaContext<any, any>> = (
+  error: Error,
+  context: C,
+) => Response | undefined | Promise<Response | undefined>;
 
 /**
  * The request that matched no route, normalised by the adapter.
@@ -39,10 +36,9 @@ export interface NotFoundRequest {
  * routing outcome. Keeping the two apart means `onError` only ever sees something that was
  * actually thrown, and `onNotFound` never has to discriminate.
  *
- * Returning nothing declines, and the return type stays narrow for the same reason - see
- * {@link ErrorHandler}.
+ * Returning nothing declines, as for {@link ErrorHandler}.
  */
 export type NotFoundHandler<C extends AsenaContext<any, any>> = (
   context: C,
   request: NotFoundRequest,
-) => Response | Promise<Response>;
+) => Response | undefined | Promise<Response | undefined>;

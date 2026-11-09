@@ -8,6 +8,11 @@ import { PatternHandlerIndex } from './PatternHandlerIndex';
 import { devtoolsBus } from '../../devtools/DevtoolsBus';
 import type { EventHandler, EventSubscription } from './types';
 
+const isThenable = (value: unknown): value is PromiseLike<unknown> =>
+  value !== null &&
+  (typeof value === 'object' || typeof value === 'function') &&
+  typeof (value as { then?: unknown }).then === 'function';
+
 /**
  * @description Internal event dispatch service
  * Handles pattern matching, storage, and dispatching of events
@@ -127,8 +132,8 @@ export class EventDispatchService implements ICoreService {
 
         // Smart async detection: If Promise, handle errors but DON'T await
         // Benchmark showed await Promise.resolve(syncHandler()) is 13x slower!
-        if (result instanceof Promise) {
-          result.catch((error) => {
+        if (result instanceof Promise || isThenable(result)) {
+          Promise.resolve(result).catch((error) => {
             void this.handleFailure(sub, eventName, data, error, 'Async');
           });
         }
