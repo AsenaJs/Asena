@@ -69,10 +69,11 @@ export interface EventExceptionContext {
 export interface MicroserviceExceptionContext {
   readonly scope: 'microservice';
   /**
-   * `message` is request/response - a handler's return value other than `undefined` becomes a
-   * successful reply; `undefined` lets the caller see the failure, and a `Response` is declined with
-   * a warning. `event` is observe-only: the original failure always reaches the transport, so its
-   * retry / DLQ policy applies, and a returned value is ignored with a warning.
+   * `message` is request/response - a handler's return value other than `undefined` (`null`
+   * included) becomes a successful reply; `undefined` lets the caller see the failure, a `Response`
+   * is declined with a warning, and an error the handler throws replaces the failure. `event` is
+   * observe-only: the original failure always reaches the transport, so its retry / DLQ policy
+   * applies, and a returned value is ignored with a warning.
    */
   readonly kind: 'message' | 'event';
   readonly message: MessageContext;

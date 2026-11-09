@@ -39,8 +39,11 @@ import type { CatchHandlerMetadata, ExceptionType } from '../types';
  * | Scope | Return value |
  * |---|---|
  * | HTTP | a `Response` answers the request; anything else declines |
- * | `@MessagePattern` | becomes a successful reply; a `Response` declines with a warning |
+ * | `@MessagePattern` | becomes a successful reply, `null` included; a `Response` declines with a warning |
  * | `@EventPattern`, `@On` | ignored with a warning - the original failure continues unchanged |
+ *
+ * A `@Catch` that throws is logged and declines - except for `@MessagePattern`, where what it
+ * throws replaces the original failure, so the caller gets a sanitized error rather than the raw one.
  *
  * @param types - Error classes to handle. None means catch-all.
  *

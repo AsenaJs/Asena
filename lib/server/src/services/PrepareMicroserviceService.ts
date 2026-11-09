@@ -255,7 +255,8 @@ export class PrepareMicroserviceService implements ICoreService {
    *
    * Outside the interceptor chain, as the http error handler sits outside middleware. For a
    * message, any value other than `undefined` or a `Response` becomes a successful reply; `undefined`
-   * and a `Response` (declined with a warning) rethrow the original error. An event is observe-only: the
+   * and a `Response` (declined with a warning) rethrow the original error, and an error the `@Catch`
+   * throws replaces it. An event is observe-only: the
    * `@Catch` runs, then the original error reaches the transport so its retry / DLQ policy still
    * applies. An unmatched error reaches the transport untouched, synchronously when thrown so.
    */
@@ -278,7 +279,7 @@ export class PrepareMicroserviceService implements ICoreService {
         throw error;
       }
 
-      const result = await this.exceptions.reply(error, context).catch(() => undefined);
+      const result = await this.exceptions.reply(error, context);
 
       if (result === undefined) {
         throw error;

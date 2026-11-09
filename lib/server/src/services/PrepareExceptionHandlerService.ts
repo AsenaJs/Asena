@@ -211,11 +211,16 @@ export class PrepareExceptionHandlerService implements ICoreService {
 
   /**
    * Run the `@Catch` chain for a `@MessagePattern` failure, where the return value becomes the
-   * reply. A `Response` is an HTTP answer, never a message reply: it is reported and declined, so
-   * the caller sees the original failure instead of a serialized `Response` posing as success.
+   * reply - `null` included, only `undefined` declines. A `Response` is an HTTP answer, never a
+   * message reply: it is reported and declined, so the caller sees the original failure instead of
+   * a serialized `Response` posing as success.
    *
-   * @returns The reply, or `undefined` when nothing matched, the handler declined, threw, or
+   * Unlike the other scopes, a handler that throws is not contained: what it throws replaces the
+   * original failure, which is how a handler sends the caller a sanitized error.
+   *
+   * @returns The reply, or `undefined` when nothing matched, the handler declined, or it
    *          returned a `Response`
+   * @throws Whatever the handler threw
    */
   public async reply(error: unknown, context: MicroserviceExceptionContext): Promise<unknown> {
     const entry = this.match(error);
@@ -224,7 +229,7 @@ export class PrepareExceptionHandlerService implements ICoreService {
       return undefined;
     }
 
-    const result = await this.invoke(entry, error, context);
+    const result = await this.call(entry, error, context);
 
     if (result instanceof Response) {
       this.logger.warn(
@@ -248,11 +253,15 @@ export class PrepareExceptionHandlerService implements ICoreService {
     this.logger.debug?.(`@Catch handler ${entry.source}() answered:`, error);
   }
 
-  private async invoke(entry: CatchEntry, error: unknown, context: ExceptionContext<any>): Promise<unknown> {
+  private async call(entry: CatchEntry, error: unknown, context: ExceptionContext<any>): Promise<unknown> {
     devtoolsBus.step('catch', entry.source);
 
+    return this.runningCatch.run(entry.source, () => entry.handler(error, context));
+  }
+
+  private async invoke(entry: CatchEntry, error: unknown, context: ExceptionContext<any>): Promise<unknown> {
     try {
-      return await this.runningCatch.run(entry.source, () => entry.handler(error, context));
+      return await this.call(entry, error, context);
     } catch (handlerError) {
       // Treated as a decline, so the framework still answers and still records the *original*
       // failure. A handler that throws must not be able to make the request disappear.
