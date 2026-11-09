@@ -17,8 +17,6 @@ import type {
   BaseMiddleware,
   BaseStaticServeParams,
   BaseValidator,
-  ErrorHandler,
-  NotFoundHandler,
   NotFoundRequest,
   PrepareMiddlewareParams,
   Route,
@@ -1413,11 +1411,7 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
       return undefined;
     };
 
-    // `ErrorHandler` types the return as `Response` even though every adapter treats a missing one
-    // as a decline - widening it breaks the hono adapter, whose `HonoErrorHandler` is this very
-    // type and goes straight to hono's own `app.onError`. The cast keeps that cost at this one
-    // boundary; see the note on ErrorHandler itself.
-    await this._adapter.onError(chain as ErrorHandler<AsenaContext<any, any>>);
+    await this._adapter.onError(chain);
   }
 
   /**
@@ -1482,7 +1476,7 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
       return undefined;
     };
 
-    await this._adapter.onNotFound(chain as NotFoundHandler<AsenaContext<any, any>>);
+    await this._adapter.onNotFound(chain);
   }
 
   /**
