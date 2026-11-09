@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'bun:test';
+import { inherits } from 'node:util';
 import { ExceptionRegistry } from '../../../lib/server/exception';
 import type { CatchEntry } from '../../../lib/server/exception';
 import { HTTP_EXCEPTION, HttpException, NotFoundException } from '../../../lib/adapter';
@@ -64,6 +65,34 @@ describe('ExceptionRegistry', () => {
       registry.register([AbstractDomainError], entry('abstract'));
 
       expect(registry.resolve(new ConcreteDomainError())?.source).toBe('abstract');
+    });
+
+    it('matches a util.inherits-style error the way instanceof does', () => {
+      // Function-based inheritance links the prototypes but not the constructors, so a walk up
+      // the constructor chain never reaches Error even though `instanceof Error` is true.
+      function LibraryError(this: Error, message: string) {
+        Error.call(this, message);
+      }
+      inherits(LibraryError, Error);
+
+      const registry = new ExceptionRegistry();
+
+      registry.register([Error], entry('error'));
+      registry.register([], entry('catchAll'));
+
+      const thrown = new (LibraryError as any)('library');
+
+      expect(thrown instanceof Error).toBe(true);
+      expect(registry.resolve(thrown)?.source).toBe('error');
+    });
+
+    it('ignores a constructor property that the prototype chain does not back', () => {
+      const registry = new ExceptionRegistry();
+
+      registry.register([DomainError], entry('domain'));
+      registry.register([], entry('catchAll'));
+
+      expect(registry.resolve({ constructor: DomainError })?.source).toBe('catchAll');
     });
 
     it('registers one handler for several types', () => {

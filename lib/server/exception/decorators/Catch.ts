@@ -5,8 +5,8 @@ import type { CatchHandlerMetadata, ExceptionType } from '../types';
 /**
  * @description Marks a method as the handler for the given exception types.
  *
- * Resolution is **most specific wins**: the thrown value's constructor chain is walked upward and
- * the first `@Catch` found answers. `@Catch(ValidationError)` therefore beats
+ * Resolution is **most specific wins**: the thrown value's prototype chain is walked upward and
+ * the first `@Catch` found answers - the same test as `instanceof`. `@Catch(ValidationError)` therefore beats
  * `@Catch(HttpException)` for a `ValidationError`, without either declaring an order.
  *
  * An exception type may be caught in exactly one place across the whole application - a second
