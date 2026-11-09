@@ -180,4 +180,31 @@ describe('request-scoped output capture on the real Bun runtime', () => {
       { stream: 'stdout', text: 'issued token=[redacted] for shelf\n', at: expect.any(Number) },
     ]);
   }, 20_000);
+
+  test('a capture released and taken again still records what the app wrapper redacted', async () => {
+    let runs: unknown;
+
+    child = Bun.spawn({
+      cmd: [process.execPath, fixture('reattach-child.ts')],
+      cwd: ROOT,
+      stdin: 'ignore',
+      stdout: 'pipe',
+      stderr: 'pipe',
+      ipc(message) {
+        if ((message as { fixture?: string }).fixture === 'logs') {
+          runs = (message as { runs: unknown }).runs;
+        }
+      },
+    });
+
+    expect(await child.exited).toBe(0);
+
+    const stdout = await new Response(child.stdout).text();
+
+    expect(stdout).toBe('/first token=[redacted]\n/again token=[redacted]\n');
+    expect(runs).toEqual([
+      [{ stream: 'stdout', text: '/first token=[redacted]\n', at: expect.any(Number) }],
+      [{ stream: 'stdout', text: '/again token=[redacted]\n', at: expect.any(Number) }],
+    ]);
+  }, 20_000);
 });

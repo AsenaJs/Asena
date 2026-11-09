@@ -1,4 +1,4 @@
-import { format } from 'node:util';
+import { format, types } from 'node:util';
 import type { DevtoolsBus, DevtoolsOpenRecord } from './DevtoolsBus';
 import type { DevtoolsRequestLog } from './protocol';
 
@@ -26,11 +26,55 @@ interface Rendered {
   forward: unknown[];
 }
 
+const hasSpecifier = (args: unknown[]): boolean => typeof args[0] === 'string' && /%[sdifoOjc%]/.test(args[0]);
+
 // Bun's console prints every non-string through Bun.inspect; util.format only resolves printf specifiers.
 const formatArgs = (args: unknown[]): string =>
-  typeof args[0] === 'string' && /%[sdifoOjc%]/.test(args[0])
+  hasSpecifier(args)
     ? format(...args)
     : args.map((arg) => (typeof arg === 'string' ? arg : Bun.inspect(arg))).join(' ');
+
+const PLAIN_PROTOTYPES = new Set<unknown>([Object.prototype, Array.prototype, null]);
+const PLAIN_NODE_LIMIT = 256;
+
+/**
+ * Whether inspecting `args` can run no app code: primitives, and plain objects and arrays of them with
+ * data properties only. Such arguments can be printed by the console as well as rendered for the record.
+ */
+const isPlainData = (args: unknown[]): boolean => {
+  const seen = new Set<object>();
+  const pending: unknown[] = [...args];
+
+  while (pending.length > 0) {
+    const value = pending.pop();
+
+    if (typeof value === 'function') {
+      return false;
+    }
+
+    if (typeof value !== 'object' || value === null || seen.has(value)) {
+      continue;
+    }
+
+    if (seen.size === PLAIN_NODE_LIMIT || types.isProxy(value) || !PLAIN_PROTOTYPES.has(Object.getPrototypeOf(value))) {
+      return false;
+    }
+
+    seen.add(value);
+
+    for (const key of Reflect.ownKeys(value)) {
+      const descriptor = Object.getOwnPropertyDescriptor(value, key);
+
+      if (typeof key === 'symbol' || !('value' in descriptor)) {
+        return false;
+      }
+
+      pending.push(descriptor.value);
+    }
+  }
+
+  return true;
+};
 
 const line = (body: string): Rendered => ({ text: `${body}\n`, forward: ['%s', body] });
 
@@ -47,7 +91,7 @@ const traceText = (body: string, below: (...args: never[]) => unknown): string =
   return `${[body, ...frames].join('\n')}\n`;
 };
 
-const render = (method: ConsoleMethod, args: unknown[], below: (...args: never[]) => unknown): Rendered => {
+const renderText = (method: ConsoleMethod, args: unknown[], below: (...args: never[]) => unknown): Rendered => {
   switch (method) {
     case 'trace': {
       const body = formatArgs(args);
@@ -78,6 +122,27 @@ const render = (method: ConsoleMethod, args: unknown[], below: (...args: never[]
     default:
       return line(formatArgs(args));
   }
+};
+
+const formattedArgs = (method: ConsoleMethod, args: unknown[]): unknown[] => {
+  switch (method) {
+    case 'dir':
+    case 'table':
+      return [];
+    case 'assert':
+      return args.slice(1);
+    default:
+      return args;
+  }
+};
+
+// The console prints plain data the way the record holds it, so it keeps the app's own arguments.
+const render = (method: ConsoleMethod, args: unknown[], below: (...args: never[]) => unknown): Rendered => {
+  const rendered = renderText(method, args, below);
+
+  return !hasSpecifier(formattedArgs(method, args)) && isPlainData(args)
+    ? { text: rendered.text, forward: args }
+    : rendered;
 };
 
 /** Runs `fn` at most once; later calls get the same value, or the same error. */
@@ -177,7 +242,7 @@ const install = (): (() => void) => {
             return taken.text;
           });
 
-          // The record's text goes out in place of the arguments, so nothing in them is inspected twice.
+          // Arguments that could run code when inspected go out as the record's text, so they run once.
           return original.apply(console, taken ? taken.forward : args);
         } finally {
           inConsole = false;
@@ -209,17 +274,20 @@ const install = (): (() => void) => {
   };
 };
 
-// Also installed at import, inert until a capture is taken: the `asena console` prelude imports this module
-// before the entry, so a console wrapper the app installs later sits above it and its redaction is captured.
-if (typeof process.send === 'function') {
+// Installed at import and never removed, inert while no capture is held: the `asena console` prelude imports
+// this module before the entry, so a console wrapper the app installs at any later time sits above it.
+const pinned = typeof process.send === 'function';
+
+if (pinned) {
   uninstall = install();
 }
 
 /**
  * Makes a write made inside a record's async scope also land on that record. `console.*` and
- * `process.stdout/stderr.write` are patched once for the whole process, however many captures are held,
- * and the patch is removed when the last one is released. The original function still receives every
- * call; inside a record, a console method gets the rendered text instead of the arguments.
+ * `process.stdout/stderr.write` are patched once for the whole process, however many captures are held.
+ * With an IPC channel the patch is installed at import and kept; without one it is removed when the last
+ * capture is released. The original function still receives every call; inside a record, a console method
+ * whose arguments are not plain data, or that formats printf specifiers, gets the rendered text instead.
  *
  * @returns Releases this capture; calling it again does nothing
  */
@@ -244,7 +312,7 @@ export const captureRequestOutput = (bus: DevtoolsBus): (() => void) => {
       holders.delete(bus);
     }
 
-    if (holders.size === 0) {
+    if (holders.size === 0 && !pinned) {
       uninstall?.();
       uninstall = undefined;
     }

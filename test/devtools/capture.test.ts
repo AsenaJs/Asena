@@ -236,16 +236,18 @@ describe('request-scoped output capture', () => {
     ]);
   });
 
-  test('the original stream receives every write: a console call as the text the record holds', () => {
+  test('the original stream receives every write, and a console call its own arguments when they are plain data', () => {
     const bytes = new TextEncoder().encode('bytes\n');
     const record = bus.open('GET', '/forward');
     const callback = () => undefined;
     const rows = [{ shelf: 'A' }];
+    const shelf = { shelf: 'A', tags: ['new', null], meta: Object.create(null) };
+    const options = { depth: 1 };
 
     bus.run(record, () => {
-      console.log('plain', 42);
+      console.log('plain', 42, shelf);
       console.trace('traced');
-      console.dir({ shelf: 'A' });
+      console.dir(shelf, options);
       console.table(rows);
       console.assert(true, 'holds');
       console.assert(false, 'broken');
@@ -255,15 +257,46 @@ describe('request-scoped output capture', () => {
     bus.close(record, 200, answer);
 
     expect(sink.calls).toEqual([
-      ['console.log', ['%s', 'plain 42']],
-      ['console.trace', ['%s', 'traced']],
-      ['console.dir', [Bun.inspect({ shelf: 'A' })]],
-      ['console.table', [Bun.inspect.table(rows).slice(0, -1)]],
+      ['console.log', ['plain', 42, shelf]],
+      ['console.trace', ['traced']],
+      ['console.dir', [shelf, options]],
+      ['console.table', [rows]],
       ['console.assert', [true, 'holds']],
-      ['console.assert', [false, '%s', 'broken']],
+      ['console.assert', [false, 'broken']],
       ['stdout', [bytes]],
       ['stderr', ['raw\n', 'utf8', callback]],
     ]);
+    expect(sink.calls[0][1][2]).toBe(shelf);
+  });
+
+  test('a console call whose arguments could run code when inspected gets the text the record holds', () => {
+    class Shelf {
+      public name = 'A';
+    }
+    const withGetter = {
+      get books() {
+        return 3;
+      },
+    };
+    const withSymbol = { [Symbol('tag')]: 1 };
+    const named = () => undefined;
+    const record = bus.open('GET', '/rendered');
+
+    bus.run(record, () => {
+      console.log('instance', new Shelf());
+      console.log('getter', withGetter);
+      console.log('nested', { inner: withGetter });
+      console.log('symbol', withSymbol);
+      console.log('proxy', new Proxy({}, {}));
+      console.log('function', named);
+      console.info('%s=%d', 'n', 7);
+    });
+    bus.close(record, 200, answer);
+
+    expect(sink.calls.map(([method]) => method)).toEqual([...Array(6).fill('console.log'), 'console.info']);
+    expect(sink.calls.map(([, args]) => args)).toEqual(
+      logsOf('/rendered')!.map(({ text }) => ['%s', text.slice(0, -1)]),
+    );
   });
 
   test('renders each console argument once: a custom inspector is not run a second time for the capture', () => {
@@ -389,7 +422,7 @@ describe('request-scoped output capture', () => {
     expect(logsOf('/hostile')).toEqual([{ stream: 'stdout', text: 'still captured\n' }]);
     expect(sink.calls).toEqual([
       ['console.log', [hostile]],
-      ['console.log', ['%s', 'still captured']],
+      ['console.log', ['still captured']],
     ]);
   });
 
