@@ -207,4 +207,32 @@ describe('request-scoped output capture on the real Bun runtime', () => {
       [{ stream: 'stdout', text: '/again token=[redacted]\n', at: expect.any(Number) }],
     ]);
   }, 20_000);
+
+  test('a console method the app replaced before the capture loaded never records its raw arguments', async () => {
+    let logs: unknown;
+
+    child = Bun.spawn({
+      cmd: [process.execPath, fixture('wrapped-first-child.ts')],
+      cwd: ROOT,
+      stdin: 'ignore',
+      stdout: 'pipe',
+      stderr: 'pipe',
+      ipc(message) {
+        if ((message as { fixture?: string }).fixture === 'logs') {
+          logs = (message as { logs: unknown }).logs;
+        }
+      },
+    });
+
+    expect(await child.exited).toBe(0);
+
+    const [stdout, stderr] = await Promise.all([new Response(child.stdout).text(), new Response(child.stderr).text()]);
+
+    expect(stdout).toBe('log token=[redacted]\ninfo line\n');
+    expect(stderr).toBe('warn token=[redacted]\n');
+    expect(logs).toEqual([
+      { stream: 'stderr', text: 'warn token=[redacted]\n', at: expect.any(Number) },
+      { stream: 'stdout', text: 'info line\n', at: expect.any(Number) },
+    ]);
+  }, 20_000);
 });

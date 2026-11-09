@@ -91,18 +91,23 @@ const traceText = (body: string, below: (...args: never[]) => unknown): string =
   return `${[body, ...frames].join('\n')}\n`;
 };
 
-const renderText = (method: ConsoleMethod, args: unknown[], below: (...args: never[]) => unknown): Rendered => {
+interface Rendering extends Rendered {
+  /** The arguments the console resolves printf specifiers in. */
+  formatted: unknown[];
+}
+
+const renderText = (method: ConsoleMethod, args: unknown[], below: (...args: never[]) => unknown): Rendering => {
   switch (method) {
     case 'trace': {
       const body = formatArgs(args);
 
-      return { text: traceText(body, below), forward: ['%s', body] };
+      return { text: traceText(body, below), forward: ['%s', body], formatted: args };
     }
     case 'dir': {
       const [value, options] = args;
       const body = typeof value === 'string' ? value : Bun.inspect(value, options);
 
-      return { text: `${body}\n`, forward: [body] };
+      return { text: `${body}\n`, forward: [body], formatted: [] };
     }
     case 'table': {
       const [data, properties] = args;
@@ -111,38 +116,24 @@ const renderText = (method: ConsoleMethod, args: unknown[], below: (...args: nev
           ? Bun.inspect.table(data, properties as string[] | undefined)
           : `${formatArgs([data])}\n`;
 
-      return { text, forward: [text.slice(0, -1)] };
+      return { text, forward: [text.slice(0, -1)], formatted: [] };
     }
     case 'assert': {
       const [condition, ...message] = args;
       const rendered = line(message.length > 0 ? formatArgs(message) : 'Assertion failed');
 
-      return { text: rendered.text, forward: [condition, ...rendered.forward] };
+      return { text: rendered.text, forward: [condition, ...rendered.forward], formatted: message };
     }
     default:
-      return line(formatArgs(args));
-  }
-};
-
-const formattedArgs = (method: ConsoleMethod, args: unknown[]): unknown[] => {
-  switch (method) {
-    case 'dir':
-    case 'table':
-      return [];
-    case 'assert':
-      return args.slice(1);
-    default:
-      return args;
+      return { ...line(formatArgs(args)), formatted: args };
   }
 };
 
 // The console prints plain data the way the record holds it, so it keeps the app's own arguments.
 const render = (method: ConsoleMethod, args: unknown[], below: (...args: never[]) => unknown): Rendered => {
-  const rendered = renderText(method, args, below);
+  const { text, forward, formatted } = renderText(method, args, below);
 
-  return !hasSpecifier(formattedArgs(method, args)) && isPlainData(args)
-    ? { text: rendered.text, forward: args }
-    : rendered;
+  return { text, forward: !hasSpecifier(formatted) && isPlainData(args) ? args : forward };
 };
 
 /** Runs `fn` at most once; later calls get the same value, or the same error. */
@@ -203,7 +194,13 @@ const capture = (stream: Stream, text: (record: DevtoolsOpenRecord) => string): 
   }
 };
 
-const install = (): (() => void) => {
+const isNative = (fn: unknown): boolean =>
+  typeof fn === 'function' &&
+  !types.isProxy(fn) &&
+  !fn.name.startsWith('bound ') &&
+  /\[native code\]\s*\}$/.test(Function.prototype.toString.call(fn));
+
+const install = (onlyNative: boolean): (() => void) => {
   const restores: (() => void)[] = [];
   let live = true;
 
@@ -221,6 +218,10 @@ const install = (): (() => void) => {
 
   for (const method of Object.keys(CONSOLE_STREAMS) as ConsoleMethod[]) {
     const stream = CONSOLE_STREAMS[method];
+
+    if (onlyNative && !isNative(Reflect.get(console, method))) {
+      continue;
+    }
 
     replace(console, method, (original) => {
       const captured = (...args: unknown[]): unknown => {
@@ -279,15 +280,18 @@ const install = (): (() => void) => {
 const pinned = typeof process.send === 'function';
 
 if (pinned) {
-  uninstall = install();
+  uninstall = install(true);
 }
 
 /**
  * Makes a write made inside a record's async scope also land on that record. `console.*` and
  * `process.stdout/stderr.write` are patched once for the whole process, however many captures are held.
  * With an IPC channel the patch is installed at import and kept; without one it is removed when the last
- * capture is released. The original function still receives every call; inside a record, a console method
- * whose arguments are not plain data, or that formats printf specifiers, gets the rendered text instead.
+ * capture is released. With an IPC channel, a console method already replaced when this module loads is
+ * left alone: the record cannot see what that replacement passes on, so it holds only what reaches
+ * `process.stdout/stderr.write`. The original function still receives every call; inside a record, a
+ * console method whose arguments are not plain data, or that formats printf specifiers, gets the rendered
+ * text instead.
  *
  * @returns Releases this capture; calling it again does nothing
  */
@@ -295,7 +299,7 @@ export const captureRequestOutput = (bus: DevtoolsBus): (() => void) => {
   let released = false;
 
   holders.set(bus, (holders.get(bus) ?? 0) + 1);
-  uninstall ??= install();
+  uninstall ??= install(false);
 
   return () => {
     if (released) {
