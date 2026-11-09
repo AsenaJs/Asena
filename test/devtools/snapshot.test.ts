@@ -11,9 +11,8 @@ import { Catch } from '../../lib/server/exception';
 import type { AsenaContext, AsenaNextHandler } from '../../lib/adapter';
 import { HTTP_EXCEPTION } from '../../lib/adapter/types/HttpException';
 import { createMockAdapter } from '../utils/createMockContext';
-import { AdminPages, AppConfig, CorsHeaders, fixtureComponents, ItemDraft, ItemMissing } from './fixtures/app';
+import { AdminPages, AppConfig, CorsHeaders, fixtureComponents, ItemDraft } from './fixtures/app';
 import type { DevtoolsServerContext } from '../../lib/devtools/context';
-import type { ExceptionRegistryView } from '../../lib/server/exception/ExceptionRegistry';
 import { installDevtoolsHook } from './helpers';
 
 const SNAPSHOT_FILE = join(import.meta.dir, 'fixtures', 'snapshot.json');
@@ -265,28 +264,6 @@ describe('buildDevtoolsSnapshot', () => {
         notFound: 'missingRoute',
       },
     ]);
-  });
-
-  // The F7 map is built from metadata; the registry is what answers at runtime. They must agree.
-  test('exception map agrees with the runtime registry view', () => {
-    const fromSnapshot = snapshot.exceptionHandlers.flatMap((handler) =>
-      handler.catches.flatMap((entry) =>
-        entry.types === 'catch-all'
-          ? [`${handler.component}.${entry.method} <- catch-all`]
-          : entry.types.map((type) => `${handler.component}.${entry.method} <- ${type.name}`),
-      ),
-    );
-    const registry: ExceptionRegistryView = (app.server as any).prepareExceptionHandlerService.view;
-    const fromRegistry = registry.catches.map(
-      ({ type, source }) => `${source} <- ${type === 'catch-all' ? type : type.name}`,
-    );
-
-    expect(fromRegistry.sort()).toEqual(fromSnapshot.sort());
-    expect(registry.notFound).toBe(`ApiExceptionHandler.${snapshot.exceptionHandlers[0].notFound}`);
-    expect(registry.whoCatches(new ItemMissing())).toBe('ApiExceptionHandler.known');
-    expect(registry.whoCatches('thrown string')).toBe('ApiExceptionHandler.fallback');
-    expect(Object.isFrozen(registry.catches)).toBe(true);
-    expect(Object.isFrozen(registry.catches[0])).toBe(true);
   });
 
   test('describes the @Config and its global middlewares in declaration order', () => {

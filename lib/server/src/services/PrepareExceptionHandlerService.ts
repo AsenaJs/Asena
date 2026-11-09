@@ -4,7 +4,7 @@ import { ComponentConstants, ComponentType, CoreService, ICoreServiceNames } fro
 import { Inject } from '../../../ioc/component';
 import { getChainedTypedMetadata, getOwnTypedMetadata, getTypedMetadata } from '../../../utils';
 import { type ServerLogger, yellow } from '../../../logger';
-import { ExceptionRegistry, type ExceptionRegistryView } from '../../exception/ExceptionRegistry';
+import { ExceptionRegistry } from '../../exception/ExceptionRegistry';
 import type {
   CatchEntry,
   CatchHandlerMetadata,
@@ -65,15 +65,6 @@ export class PrepareExceptionHandlerService implements ICoreService {
   /** Whether a `@NotFound()` was registered. */
   public get hasNotFoundHandler(): boolean {
     return this.notFound !== undefined;
-  }
-
-  /** A read-only view of the registry, taken after `prepare()`. */
-  public get view(): ExceptionRegistryView {
-    return {
-      catches: this.registry.entries(),
-      notFound: this.notFound?.source,
-      whoCatches: (error) => this.registry.resolve(error)?.source,
-    };
   }
 
   /**
