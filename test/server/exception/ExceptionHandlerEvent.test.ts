@@ -501,4 +501,55 @@ describe('@Catch for @On handlers', () => {
     expect(seen).toEqual([{ scope: 'event', event: 'raw.event', data: 7 }]);
     expect('source' in seen[0]).toBe(false);
   });
+
+  test('does not route a failure the @Catch itself set off back into @Catch, so it cannot loop', async () => {
+    // Without the guard this runs in microtasks only: the cap is what keeps the red run finite.
+    const cap = 1000;
+    const reporterDown = new Error('reporter down');
+    let catches = 0;
+    let emitter!: EventEmitter;
+
+    @ExceptionHandler()
+    class Errors {
+      @Catch()
+      public fallback() {
+        catches += 1;
+
+        if (catches < cap) {
+          emitter.emit('app.error');
+        }
+      }
+    }
+
+    @EventService()
+    class Events {
+      @On('job.run')
+      public run() {
+        throw new Error('job failed');
+      }
+
+      @On('app.error')
+      public async report() {
+        throw reporterDown;
+      }
+    }
+
+    const app = await boot([Errors, Events]);
+
+    emitter = app.emitter;
+
+    const catchesWhenTimerFired = new Promise<number>((resolve) => setTimeout(() => resolve(catches), 0));
+
+    emitter.emit('job.run');
+
+    expect(await catchesWhenTimerFired).toBe(1);
+    await flush();
+
+    expect(catches).toBe(1);
+    expect(consoleError).toHaveBeenCalledWith(
+      '[EventDispatchService] Async error in handler for event "app.error":',
+      reporterDown,
+    );
+    expect(app.logger.warn).toHaveBeenCalledWith(expect.stringContaining('Errors.fallback()'), reporterDown);
+  });
 });

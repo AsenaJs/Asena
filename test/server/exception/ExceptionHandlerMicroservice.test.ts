@@ -528,6 +528,45 @@ describe('@Catch for @EventPattern', () => {
     ]);
   });
 
+  test('does not route a failure the @Catch itself published back into @Catch, so it cannot loop', async () => {
+    const transport = new InMemoryTransport();
+    const auditDown = new Error('audit down');
+    const cap = 50;
+    let catches = 0;
+
+    @ExceptionHandler()
+    class Errors {
+      @Catch()
+      public async fallback() {
+        catches += 1;
+
+        if (catches < cap) {
+          await transport.emit('audit.failed');
+        }
+      }
+    }
+
+    @MessageController({ transport: 'orders' })
+    class OrderEvents {
+      @EventPattern('order.shipped')
+      public async shipped() {
+        throw new OutOfStock();
+      }
+
+      @EventPattern('audit.failed')
+      public async audit() {
+        throw auditDown;
+      }
+    }
+
+    const { logger } = await bootWith(transport, [Errors, OrderEvents]);
+
+    await transport.emit('order.shipped');
+
+    expect(catches).toBe(1);
+    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('Errors.fallback()'), auditDown);
+  });
+
   test('a @Catch that returns nothing declines, so the transport still sees the original failure', async () => {
     const transport = new RecordingTransport();
     const failure = new OutOfStock();

@@ -31,6 +31,11 @@ import type { CatchHandlerMetadata, ExceptionType } from '../types';
  * Whoever answers records the error: when a `@Catch` answers, the framework logs the original
  * error at debug level only, so log it in the handler if it matters.
  *
+ * A failure raised by work a running `@Catch` started - an `@On` it emitted to, an in-process
+ * `@EventPattern` it published to - does not reach `@Catch` again; the framework default handles it,
+ * with a warning. The guard follows the async call chain, so it cannot follow a message through a
+ * real broker: a `@Catch` that publishes there should not publish failures it may itself receive.
+ *
  * | Scope | Return value |
  * |---|---|
  * | HTTP | a `Response` answers the request; anything else declines |

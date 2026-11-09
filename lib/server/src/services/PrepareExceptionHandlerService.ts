@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from 'node:async_hooks';
 import type { Container, ICoreService } from '../../../ioc';
 import { ComponentConstants, ComponentType, CoreService, ICoreServiceNames } from '../../../ioc';
 import { Inject } from '../../../ioc/component';
@@ -50,6 +51,9 @@ export class PrepareExceptionHandlerService implements ICoreService {
   private logger!: ServerLogger;
 
   private readonly registry = new ExceptionRegistry();
+
+  /** The `source` of the `@Catch` whose work is running, if any. Entered on the error path only. */
+  private readonly runningCatch = new AsyncLocalStorage<string>();
 
   private notFound?: NotFoundEntry;
 
@@ -135,7 +139,28 @@ export class PrepareExceptionHandlerService implements ICoreService {
 
   /** Whether some `@Catch` would receive this value. Synchronous, so a caller can keep its default path in the same tick. */
   public handles(error: unknown): boolean {
-    return this.registry.resolve(error) !== undefined;
+    return this.match(error) !== undefined;
+  }
+
+  /**
+   * The `@Catch` for a thrown value, unless it was raised by work a running `@Catch` started: a
+   * catch-all that emits into a failing listener would otherwise receive its own failure forever.
+   */
+  private match(error: unknown): CatchEntry | undefined {
+    const entry = this.registry.resolve(error);
+    const running = this.runningCatch.getStore();
+
+    if (entry && running !== undefined) {
+      this.logger.warn(
+        `An error was raised by work that @Catch handler ${running}() started — it is not routed to @Catch ` +
+          'again, so a handler cannot loop on its own failures; the framework default handles it:',
+        error,
+      );
+
+      return undefined;
+    }
+
+    return entry;
   }
 
   /**
@@ -147,7 +172,7 @@ export class PrepareExceptionHandlerService implements ICoreService {
    *          declined by returning nothing, or the handler itself threw
    */
   public async dispatch(error: unknown, context: ExceptionContext<any>): Promise<unknown> {
-    const entry = this.registry.resolve(error);
+    const entry = this.match(error);
 
     if (!entry) {
       return undefined;
@@ -168,7 +193,7 @@ export class PrepareExceptionHandlerService implements ICoreService {
    * A returned value is reported, since it can only mean the handler expected it to count.
    */
   public async observe(error: unknown, context: ExceptionContext<any>): Promise<void> {
-    const entry = this.registry.resolve(error);
+    const entry = this.match(error);
 
     if (!entry) {
       return;
@@ -193,7 +218,7 @@ export class PrepareExceptionHandlerService implements ICoreService {
    *          returned a `Response`
    */
   public async reply(error: unknown, context: MicroserviceExceptionContext): Promise<unknown> {
-    const entry = this.registry.resolve(error);
+    const entry = this.match(error);
 
     if (!entry) {
       return undefined;
@@ -227,7 +252,7 @@ export class PrepareExceptionHandlerService implements ICoreService {
     devtoolsBus.step('catch', entry.source);
 
     try {
-      return await entry.handler(error, context);
+      return await this.runningCatch.run(entry.source, () => entry.handler(error, context));
     } catch (handlerError) {
       // Treated as a decline, so the framework still answers and still records the *original*
       // failure. A handler that throws must not be able to make the request disappear.
