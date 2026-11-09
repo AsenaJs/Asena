@@ -1,8 +1,11 @@
 // The IPC contract between the devtools agent (in the app) and the console host (in the CLI).
 // Self-contained on purpose: the CLI has no core dependency and carries a copy of this file.
+// Every export is @internal: the console's wire format, versioned by DEVTOOLS_PROTOCOL_VERSION, not by semver.
 
+/** @internal */
 export const DEVTOOLS_PROTOCOL_VERSION = 1;
 
+/** @internal */
 export type DevtoolsComponentType =
   | 'COMPONENT'
   | 'SERVICE'
@@ -17,13 +20,17 @@ export type DevtoolsComponentType =
   | 'MESSAGE_CONTROLLER'
   | 'EXCEPTION_HANDLER';
 
+/** @internal */
 export type DevtoolsScope = 'singleton' | 'prototype';
 
+/** @internal */
 export type DevtoolsLifecycleState = 'NEW' | 'STARTING' | 'STARTED' | 'STOPPING' | 'STOPPED' | 'FAILED';
 
+/** @internal */
 export type DevtoolsHttpMethod =
   'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH' | 'OPTIONS' | 'HEAD' | 'CONNECT' | 'TRACE' | 'ALL';
 
+/** @internal */
 export interface DevtoolsDependency {
   /** `null` for a soft dependency: a controller's middleware, which no field holds. */
   field: string | null;
@@ -32,7 +39,10 @@ export interface DevtoolsDependency {
   kind: 'inject' | 'soft' | 'strategy';
 }
 
-/** An `@Value` field. Never carries the value itself. */
+/**
+ * An `@Value` field. Never carries the value itself.
+ * @internal
+ */
 export interface DevtoolsValueField {
   field: string;
   /** The environment variable name. */
@@ -44,6 +54,7 @@ export interface DevtoolsValueField {
   isSet: boolean;
 }
 
+/** @internal */
 export interface DevtoolsComponent {
   /** The container key (`@Service('name')` or the class name). */
   name: string;
@@ -56,6 +67,7 @@ export interface DevtoolsComponent {
   values: DevtoolsValueField[];
 }
 
+/** @internal */
 export interface DevtoolsRoute {
   /** Controller component name. */
   controller: string;
@@ -76,24 +88,30 @@ export interface DevtoolsRoute {
   staticServe?: boolean;
 }
 
-/** A `@Page` of a `@FrontendController`, served by Bun outside the middleware chain. */
+/**
+ * A `@Page` of a `@FrontendController`, served by Bun outside the middleware chain.
+ * @internal
+ */
 export interface DevtoolsPage {
   controller: string;
   method: string;
   path: string;
 }
 
+/** @internal */
 export interface DevtoolsWebSocket {
   /** The `@WebSocket` path, without a leading slash, as the namespace is registered. */
   namespace: string;
   component: string;
 }
 
+/** @internal */
 export interface DevtoolsSchedule {
   name: string;
   cron: string;
 }
 
+/** @internal */
 export interface DevtoolsEventHandler {
   component: string;
   method: string;
@@ -101,6 +119,7 @@ export interface DevtoolsEventHandler {
   event: string;
 }
 
+/** @internal */
 export interface DevtoolsMessageHandler {
   controller: string;
   method: string;
@@ -110,6 +129,7 @@ export interface DevtoolsMessageHandler {
   transport: string;
 }
 
+/** @internal */
 export interface DevtoolsCaughtType {
   name: string;
   /** Constructor names from this type upward, itself first, `Object` and `Function` left out. */
@@ -118,12 +138,14 @@ export interface DevtoolsCaughtType {
   httpException?: true;
 }
 
+/** @internal */
 export interface DevtoolsCatch {
   method: string;
   /** The `@Catch` types, or `'catch-all'` for a bare `@Catch()`. */
   types: DevtoolsCaughtType[] | 'catch-all';
 }
 
+/** @internal */
 export interface DevtoolsExceptionHandler {
   component: string;
   catches: DevtoolsCatch[];
@@ -131,12 +153,14 @@ export interface DevtoolsExceptionHandler {
   notFound?: string;
 }
 
+/** @internal */
 export interface DevtoolsGlobalMiddleware {
   middleware: string;
   include?: string[];
   exclude?: string[];
 }
 
+/** @internal */
 export interface DevtoolsConfig {
   /** The `@Config` component name, absent when the app declares none. */
   component?: string;
@@ -146,6 +170,7 @@ export interface DevtoolsConfig {
   globalMiddlewares: DevtoolsGlobalMiddleware[];
 }
 
+/** @internal */
 export interface DevtoolsSnapshot {
   components: DevtoolsComponent[];
   routes: DevtoolsRoute[];
@@ -158,12 +183,16 @@ export interface DevtoolsSnapshot {
   config: DevtoolsConfig;
 }
 
-/** A microservice transport from `@Config.transport()`, under the name `Ulak` registers it by. */
+/**
+ * A microservice transport from `@Config.transport()`, under the name `Ulak` registers it by.
+ * @internal
+ */
 export interface DevtoolsTransport {
   name: string;
   connected: boolean;
 }
 
+/** @internal */
 export interface DevtoolsHello {
   coreVersion: string;
   /** Adapter name, `null` in headless mode. */
@@ -174,12 +203,16 @@ export interface DevtoolsHello {
   transports?: DevtoolsTransport[];
 }
 
-/** Exactly the readiness body `HealthServer` answers, minus `uptime` (carried by the metrics). */
+/**
+ * Exactly the readiness body `HealthServer` answers, minus `uptime` (carried by the metrics).
+ * @internal
+ */
 export type DevtoolsReadiness =
   | { status: 'not_ready'; state: DevtoolsLifecycleState }
   | { status: 'up' }
   | { status: 'up' | 'degraded'; transports: Record<string, 'connected' | 'disconnected'> };
 
+/** @internal */
 export interface DevtoolsMetrics {
   rss: number;
   heapUsed: number;
@@ -193,6 +226,7 @@ export interface DevtoolsMetrics {
   dropped?: number;
 }
 
+/** @internal */
 export type DevtoolsStepKind =
   | 'global-middleware'
   | 'middleware'
@@ -203,12 +237,14 @@ export type DevtoolsStepKind =
   | 'adapter-default'
   | 'not-found';
 
+/** @internal */
 export interface DevtoolsRequestStep {
   kind: DevtoolsStepKind;
   /** Component and method, e.g. `UserController.find`; the adapter name for `adapter-default`. */
   name: string;
 }
 
+/** @internal */
 export interface DevtoolsRequestLog {
   stream: 'stdout' | 'stderr';
   /** One write, verbatim; may span several lines (a stack trace stays one entry). */
@@ -217,6 +253,7 @@ export interface DevtoolsRequestLog {
   at: number;
 }
 
+/** @internal */
 export interface DevtoolsRequestRecord {
   id: string;
   /** Epoch milliseconds, so the host can attach the log lines written during the request. */
@@ -234,17 +271,23 @@ export interface DevtoolsRequestRecord {
   logsTruncated?: true;
 }
 
+/** @internal */
 export type DevtoolsCommand =
   | { command: 'runSchedule'; name: string }
   | { command: 'emitEvent'; event: string; data?: unknown }
   | { command: 'sendMessage'; transport: string; pattern: string; kind: 'message' | 'event'; data?: unknown };
 
-/** `id` correlates the command with its `commandResult`. */
+/**
+ * `id` correlates the command with its `commandResult`.
+ * @internal
+ */
 export type DevtoolsCommandRequest = { id: string } & DevtoolsCommand;
 
+/** @internal */
 export type DevtoolsCommandResult =
   { id: string; ok: true; result?: unknown } | { id: string; ok: false; error: { name: string; message: string } };
 
+/** @internal */
 export interface DevtoolsAgentPayloads {
   hello: DevtoolsHello;
   snapshot: DevtoolsSnapshot;
@@ -253,24 +296,30 @@ export interface DevtoolsAgentPayloads {
   commandResult: DevtoolsCommandResult;
 }
 
+/** @internal */
 export interface DevtoolsHostPayloads {
   command: DevtoolsCommandRequest;
 }
 
+/** @internal */
 export type DevtoolsAgentMessageType = keyof DevtoolsAgentPayloads;
 
+/** @internal */
 export type DevtoolsHostMessageType = keyof DevtoolsHostPayloads;
 
+/** @internal */
 export interface DevtoolsMessage<T extends string, P> {
   v: typeof DEVTOOLS_PROTOCOL_VERSION;
   type: T;
   payload: P;
 }
 
+/** @internal */
 export type DevtoolsAgentMessage = {
   [T in DevtoolsAgentMessageType]: DevtoolsMessage<T, DevtoolsAgentPayloads[T]>;
 }[DevtoolsAgentMessageType];
 
+/** @internal */
 export type DevtoolsHostMessage = {
   [T in DevtoolsHostMessageType]: DevtoolsMessage<T, DevtoolsHostPayloads[T]>;
 }[DevtoolsHostMessageType];
@@ -285,11 +334,13 @@ const AGENT_MESSAGE_TYPES: readonly string[] = [
 
 const HOST_MESSAGE_TYPES: readonly string[] = ['command'] satisfies DevtoolsHostMessageType[];
 
+/** @internal */
 export const agentMessage = <T extends DevtoolsAgentMessageType>(
   type: T,
   payload: DevtoolsAgentPayloads[T],
 ): DevtoolsMessage<T, DevtoolsAgentPayloads[T]> => ({ v: DEVTOOLS_PROTOCOL_VERSION, type, payload });
 
+/** @internal */
 export const hostMessage = <T extends DevtoolsHostMessageType>(
   type: T,
   payload: DevtoolsHostPayloads[T],
@@ -309,10 +360,16 @@ const isEnvelope = (value: unknown, types: readonly string[]): boolean => {
   );
 };
 
-/** Envelope check: an object payload is trusted to match its type once the version agrees. */
+/**
+ * Envelope check: an object payload is trusted to match its type once the version agrees.
+ * @internal
+ */
 export const isDevtoolsAgentMessage = (value: unknown): value is DevtoolsAgentMessage =>
   isEnvelope(value, AGENT_MESSAGE_TYPES);
 
-/** Envelope check, plus the string `id` the agent answers under; the command's own fields are the agent's to check. */
+/**
+ * Envelope check, plus the string `id` the agent answers under; the command's own fields are the agent's to check.
+ * @internal
+ */
 export const isDevtoolsHostMessage = (value: unknown): value is DevtoolsHostMessage =>
   isEnvelope(value, HOST_MESSAGE_TYPES) && typeof (value as { payload: { id?: unknown } }).payload.id === 'string';
