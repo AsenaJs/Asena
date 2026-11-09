@@ -14,6 +14,16 @@ class ChattyJob implements AsenaSchedule {
     console.trace('trace line');
     console.warn('warn line');
     console.error(new Error('boom'));
+    console.dir({ dir: 'line' });
+    console.table([{ table: 'line' }]);
+    console.assert(false, 'assert line');
+
+    let inspected = 0;
+
+    console.log('inspect line', {
+      [Bun.inspect.custom]: () => `custom #${++inspected}`,
+    });
+    process.send!({ fixture: 'inspected', count: inspected });
     process.stdout.write('raw stdout\n');
     process.stderr.write(new TextEncoder().encode('raw stderr\n'));
     await Bun.sleep(1);

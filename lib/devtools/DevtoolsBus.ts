@@ -131,9 +131,9 @@ export class DevtoolsBus {
   /**
    * Appends an output write to the record of the current async context, while it is open.
    *
-   * @param render - Called only when a record takes the write
+   * @param render - Called only when a record takes the write; an empty result adds nothing
    */
-  public captureOutput(stream: DevtoolsRequestLog['stream'], render: () => string): void {
+  public captureOutput(stream: DevtoolsRequestLog['stream'], render: (record: DevtoolsOpenRecord) => string): void {
     const record = this.storage?.getStore();
 
     if (!record || record.closed || record.logsTruncated) {
@@ -146,7 +146,12 @@ export class DevtoolsBus {
       return;
     }
 
-    const text = render();
+    const text = render(record);
+
+    if (text === '') {
+      return;
+    }
+
     const room = MAX_LOG_CHARS - record.logChars;
     const kept = text.length > room ? text.slice(0, room) : text;
 
