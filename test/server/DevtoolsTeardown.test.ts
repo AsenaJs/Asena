@@ -1,5 +1,6 @@
-import { afterEach, describe, expect, mock, test } from 'bun:test';
+import { afterEach, describe, expect, mock, spyOn, test } from 'bun:test';
 import { devtoolsBus } from '../../lib/devtools/DevtoolsBus';
+import { ICoreServiceNames } from '../../lib/ioc';
 import { OnStart, OnStop } from '../../lib/ioc/component';
 import { AsenaServerFactory } from '../../lib/server';
 import { Schedule, Service } from '../../lib/server/decorators';
@@ -169,5 +170,57 @@ describe('devtools in AsenaServer teardown', () => {
     } finally {
       process.env.NODE_ENV = previousEnv;
     }
+  });
+
+  test('a stop() issued while the agent is being attached leaves no attachment behind', async () => {
+    let attached = 0;
+    let detached = 0;
+
+    restore = installDevtoolsHook(() => {
+      attached += 1;
+
+      return {
+        detach: () => {
+          detached += 1;
+        },
+      };
+    });
+
+    const server = await AsenaServerFactory.create({
+      headless: true,
+      logger: silentLogger,
+      components: [Recorder],
+      shutdown: { signals: false },
+    });
+    const coreContainer = server.coreContainer;
+    const resolve = coreContainer.resolve.bind(coreContainer);
+    let releaseEmitter!: () => void;
+    const emitterHeld = new Promise<void>((done) => {
+      releaseEmitter = done;
+    });
+    let emitterRequested!: () => void;
+    const emitterAsked = new Promise<void>((done) => {
+      emitterRequested = done;
+    });
+
+    // attachDevtools() is the only caller resolving the emitter through the core container.
+    spyOn(coreContainer, 'resolve').mockImplementation((async (name: string) => {
+      if (name === ICoreServiceNames.EVENT_EMITTER) {
+        emitterRequested();
+        await emitterHeld;
+      }
+
+      return resolve(name);
+    }) as any);
+
+    const starting = server.start();
+
+    await emitterAsked;
+    await server.stop();
+    releaseEmitter();
+    await starting;
+
+    expect(attached - detached).toBe(0);
+    expect(devtoolsBus.enabled).toBe(false);
   });
 });

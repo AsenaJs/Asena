@@ -788,6 +788,13 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
     const lifecycle = this.lifecycleService;
 
     try {
+      const events = await this._coreContainer.resolve<EventEmitter>(ICoreServiceNames.EVENT_EMITTER);
+
+      // A stop() during that await has already run the detach step and may have released the bus.
+      if (this.stopping !== undefined) {
+        return;
+      }
+
       const attachment = hook({
         port: this._httpServer?.port ?? null,
         adapter: this._adapter?.name ?? null,
@@ -799,7 +806,7 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
           },
         },
         cron: this.cronRunner,
-        events: await this._coreContainer.resolve<EventEmitter>(ICoreServiceNames.EVENT_EMITTER),
+        events,
         globalMiddlewares: this.globalMiddlewareConfigs,
         bus: devtoolsBus,
       });
