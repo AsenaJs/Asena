@@ -189,6 +189,8 @@ export interface DevtoolsMetrics {
   uptimeSeconds: number;
   readiness: DevtoolsReadiness;
   transports?: DevtoolsTransport[];
+  /** Request records and metrics dropped since the agent attached because the host was not reading; absent when none. */
+  dropped?: number;
 }
 
 export type DevtoolsStepKind =

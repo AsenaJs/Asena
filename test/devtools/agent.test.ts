@@ -10,12 +10,20 @@ import manifest from '../../package.json';
 import { installDevtoolsHook } from './helpers';
 import { consoleAppComponents, NightlyRestock, PantryEvents } from './fixtures/console-app';
 
-const fakeChannel = () => {
+/** `stalled` models a host that stopped reading: nothing sent is flushed until `drain()`. */
+const fakeChannel = ({ stalled = false }: { stalled?: boolean } = {}) => {
   const sent: DevtoolsAgentMessage[] = [];
+  const unflushed: (() => void)[] = [];
   const listeners = new Set<(message: unknown) => void>();
   const channel: DevtoolsChannel = {
-    send: (message) => {
+    send: (message, flushed) => {
       sent.push(message);
+
+      if (stalled) {
+        unflushed.push(flushed);
+      } else {
+        flushed();
+      }
     },
     onMessage: (listener) => {
       listeners.add(listener);
@@ -29,6 +37,7 @@ const fakeChannel = () => {
     sent,
     listeners,
     deliver: (message: unknown) => listeners.forEach((listener) => listener(message)),
+    drain: () => unflushed.splice(0).forEach((flushed) => flushed()),
   };
 };
 
@@ -148,6 +157,42 @@ describe('attachDevtoolsAgent', () => {
     } finally {
       transports.mockRestore();
     }
+  });
+
+  // process.send() under Bun returns true even with megabytes queued for a host that stopped reading,
+  // so the agent bounds what it has handed over but not yet seen flushed.
+  test('drops records and metrics while the host is not reading, still answers commands, and reports the count', async () => {
+    const { channel, sent, deliver, drain } = fakeChannel({ stalled: true });
+    const emitEvent = (id: string) =>
+      deliver(hostMessage('command', { id, command: 'emitEvent', event: 'pantry.restocked', data: {} }));
+
+    // hello and the snapshot fill the two slots.
+    attachment = attachDevtoolsAgent(context, { channel, sampleIntervalMs: 5, maxPendingMessages: 2 });
+    emitEvent('e1');
+    emitEvent('e2');
+    emitEvent('e3');
+    await Bun.sleep(30);
+
+    expect(payloadsOf(sent, 'request')).toEqual([]);
+    expect(payloadsOf(sent, 'metrics')).toEqual([]);
+    expect(payloadsOf(sent, 'commandResult').map((result) => result.id)).toEqual(['e1', 'e2', 'e3']);
+
+    drain();
+
+    for (let waited = 0; payloadsOf(sent, 'metrics').length === 0 && waited < 2000; waited += 5) {
+      await Bun.sleep(5);
+    }
+
+    const [firstAfterDrain] = payloadsOf(sent, 'metrics');
+
+    // The three records plus every metrics tick of the 30 ms stall.
+    expect(firstAfterDrain.dropped).toBeGreaterThan(3);
+
+    drain();
+    emitEvent('e4');
+    await Bun.sleep(5);
+
+    expect(payloadsOf(sent, 'request').map((record) => record.path)).toEqual(['pantry.restocked']);
   });
 
   test('answers commands through the real dispatch paths, with the correlation id', async () => {

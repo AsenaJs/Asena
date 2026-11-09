@@ -17,7 +17,8 @@ import { buildDevtoolsSnapshot } from './snapshot';
 
 /** How the agent talks to the console host. Defaults to the process IPC channel. */
 export interface DevtoolsChannel {
-  send(message: DevtoolsAgentMessage): void;
+  /** Throws when the message cannot be serialised; otherwise calls `flushed` once it has left the process. */
+  send(message: DevtoolsAgentMessage, flushed: () => void): void;
   /** @returns Removes the listener */
   onMessage(listener: (message: unknown) => void): () => void;
 }
@@ -26,11 +27,16 @@ export interface DevtoolsAgentOptions {
   channel?: DevtoolsChannel;
   /** @default 1000 */
   sampleIntervalMs?: number;
+  /**
+   * Sent but not yet flushed messages above which request records and metrics are dropped.
+   * @default 1000
+   */
+  maxPendingMessages?: number;
 }
 
 const processChannel: DevtoolsChannel = {
-  send: (message) => {
-    process.send?.(message);
+  send: (message, flushed) => {
+    process.send?.(message, undefined, undefined, () => flushed());
   },
   onMessage: (listener) => {
     process.on('message', listener);
@@ -192,14 +198,32 @@ export const attachDevtoolsAgent = (
 
   const channel = options.channel ?? processChannel;
   const interval = options.sampleIntervalMs ?? 1000;
+  const maxPending = options.maxPendingMessages ?? 1000;
+  let pending = 0;
+  let dropped = 0;
 
   const send = (message: DevtoolsAgentMessage): boolean => {
+    pending += 1;
+
     try {
-      channel.send(message);
+      channel.send(message, () => {
+        pending -= 1;
+      });
 
       return true;
     } catch {
+      pending -= 1;
+
       return false;
+    }
+  };
+
+  // Commands, hello and the snapshot are always sent: the host asked for them, and they are few.
+  const sendTelemetry = (message: DevtoolsAgentMessage): void => {
+    if (pending >= maxPending) {
+      dropped += 1;
+    } else {
+      send(message);
     }
   };
 
@@ -215,7 +239,7 @@ export const attachDevtoolsAgent = (
   send(agentMessage('snapshot', buildDevtoolsSnapshot(context.container, context)));
 
   const unsubscribe = context.bus.subscribe((record) => {
-    send(agentMessage('request', record));
+    sendTelemetry(agentMessage('request', record));
   });
   const releaseOutput = captureRequestOutput(context.bus);
 
@@ -241,6 +265,7 @@ export const attachDevtoolsAgent = (
       uptimeSeconds: Math.round(process.uptime()),
       readiness: computeReadiness(context.lifecycle.state, context.ulak.getMicroserviceTransports()),
       transports: describeTransports(context),
+      ...(dropped > 0 && { dropped }),
     };
   };
 
@@ -253,7 +278,7 @@ export const attachDevtoolsAgent = (
       return;
     }
 
-    send(agentMessage('metrics', metrics));
+    sendTelemetry(agentMessage('metrics', metrics));
   }, interval);
 
   sampler.unref();
