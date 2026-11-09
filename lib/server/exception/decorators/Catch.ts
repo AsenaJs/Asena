@@ -28,6 +28,8 @@ import type { CatchHandlerMetadata, ExceptionType } from '../types';
  *
  * **What a return value does depends on the scope.** Returning `undefined` always declines: on HTTP
  * `@Config.onError` and then the adapter default answer, elsewhere the original error continues.
+ * Whoever answers records the error: when a `@Catch` answers, the framework logs the original
+ * error at debug level only, so log it in the handler if it matters.
  *
  * | Scope | Return value |
  * |---|---|
@@ -41,6 +43,9 @@ import type { CatchHandlerMetadata, ExceptionType } from '../types';
  * ```typescript
  * @ExceptionHandler()
  * export class ApiExceptionHandler {
+ *   @Inject(LogService)
+ *   private log: LogService;
+ *
  *   @Catch(UserNotFoundError, OrderNotFoundError)
  *   public missing(error: Error, ctx: ExceptionContext<Context>) {
  *     if (ctx.scope !== 'http') return;
@@ -49,6 +54,7 @@ import type { CatchHandlerMetadata, ExceptionType } from '../types';
  *
  *   @Catch()
  *   public fallback(error: unknown, ctx: ExceptionContext<Context>) {
+ *     this.log.error('Unhandled error', error); // once a @Catch answers, the framework logs it at debug only
  *     if (ctx.scope !== 'http') return;
  *     return ctx.context.send({ error: 'Internal Server Error' }, 500);
  *   }

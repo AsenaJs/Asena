@@ -4,9 +4,12 @@ import { Catch } from '../../../lib/server/exception';
 import { Inject } from '../../../lib/ioc/component';
 import type { AsenaContext } from '../../../lib/adapter';
 import { HttpException, NotFoundException } from '../../../lib/adapter';
-import { bootExceptionApp, responseContext } from './bootHelper';
+import { bootExceptionApp, createLogger, responseContext } from './bootHelper';
 
 class BusinessFailure extends Error {}
+
+const catchDebugLines = (logger: ReturnType<typeof createLogger>) =>
+  (logger.debug.mock.calls as unknown[][]).filter(([message]) => String(message).includes('@Catch'));
 
 @Service()
 class AuditService {
@@ -64,6 +67,37 @@ describe('the HTTP exception chain', () => {
 
     expect(response!.status).toBe(422);
     expect(await response!.json()).toEqual({ error: 'rejected' });
+  });
+
+  test('logs the original error at debug level when a @Catch answers, since the adapter will not', async () => {
+    @ExceptionHandler()
+    class BusinessErrors {
+      @Catch(BusinessFailure)
+      public handle(_error: Error, ctx: any) {
+        return ctx.context.send({ error: 'rejected' }, 422);
+      }
+    }
+
+    const failure = new BusinessFailure('rejected');
+    const app = await bootExceptionApp([BusinessErrors]);
+
+    await app.errorHandler!(failure, responseContext());
+
+    expect(catchDebugLines(app.logger)).toEqual([[expect.stringContaining('BusinessErrors.handle()'), failure]]);
+  });
+
+  test('does not log at debug level when the @Catch declines, since the adapter logs', async () => {
+    @ExceptionHandler()
+    class ObservingErrors {
+      @Catch(BusinessFailure)
+      public handle() {}
+    }
+
+    const app = await bootExceptionApp([ObservingErrors]);
+
+    await app.errorHandler!(new BusinessFailure('rejected'), responseContext());
+
+    expect(catchDebugLines(app.logger)).toEqual([]);
   });
 
   test('declines when no handler matches, so the adapter answers and logs', async () => {

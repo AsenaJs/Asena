@@ -361,6 +361,35 @@ describe('@Catch for @MessagePattern', () => {
     expect(logger.warn.mock.calls.length).toBe(warningsAtBoot);
   });
 
+  test('logs the original error at debug level when a @Catch replies, since the transport never sees it', async () => {
+    const transport = new RecordingTransport();
+    const failure = new OutOfStock('sku-1');
+
+    @ExceptionHandler()
+    class Errors {
+      @Catch(OutOfStock)
+      public outOfStock() {
+        return { error: 'out of stock' };
+      }
+    }
+
+    @MessageController({ transport: 'orders' })
+    class OrderHandler {
+      @MessagePattern('create')
+      public async create() {
+        throw failure;
+      }
+    }
+
+    const { logger } = await bootWith(transport, [Errors, OrderHandler]);
+
+    await transport.messages.get('create')!({}, messageContext('create'));
+
+    const lines = (logger.debug.mock.calls as unknown[][]).filter(([message]) => String(message).includes('@Catch'));
+
+    expect(lines).toEqual([[expect.stringContaining('Errors.outOfStock()'), failure]]);
+  });
+
   test('a @Catch that throws is contained: its error is logged and the original is rethrown', async () => {
     const transport = new RecordingTransport();
     const failure = new OutOfStock('original');

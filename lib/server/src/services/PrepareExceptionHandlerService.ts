@@ -149,7 +149,17 @@ export class PrepareExceptionHandlerService implements ICoreService {
   public async dispatch(error: unknown, context: ExceptionContext<any>): Promise<unknown> {
     const entry = this.registry.resolve(error);
 
-    return entry ? this.invoke(entry, error, context) : undefined;
+    if (!entry) {
+      return undefined;
+    }
+
+    const result = await this.invoke(entry, error, context);
+
+    if (result instanceof Response) {
+      this.recordAnswered(entry, error);
+    }
+
+    return result;
   }
 
   /**
@@ -201,7 +211,16 @@ export class PrepareExceptionHandlerService implements ICoreService {
       return undefined;
     }
 
+    if (result !== undefined) {
+      this.recordAnswered(entry, error);
+    }
+
     return result;
+  }
+
+  /** Whoever answers is who records: once a `@Catch` answers, the adapter or transport never logs the error. */
+  private recordAnswered(entry: CatchEntry, error: unknown): void {
+    this.logger.debug?.(`@Catch handler ${entry.source}() answered:`, error);
   }
 
   private async invoke(entry: CatchEntry, error: unknown, context: ExceptionContext<any>): Promise<unknown> {
