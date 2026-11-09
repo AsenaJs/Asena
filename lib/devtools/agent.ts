@@ -3,7 +3,7 @@ import { dirname, join } from 'node:path';
 import { computeReadiness } from '../server/health/readiness';
 import { LifecycleState } from '../server/lifecycle/LifecycleState';
 import { captureRequestOutput } from './capture';
-import type { DevtoolsAttachment, DevtoolsServerContext } from './context';
+import { devtoolsRefusal, type DevtoolsAttachment, type DevtoolsServerContext } from './context';
 import {
   agentMessage,
   isDevtoolsHostMessage,
@@ -203,8 +203,10 @@ export const startDevtoolsAgent = (
   context: DevtoolsServerContext,
   options: DevtoolsAgentOptions = {},
 ): DevtoolsAttachment => {
-  if (process.env.NODE_ENV === 'production') {
-    return inert('NODE_ENV is production; the console is a development tool');
+  const refusal = devtoolsRefusal();
+
+  if (refusal) {
+    return inert(refusal);
   }
 
   if (!options.channel && typeof process.send !== 'function') {

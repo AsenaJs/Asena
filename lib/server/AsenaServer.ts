@@ -61,7 +61,7 @@ import type { MicroserviceTransport } from './microservice';
 import type { LifecycleService } from './lifecycle';
 import type { AsenaStopOptions, ShutdownOptions } from './types';
 import type { EventEmitter } from './event/EventEmitter';
-import { DEVTOOLS_HOOK, type DevtoolsAttachment, type DevtoolsHook } from '../devtools/context';
+import { DEVTOOLS_HOOK, devtoolsRefusal, type DevtoolsAttachment, type DevtoolsHook } from '../devtools/context';
 import { devtoolsBus } from '../devtools/DevtoolsBus';
 
 /**
@@ -746,13 +746,25 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
   }
 
   /**
-   * @description The console wrapper's hook, when this process is an IPC child that has one.
+   * @description The console wrapper's hook, when this process is an IPC child that has one and may use it.
    * @returns {DevtoolsHook | undefined}
    */
   private devtoolsHook(): DevtoolsHook | undefined {
     const hook = (globalThis as Record<symbol, unknown>)[DEVTOOLS_HOOK];
 
-    return typeof hook === 'function' && typeof process.send === 'function' ? (hook as DevtoolsHook) : undefined;
+    if (typeof hook !== 'function' || typeof process.send !== 'function') {
+      return undefined;
+    }
+
+    const refusal = devtoolsRefusal();
+
+    if (refusal) {
+      this._logger.warn(`${yellow('[AsenaServer]')} devtools agent not attached: ${refusal}`);
+
+      return undefined;
+    }
+
+    return hook as DevtoolsHook;
   }
 
   /**
@@ -763,9 +775,13 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
    * @returns {Promise<void>}
    */
   private async attachDevtools(): Promise<void> {
+    if (!this.enabledDevtoolsBus) {
+      return;
+    }
+
     const hook = this.devtoolsHook();
 
-    if (!hook || !this.enabledDevtoolsBus) {
+    if (!hook) {
       return;
     }
 

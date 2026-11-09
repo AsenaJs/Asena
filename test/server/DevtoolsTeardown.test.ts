@@ -131,4 +131,43 @@ describe('devtools in AsenaServer teardown', () => {
     await server.stop();
     expect(devtoolsBus.enabled).toBe(false);
   });
+
+  // The agent refuses production; an enabled bus would still have every adapter open and close a
+  // record per request with nobody listening.
+  test('under NODE_ENV=production the bus is never enabled and the hook never called', async () => {
+    const hook = mock(() => ({ detach: () => {} }));
+    const warn = mock(() => {});
+    const previousEnv = process.env.NODE_ENV;
+    let enabledDuringBoot: boolean | undefined;
+
+    @Service()
+    class BootProbe {
+      @OnStart()
+      public start(): void {
+        enabledDuringBoot = devtoolsBus.enabled;
+      }
+    }
+
+    restore = installDevtoolsHook(hook);
+    process.env.NODE_ENV = 'production';
+
+    try {
+      const server = await AsenaServerFactory.create({
+        headless: true,
+        logger: { ...silentLogger, warn },
+        components: [BootProbe],
+        shutdown: { signals: false },
+      });
+
+      await server.start();
+
+      expect(enabledDuringBoot).toBe(false);
+      expect(hook).not.toHaveBeenCalled();
+      expect(warn.mock.calls.flat().join('\n')).toContain('NODE_ENV is production');
+
+      await server.stop();
+    } finally {
+      process.env.NODE_ENV = previousEnv;
+    }
+  });
 });

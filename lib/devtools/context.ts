@@ -7,6 +7,10 @@ import type { DevtoolsBus } from './DevtoolsBus';
 /** The `globalThis` key the `asena console` wrapper sets to the agent factory. */
 export const DEVTOOLS_HOOK = Symbol.for('asena.devtools');
 
+/** @internal Why the console must stay off in this process, or `undefined` when it may attach. */
+export const devtoolsRefusal = (): string | undefined =>
+  process.env.NODE_ENV === 'production' ? 'NODE_ENV is production; the console is a development tool' : undefined;
+
 /** What `AsenaServer.start()` hands the devtools agent once the server is ready. */
 export interface DevtoolsServerContext {
   /** Bound HTTP port, `null` in headless mode. */
