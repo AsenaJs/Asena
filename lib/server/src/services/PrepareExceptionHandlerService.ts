@@ -1,7 +1,7 @@
 import type { Container, ICoreService } from '../../../ioc';
 import { ComponentConstants, ComponentType, CoreService, ICoreServiceNames } from '../../../ioc';
 import { Inject } from '../../../ioc/component';
-import { getChainedTypedMetadata, getOwnTypedMetadata } from '../../../utils';
+import { getChainedTypedMetadata, getOwnTypedMetadata, getTypedMetadata } from '../../../utils';
 import { type ServerLogger, yellow } from '../../../logger';
 import { ExceptionRegistry, type ExceptionRegistryView } from '../../exception/ExceptionRegistry';
 import type {
@@ -271,7 +271,8 @@ export class PrepareExceptionHandlerService implements ICoreService {
     seenTypes: Map<ExceptionType, string>,
     claimCatchAll: (source: string) => void,
   ): void {
-    const className = instance.constructor.name;
+    const className =
+      getTypedMetadata<string>(ComponentConstants.NameKey, instance.constructor) || instance.constructor.name;
 
     // Chained, not plain getTypedMetadata: @Catch writes to the class declaring the method, so a
     // handler inherited from a base class lives on that base. Same reasoning as

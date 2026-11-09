@@ -150,6 +150,33 @@ describe('@Catch for @MessagePattern', () => {
     expect(await transport.send('order.create')).toBe('fallback');
   });
 
+  test('names the handler by component name, as the devtools snapshot does', async () => {
+    const transport = new RecordingTransport();
+    const sources: string[] = [];
+
+    @ExceptionHandler()
+    class Errors {
+      @Catch(OutOfStock)
+      public outOfStock(_error: Error, ctx: ExceptionContext) {
+        sources.push((ctx as { source: string }).source);
+        return 'fallback';
+      }
+    }
+
+    @MessageController({ name: 'Orders', transport: 'orders' })
+    class OrderHandler {
+      @MessagePattern('create')
+      public create() {
+        throw new OutOfStock();
+      }
+    }
+
+    await bootWith(transport, [Errors, OrderHandler]);
+    await transport.messages.get('create')!({}, messageContext('create'));
+
+    expect(sources).toEqual(['Orders.create']);
+  });
+
   test('resolves the most specific type along the prototype chain', async () => {
     const transport = new InMemoryTransport();
 

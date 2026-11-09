@@ -75,6 +75,35 @@ describe('@Catch for @On handlers', () => {
     expect(returnValueWarnings(logger)[0]).toContain('Errors.quota()');
   });
 
+  test('names the @On and the @Catch by component name, as the devtools snapshot does', async () => {
+    const seen: ExceptionContext[] = [];
+
+    @ExceptionHandler('NamedErrors')
+    class Errors {
+      @Catch(QuotaExceeded)
+      public quota(_error: unknown, ctx: ExceptionContext) {
+        seen.push(ctx);
+        return true;
+      }
+    }
+
+    @EventService({ name: 'NamedUserEvents', prefix: 'user' })
+    class UserEvents {
+      @On('created')
+      public onCreated() {
+        throw new QuotaExceeded('quota');
+      }
+    }
+
+    const { emitter, logger } = await boot([Errors, UserEvents]);
+
+    emitter.emit('user.created');
+    await flush();
+
+    expect(seen.map((ctx) => (ctx as { source?: string }).source)).toEqual(['NamedUserEvents.onCreated']);
+    expect(returnValueWarnings(logger)[0]).toContain('NamedErrors.quota()');
+  });
+
   test('hands an async rejection to the matching @Catch, and still logs the default line', async () => {
     const seen: unknown[] = [];
     const failure = new QuotaExceeded('quota');

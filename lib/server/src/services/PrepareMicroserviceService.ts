@@ -177,6 +177,8 @@ export class PrepareMicroserviceService implements ICoreService {
     }
 
     const controllerName = controller.constructor.name;
+    const componentName =
+      getTypedMetadata<string>(ComponentConstants.NameKey, controller.constructor) || controllerName;
 
     this.logInheritedHandlers(controller, controllerName, handlers);
 
@@ -207,16 +209,15 @@ export class PrepareMicroserviceService implements ICoreService {
       const intercepted = (data: any, context: MessageContext) =>
         composeOnReceive(interceptors, context, () => Promise.resolve(bound(data, context)));
 
+      const source = `${componentName}.${methodName}`;
       const routed = this.exceptions?.hasHandlers
-        ? this.routeFailures(intercepted, metadata.type, `${controllerName}.${methodName}`, transportName)
+        ? this.routeFailures(intercepted, metadata.type, source, transportName)
         : intercepted;
 
       const dispatch = metadata.type === 'message' ? '@MessagePattern' : '@EventPattern';
       const wrapped = devtoolsBus.enabled
         ? (data: unknown, context: MessageContext) =>
-            devtoolsBus.observe(dispatch, context.pattern, `${controllerName}.${methodName}`, () =>
-              routed(data, context),
-            )
+            devtoolsBus.observe(dispatch, context.pattern, source, () => routed(data, context))
         : routed;
 
       const finalPattern = this.buildPattern(prefix, metadata.pattern, applyPrefix);
