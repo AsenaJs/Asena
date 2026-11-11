@@ -6,11 +6,22 @@ import ts from 'typescript';
 const file = join(import.meta.dir, '__strict-handler-types.ts');
 const source = `
   import type { AsenaContext } from '../../../lib/adapter/AsenaContext';
-  import type { ErrorHandler, NotFoundHandler } from '../../../lib/adapter/types/ErrorHandler';
+  import type { ErrorHandler, NotFoundHandler, NotFoundRequest } from '../../../lib/adapter/types/ErrorHandler';
+  import type { AsenaConfig } from '../../../lib/server/config/AsenaConfig';
 
   export const onError: ErrorHandler<AsenaContext<any, any>> = async () => undefined;
   export const onNotFound: NotFoundHandler<AsenaContext<any, any>> = async () => undefined;
   export const answers: ErrorHandler<AsenaContext<any, any>> = () => new Response('x');
+
+  export class DecliningConfig implements AsenaConfig {
+    public onError(error: Error) {
+      return error.message === 'mine' ? new Response('x') : undefined;
+    }
+
+    public async onNotFound(_context: AsenaContext<any, any>, request: NotFoundRequest) {
+      return request.path === '/mine' ? new Response('x') : undefined;
+    }
+  }
 `;
 
 const options: ts.CompilerOptions = {

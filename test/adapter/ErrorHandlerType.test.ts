@@ -3,7 +3,7 @@ import { join } from 'node:path';
 
 // This repo compiles with `strict: false`, where `undefined` fits every type, so a declining
 // handler is only an error for the strict consumers (adapters, applications) the types are for.
-describe('ErrorHandler / NotFoundHandler', () => {
+describe('ErrorHandler / NotFoundHandler and the @Config hooks', () => {
   test('a strict consumer declines by returning nothing, with no cast', () => {
     const result = Bun.spawnSync([process.execPath, join(import.meta.dir, 'fixtures', 'strictHandlerTypes.ts')]);
 
