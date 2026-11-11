@@ -56,10 +56,11 @@ export class AsenaWebSocketService<T = any> {
    * Handles incoming messages from the WebSocket connection.
    *
    * @param ws - The WebSocket connection.
-   * @param message - The message received, which can be a Buffer or a string.
+   * @param message - The message received: a string, or binary data in the type `ws.binaryType`
+   * selects (`Buffer` by default). An override may declare only the types it receives.
    * @returns A promise that resolves to void or void.
    */
-  protected onMessage?(ws: Socket<T>, message: Buffer | string): void | Promise<void>;
+  protected onMessage?(ws: Socket<T>, message: string | Buffer | ArrayBuffer | Uint8Array | Blob): void | Promise<void>;
 
   /**
    * Handles the drain event for the WebSocket connection.
