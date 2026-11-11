@@ -382,7 +382,7 @@ describe('attachDevtoolsAgent', () => {
       {
         id: 'h1',
         ok: false,
-        error: { name: 'Error', message: 'The command failed and its error could not be described' },
+        error: { name: 'Error', message: 'The command failed and the agent could not turn its error into a result' },
       },
     ]);
   });

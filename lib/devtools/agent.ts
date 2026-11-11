@@ -365,7 +365,12 @@ export const startDevtoolsAgent = (
           // Nothing left to report through; the app must stay up.
         }
 
-        send(agentMessage('commandResult', failed(id, 'The command failed and its error could not be described')));
+        send(
+          agentMessage(
+            'commandResult',
+            failed(id, 'The command failed and the agent could not turn its error into a result'),
+          ),
+        );
       });
   };
 
