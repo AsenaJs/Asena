@@ -187,13 +187,12 @@ const runCommand = async (
  * The devtools agent. `asena console` sets it as the `globalThis[Symbol.for('asena.devtools')]` hook,
  * and `AsenaServer.start()` calls it once the server is ready.
  *
- * Sends `hello` and the snapshot, then a metrics sample every second and every record the bus
- * closes, with what the app wrote to the console and the std streams while that record was in
- * scope, and answers the host's commands through the app's real dispatch paths; with several
- * attachments in one process, only the most recent one sends records and metrics and answers
- * commands. It opens no port
- * and registers nothing; `detach` puts the console and stream functions back. Called without an
- * IPC channel, or with `NODE_ENV=production`, it does nothing and says so once.
+ * Sends `hello` and the snapshot. The most recent attachment in the process also sends a metrics
+ * sample every second and every record the bus closes, with what the app wrote to the console and
+ * the std streams while that record was in scope, and answers the host's commands through the
+ * app's real dispatch paths. It opens no port and registers nothing; `detach` puts the console and
+ * stream functions back. Called without an IPC channel, or with `NODE_ENV=production`, it does
+ * nothing and says so once.
  *
  * @param context - The server, as `AsenaServer.start()` hands it over
  * @returns What the server calls on stop: it releases the IPC listener so the process can exit
