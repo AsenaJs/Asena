@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { computeReadiness } from '../server/health/readiness';
 import { LifecycleState } from '../server/lifecycle/LifecycleState';
+import { describeErrorChain } from '../utils/errorChain';
 import { captureRequestOutput } from './capture';
 import { devtoolsRefusal, type DevtoolsAttachment, type DevtoolsServerContext } from './context';
 import {
@@ -341,6 +342,8 @@ export const startDevtoolsAgent = (
       return;
     }
 
+    const { id, command } = message.payload;
+
     void runCommand(context, message.payload)
       .then((result) => {
         if (!send(agentMessage('commandResult', result)) && result.ok) {
@@ -353,7 +356,17 @@ export const startDevtoolsAgent = (
           );
         }
       })
-      .catch(() => undefined);
+      .catch((error: unknown) => {
+        try {
+          context.logger.warn(
+            `[devtools] command ${JSON.stringify(id)} (${String(command)}) failed outside its handler: ${describeErrorChain(error)}`,
+          );
+        } catch {
+          // Nothing left to report through; the app must stay up.
+        }
+
+        send(agentMessage('commandResult', failed(id, 'The command failed and its error could not be described')));
+      });
   };
 
   let removeListener: (() => void) | undefined;

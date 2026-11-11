@@ -1,4 +1,5 @@
 import type { Container } from '../ioc';
+import type { ServerLogger } from '../logger';
 import type { Ulak } from '../server/messaging';
 import type { LifecycleState } from '../server/lifecycle/LifecycleState';
 import type { GlobalMiddlewareConfig } from '../server/config';
@@ -26,6 +27,8 @@ export interface DevtoolsServerContext {
   globalMiddlewares: readonly GlobalMiddlewareConfig[];
   /** The server's own bus, not the one the agent's module copy would import. */
   bus: DevtoolsBus;
+  /** The server's logger: where the agent reports its own failures, rather than the console it captures. */
+  logger: ServerLogger;
 }
 
 export interface DevtoolsAttachment {

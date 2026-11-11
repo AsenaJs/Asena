@@ -809,6 +809,7 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
         events,
         globalMiddlewares: this.globalMiddlewareConfigs,
         bus: devtoolsBus,
+        logger: this._logger,
       });
 
       if (attachment) {

@@ -5,7 +5,7 @@ import { buildDevtoolsSnapshot } from '../../lib/devtools/snapshot';
 import { hostMessage, type DevtoolsAgentMessage, type DevtoolsCommand } from '../../lib/devtools/protocol';
 import { computeReadiness } from '../../lib/server/health/readiness';
 import { AsenaServerFactory, type AsenaServer } from '../../lib/server';
-import { silentLogger } from '../../lib/test/harness/silentLogger';
+import { createCapturingLogger, silentLogger } from '../../lib/test/harness/silentLogger';
 import manifest from '../../package.json';
 import { installDevtoolsHook } from './helpers';
 import { consoleAppComponents, NightlyRestock, PantryEvents } from './fixtures/console-app';
@@ -338,6 +338,51 @@ describe('attachDevtoolsAgent', () => {
       refused('t3', 'runSchedule needs a string "name", got object'),
       refused('t4', 'sendMessage needs a string "pattern", got number'),
       refused('t5', 'sendMessage needs a string "transport", got null'),
+    ]);
+  });
+
+  // An error whose own `message` throws cannot be turned into a result; before, the host waited for
+  // an answer that never came and nothing said why.
+  test('a command whose failure cannot be described is logged once at warn and still answered', async () => {
+    const { channel, sent, deliver } = fakeChannel();
+    const { logger, entries } = createCapturingLogger();
+    const hostile = Object.defineProperty(new Error('hidden'), 'message', {
+      get: () => {
+        throw new Error('message getter exploded');
+      },
+    });
+    const runNow = spyOn(context.cron, 'runNow').mockRejectedValue(hostile);
+    const consoleSpies = (['log', 'warn', 'error'] as const).map((method) =>
+      spyOn(console, method).mockImplementation(() => {}),
+    );
+
+    attachment = startDevtoolsAgent({ ...context, logger }, { channel });
+
+    try {
+      deliver(hostMessage('command', { id: 'h1', command: 'runSchedule', name: 'NightlyRestock' }));
+      await Bun.sleep(20);
+
+      for (const spy of consoleSpies) {
+        expect(spy).not.toHaveBeenCalled();
+      }
+    } finally {
+      runNow.mockRestore();
+      consoleSpies.forEach((spy) => spy.mockRestore());
+    }
+
+    expect(entries).toEqual([
+      {
+        level: 'warn',
+        message: '[devtools] command "h1" (runSchedule) failed outside its handler: message getter exploded',
+        meta: undefined,
+      },
+    ]);
+    expect(payloadsOf(sent, 'commandResult')).toEqual([
+      {
+        id: 'h1',
+        ok: false,
+        error: { name: 'Error', message: 'The command failed and its error could not be described' },
+      },
     ]);
   });
 

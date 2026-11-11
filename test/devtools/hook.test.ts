@@ -56,6 +56,7 @@ describe('devtools hook in AsenaServer.start()', () => {
       'events',
       'globalMiddlewares',
       'lifecycle',
+      'logger',
       'port',
       'ulak',
     ]);
