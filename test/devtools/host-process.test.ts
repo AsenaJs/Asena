@@ -12,6 +12,7 @@ import {
   type DevtoolsHello,
   type DevtoolsMetrics,
   type DevtoolsRequestRecord,
+  type DevtoolsServerRef,
 } from '../../lib/devtools/protocol';
 
 const ROOT = join(import.meta.dir, '..', '..');
@@ -106,8 +107,9 @@ const spawnHost = (env: Record<string, string> = {}) => {
     devtools,
     hellos: (from?: number) => ofType<DevtoolsHello>('hello', from),
     metrics: (from?: number) => ofType<DevtoolsMetrics>('metrics', from),
+    stopped: (from?: number) => ofType<DevtoolsServerRef>('serverStopped', from),
     requests: (path: string, from?: number) =>
-      ofType<DevtoolsRequestRecord>('request', from).filter((record) => record.path === path),
+      ofType<DevtoolsRequestRecord & DevtoolsServerRef>('request', from).filter((record) => record.path === path),
     results: (id: string, from?: number) =>
       ofType<DevtoolsCommandResult>('commandResult', from).filter((result) => result.id === id),
     ready: () =>
@@ -118,7 +120,9 @@ const spawnHost = (env: Record<string, string> = {}) => {
       pings += 1;
       expect(await ask({ fixture: 'ping', n: pings })).toMatchObject({ pong: pings });
     },
-    async command(command: DevtoolsCommand): Promise<{ id: string; result: DevtoolsCommandResult }> {
+    async command(
+      command: DevtoolsCommand & { serverId?: string },
+    ): Promise<{ id: string; result: DevtoolsCommandResult }> {
       commands += 1;
 
       const id = `command-${commands}`;
@@ -165,85 +169,148 @@ describe('devtools agent against a real console host', () => {
   describe('two servers in one process', () => {
     const second = [{ name: 'default', connected: true }];
 
+    const servers = [
+      { event: 'first.ping', job: 'FirstJob', transports: [] },
+      { event: 'second.ping', job: 'SecondJob', transports: second },
+    ];
+
     const bootTwo = async () => {
       const app = host({ HOST_CHILD_SERVERS: '2' });
 
       await app.ready();
 
-      expect(app.devtools().filter((message) => message.type === 'snapshot')).toHaveLength(2);
+      const ids = app.hellos().map((hello) => hello.serverId);
+      const snapshots = app.devtools().flatMap((message) => (message.type === 'snapshot' ? [message.payload] : []));
+
+      expect(ids).toHaveLength(2);
+      expect(ids.every((id) => typeof id === 'string' && id !== '')).toBe(true);
+      expect(ids[0]).not.toBe(ids[1]);
       expect(app.hellos().map((hello) => hello.transports)).toEqual([[], second]);
+      expect(snapshots.map((snapshot) => [snapshot.serverId, snapshot.schedules.map((job) => job.name)])).toEqual([
+        [ids[0], ['FirstJob']],
+        [ids[1], ['SecondJob']],
+      ]);
 
-      // The first server's event, reported by the second server's agent: the bus is one per process.
-      expect(await app.ask({ fixture: 'emit', server: 0, event: 'first.ping' })).toMatchObject({ delivered: true });
+      // One event in each server: one record each, under the id of the server that dispatched it.
+      for (const [server, { event }] of servers.entries()) {
+        expect(await app.ask({ fixture: 'emit', server, event })).toMatchObject({ delivered: true });
+        await app.settle();
+        expect(app.requests(event).map((record) => record.serverId)).toEqual([ids[server]]);
+      }
+
+      // Both servers' jobs are runnable by id, the older one's too.
+      for (const [server, { job }] of servers.entries()) {
+        const { id, result } = await app.command({ serverId: ids[server], command: 'runSchedule', name: job });
+
+        await app.settle();
+        expect(result).toEqual({ id, serverId: ids[server], ok: true, result: { ran: job } });
+        expect(app.results(id)).toHaveLength(1);
+        expect(app.requests(job).map((record) => record.serverId)).toEqual([ids[server]]);
+      }
+
+      expect(await app.ask({ fixture: 'state' })).toMatchObject({ runs: { first: 1, second: 1 } });
+
+      // Without an id the command goes to the most recent server, which has no FirstJob.
+      const unaddressed = await app.command({ command: 'runSchedule', name: 'FirstJob' });
+      const recent = await app.command({ command: 'emitEvent', event: 'second.ping' });
+
       await app.settle();
-      expect(app.requests('first.ping')).toHaveLength(1);
-
-      const { id, result } = await app.command({ command: 'emitEvent', event: 'second.ping' });
-
-      await app.settle();
-      expect(result).toEqual({ id, ok: true, result: { delivered: true } });
-      expect(app.results(id)).toHaveLength(1);
-      expect(app.requests('second.ping')).toHaveLength(1);
+      expect(unaddressed.result).toMatchObject({ serverId: ids[1], ok: false });
+      expect(recent.result).toEqual({ id: recent.id, serverId: ids[1], ok: true, result: { delivered: true } });
+      expect(app.results(recent.id)).toHaveLength(1);
+      expect(app.requests('second.ping')).toHaveLength(2);
+      expect(await app.ask({ fixture: 'state' })).toMatchObject({ runs: { first: 1, second: 1 } });
 
       await waitFor(() => app.metrics().length > 0, 5_000, 'a metrics sample');
 
-      return app;
+      for (const sample of app.metrics()) {
+        expect(sample.servers).toEqual({
+          [ids[0]]: { readiness: { status: 'up' }, transports: [] },
+          [ids[1]]: { readiness: { status: 'up', transports: { default: 'connected' } }, transports: second },
+        });
+        expect(sample.transports).toEqual(second);
+      }
+
+      expect(app.stopped()).toEqual([]);
+
+      return { app, ids };
     };
 
-    const expectSilenceAfterLastStop = async (app: ReturnType<typeof spawnHost>, server: number) => {
-      expect(await app.ask({ fixture: 'stop', server })).toMatchObject({ stopped: server, busEnabled: false });
+    /** Stops one of the two servers and checks that the host learns it and the other keeps working. */
+    const stopOneOfTwo = async (app: ReturnType<typeof spawnHost>, ids: string[], gone: number) => {
+      const left = 1 - gone;
+      const { event, job, transports } = servers[left];
+
+      expect(await app.ask({ fixture: 'stop', server: gone })).toMatchObject({ stopped: gone, busEnabled: true });
 
       const stopped = app.mark();
 
-      app.child.send(hostMessage('command', { id: 'after-stop', command: 'emitEvent', event: 'first.ping' }));
+      expect(app.stopped()).toEqual([{ serverId: ids[gone] }]);
+
+      await waitFor(() => app.metrics(stopped).length > 0, 5_000, 'a metrics sample without the stopped server');
+
+      for (const sample of app.metrics(stopped)) {
+        expect(Object.keys(sample.servers)).toEqual([ids[left]]);
+        expect(sample.transports).toEqual(transports);
+      }
+
+      const refused = await app.command({ serverId: ids[gone], command: 'runSchedule', name: servers[gone].job });
+      const named = await app.command({ serverId: ids[left], command: 'runSchedule', name: job });
+      const unaddressed = await app.command({ command: 'emitEvent', event });
+
+      await app.settle();
+      expect(refused.result).toEqual({
+        id: refused.id,
+        ok: false,
+        error: {
+          name: 'Error',
+          message: `No attached server has the id ${JSON.stringify(ids[gone])}; the command was not run`,
+        },
+      });
+      expect(named.result).toEqual({ id: named.id, serverId: ids[left], ok: true, result: { ran: job } });
+      expect(unaddressed.result).toEqual({
+        id: unaddressed.id,
+        serverId: ids[left],
+        ok: true,
+        result: { delivered: true },
+      });
+
+      for (const { id } of [refused, named, unaddressed]) {
+        expect(app.results(id)).toHaveLength(1);
+      }
+
+      expect(app.requests(job, stopped).map((record) => record.serverId)).toEqual([ids[left]]);
+      expect(app.requests(event, stopped).map((record) => record.serverId)).toEqual([ids[left]]);
+      expect(await app.ask({ fixture: 'state' })).toMatchObject({
+        runs: { first: gone === 0 ? 1 : 2, second: gone === 0 ? 2 : 1 },
+      });
+
+      // The last one: the host is told, and then the process holds no sampler and no command listener.
+      expect(await app.ask({ fixture: 'stop', server: left })).toMatchObject({ stopped: left, busEnabled: false });
+
+      const silent = app.mark();
+
+      expect(app.stopped()).toEqual([{ serverId: ids[gone] }, { serverId: ids[left] }]);
+
+      app.child.send(hostMessage('command', { id: 'after-stop', command: 'emitEvent', event }));
       // Longer than the 1 s metrics interval, and counted in the child: a sampler or a command
       // listener left behind would have spoken by the time it exits.
       app.child.send({ fixture: 'exitAfter', ms: 1_200 });
 
       expect(await app.child.exited).toBe(0);
-      expect(app.devtools(stopped)).toEqual([]);
+      expect(app.devtools(silent)).toEqual([]);
     };
 
-    test('the most recent server speaks; when it stops, the first one takes over', async () => {
-      const app = await bootTwo();
+    test('both servers report and answer under their ids; the most recent one stops first', async () => {
+      const { app, ids } = await bootTwo();
 
-      expect(app.metrics().map((sample) => sample.transports)).toEqual(app.metrics().map(() => second));
-
-      expect(await app.ask({ fixture: 'stop', server: 1 })).toMatchObject({ stopped: 1, busEnabled: true });
-
-      const handedOver = app.mark();
-
-      await waitFor(() => app.metrics(handedOver).length > 0, 5_000, 'a metrics sample from the first server');
-      expect(app.metrics(handedOver).map((sample) => sample.transports)).toEqual(app.metrics(handedOver).map(() => []));
-
-      const { id, result } = await app.command({ command: 'emitEvent', event: 'first.ping' });
-
-      await app.settle();
-      expect(result).toEqual({ id, ok: true, result: { delivered: true } });
-      expect(app.results(id)).toHaveLength(1);
-      expect(app.requests('first.ping', handedOver)).toHaveLength(1);
-
-      await expectSilenceAfterLastStop(app, 0);
+      await stopOneOfTwo(app, ids, 1);
     }, 20_000);
 
-    test('stopping the first server leaves the most recent one speaking', async () => {
-      const app = await bootTwo();
+    test('both servers report and answer under their ids; the first one stops first', async () => {
+      const { app, ids } = await bootTwo();
 
-      expect(await app.ask({ fixture: 'stop', server: 0 })).toMatchObject({ stopped: 0, busEnabled: true });
-
-      const stopped = app.mark();
-
-      await waitFor(() => app.metrics(stopped).length > 0, 5_000, 'a metrics sample from the second server');
-      expect(app.metrics().map((sample) => sample.transports)).toEqual(app.metrics().map(() => second));
-
-      const { id, result } = await app.command({ command: 'emitEvent', event: 'second.ping' });
-
-      await app.settle();
-      expect(result).toEqual({ id, ok: true, result: { delivered: true } });
-      expect(app.results(id)).toHaveLength(1);
-      expect(app.requests('second.ping', stopped)).toHaveLength(1);
-
-      await expectSilenceAfterLastStop(app, 1);
+      await stopOneOfTwo(app, ids, 0);
     }, 20_000);
   });
 
@@ -357,8 +424,10 @@ describe('devtools agent against a real console host', () => {
     expect(app.child.exitCode).toBeNull();
 
     const { id, result } = await app.command({ command: 'emitEvent', event: 'first.ping' });
+    const [{ serverId }] = app.hellos();
 
-    expect(result).toEqual({ id, ok: true, result: { delivered: true } });
+    expect(result).toEqual({ id, serverId, ok: true, result: { delivered: true } });
+    expect(answered.map((refusal) => refusal.serverId)).toEqual(ids.map(() => serverId));
     expect(app.stderr()).toBe('');
   }, 20_000);
 
@@ -449,8 +518,10 @@ describe('devtools agent against a real console host', () => {
     );
 
     const { id, result } = await app.command({ command: 'emitEvent', event: 'first.ping' });
+    const [{ serverId }] = app.hellos();
 
-    expect(result).toEqual({ id, ok: true, result: { delivered: true } });
+    expect(result).toEqual({ id, serverId, ok: true, result: { delivered: true } });
+    expect(app.metrics().at(-1)!.servers[serverId].dropped).toBe(app.metrics().at(-1)!.dropped);
 
     const dropped = app.metrics().at(-1)!.dropped!;
     const bulk = app

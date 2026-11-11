@@ -7,9 +7,10 @@ import type { DevtoolsHook } from '../../../lib/devtools/context';
 import { devtoolsBus } from '../../../lib/devtools/DevtoolsBus';
 import { ICoreServiceNames } from '../../../lib/ioc';
 import { AsenaServerFactory } from '../../../lib/server';
-import { Config, EventService } from '../../../lib/server/decorators';
+import { Config, EventService, Schedule } from '../../../lib/server/decorators';
 import { On, type EventEmitter } from '../../../lib/server/event';
 import { InMemoryTransport } from '../../../lib/server/microservice';
+import type { AsenaSchedule } from '../../../lib/server/schedule';
 import { silentLogger } from '../../../lib/test/harness/silentLogger';
 
 let hookCalls = 0;
@@ -42,7 +43,23 @@ class SecondEvents {
   }
 }
 
-// Only the second server has a transport, which is what tells its hello and metrics from the first's.
+const runs = { first: 0, second: 0 };
+
+@Schedule({ cron: '0 4 * * *' })
+class FirstJob implements AsenaSchedule {
+  public execute() {
+    runs.first += 1;
+  }
+}
+
+@Schedule({ cron: '0 4 * * *' })
+class SecondJob implements AsenaSchedule {
+  public execute() {
+    runs.second += 1;
+  }
+}
+
+// Only the second server has a transport, so its hello and its state differ from the first's by more than the id.
 @Config()
 class SecondConfig {
   public transport() {
@@ -50,7 +67,10 @@ class SecondConfig {
   }
 }
 
-const componentSets = [[FirstEvents], [SecondEvents, SecondConfig]];
+const componentSets = [
+  [FirstEvents, FirstJob],
+  [SecondEvents, SecondJob, SecondConfig],
+];
 const count = Number(process.env.HOST_CHILD_SERVERS ?? 1);
 const servers = [];
 const emitters: EventEmitter[] = [];
@@ -104,7 +124,7 @@ process.on('message', (message: unknown) => {
       reply({ pong: control.n });
       break;
     case 'state':
-      reply({ hookCalls, busEnabled: devtoolsBus.enabled, received: [...received] });
+      reply({ hookCalls, busEnabled: devtoolsBus.enabled, received: [...received], runs: { ...runs } });
       break;
     case 'emit':
       reply({ delivered: emitters[control.server].emit(control.event) });

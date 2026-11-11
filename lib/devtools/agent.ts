@@ -13,6 +13,7 @@ import {
   type DevtoolsCommandRequest,
   type DevtoolsCommandResult,
   type DevtoolsMetrics,
+  type DevtoolsServerState,
   type DevtoolsTransport,
 } from './protocol';
 import { buildDevtoolsSnapshot } from './snapshot';
@@ -54,24 +55,37 @@ const processChannel: DevtoolsChannel = {
   },
 };
 
+/** One attached server, as the attachment that speaks for the process reaches it. */
 interface HostSpeaker {
+  readonly serverId: string;
+  /** Starts listening for commands and sampling metrics on behalf of every attached server. */
   listen(): void;
   unlisten(): void;
+  /** Throws when the server's state cannot be read. */
+  state(): DevtoolsServerState;
+  /** Runs the command on this server and sends its result. */
+  answer(request: DevtoolsCommandRequest): void;
 }
 
 // On globalThis rather than in module scope: a `--hot` reload evaluates a fresh copy of this module.
 const HOST_SPEAKERS = Symbol.for('asena.devtools.hostSpeakers');
 
+/** Every attached server of the process, in the order they attached. */
+const hostSpeakers = (): HostSpeaker[] => {
+  const slot = globalThis as Record<symbol, unknown>;
+
+  return (slot[HOST_SPEAKERS] ??= []) as HostSpeaker[];
+};
+
 /**
- * Only the most recent live attachment speaks to the host: it alone listens for commands and sends
- * records and metrics, so the host gets each once however many servers the process holds. When it
- * detaches, the one before it takes over.
+ * The most recent attachment speaks for the process: it alone listens for commands and samples
+ * metrics, so the host gets one answer and one sample however many servers the process holds. When
+ * it detaches, the one before it takes over.
  *
  * @returns Releases the claim
  */
 const claimHost = (claimant: HostSpeaker): (() => void) => {
-  const slot = globalThis as Record<symbol, unknown>;
-  const stack = (slot[HOST_SPEAKERS] ??= []) as HostSpeaker[];
+  const stack = hostSpeakers();
 
   stack.at(-1)?.unlisten();
   stack.push(claimant);
@@ -137,8 +151,9 @@ const describeTransports = (context: DevtoolsServerContext): DevtoolsTransport[]
     connected: transport.isConnected,
   }));
 
-const failed = (id: string, message: string): DevtoolsCommandResult => ({
+const failed = (id: string, message: string, serverId?: string): DevtoolsCommandResult => ({
   id,
+  ...(serverId !== undefined && { serverId }),
   ok: false,
   error: { name: 'Error', message },
 });
@@ -218,12 +233,13 @@ const runCommand = async (
  * The devtools agent. `asena console` sets it as the `globalThis[Symbol.for('asena.devtools')]` hook,
  * and `AsenaServer.start()` calls it once the server is ready.
  *
- * Sends `hello` and the snapshot. The most recent attachment in the process also sends a metrics
- * sample every second and every record the bus closes, with what the app wrote to the console and
- * the std streams while that record was in scope, and answers the host's commands through the
- * app's real dispatch paths. It opens no port and registers nothing; `detach` puts the console and
- * stream functions back. Called without an IPC channel, or with `NODE_ENV=production`, it does
- * nothing and says so once.
+ * Sends `hello` and the snapshot under the server's id, then every record that server's handlers
+ * close, with what the app wrote to the console and the std streams while the record was in scope,
+ * and answers the host's commands through the app's real dispatch paths. The most recent attachment
+ * in the process listens for the commands of every attached server and sends one metrics sample a
+ * second that carries each of them. It opens no port and registers nothing; `detach` tells the host
+ * the server is gone and puts the console and stream functions back. Called without an IPC channel,
+ * or with `NODE_ENV=production`, it does nothing and says so once.
  *
  * @param context - The server, as `AsenaServer.start()` hands it over
  * @returns What the server calls on stop: it releases the IPC listener so the process can exit
@@ -248,9 +264,9 @@ export const startDevtoolsAgent = (
   const channel = options.channel ?? processChannel;
   const interval = options.sampleIntervalMs ?? 1000;
   const maxPending = options.maxPendingMessages ?? 1000;
+  const { serverId } = context;
   let pending = 0;
   let dropped = 0;
-  let speaking = false;
 
   const send = (message: DevtoolsAgentMessage): boolean => {
     pending += 1;
@@ -268,12 +284,8 @@ export const startDevtoolsAgent = (
     }
   };
 
-  // Commands, hello and the snapshot are always sent: the host asked for them, and they are few.
+  // Results, hello, the snapshot and serverStopped are always sent: the host needs them, and they are few.
   const sendTelemetry = (message: DevtoolsAgentMessage): void => {
-    if (!speaking) {
-      return;
-    }
-
     if (pending >= maxPending) {
       dropped += 1;
     } else {
@@ -283,6 +295,7 @@ export const startDevtoolsAgent = (
 
   send(
     agentMessage('hello', {
+      serverId,
       coreVersion: readCoreVersion(),
       adapter: context.adapter,
       port: context.port,
@@ -290,66 +303,33 @@ export const startDevtoolsAgent = (
       transports: describeTransports(context),
     }),
   );
-  send(agentMessage('snapshot', buildDevtoolsSnapshot(context.container, context)));
+  send(agentMessage('snapshot', { ...buildDevtoolsSnapshot(context.container, context), serverId }));
 
-  const unsubscribe = context.bus.subscribe((record) => {
-    sendTelemetry(agentMessage('request', record));
+  const unsubscribe = context.bus.subscribe((record, from) => {
+    if (from === serverId) {
+      sendTelemetry(agentMessage('request', { ...record, serverId }));
+    }
   });
   const releaseOutput = captureRequestOutput(context.bus);
 
-  let lastCpu = process.cpuUsage();
-  let lastAt = performance.now();
+  const state = (): DevtoolsServerState => ({
+    readiness: computeReadiness(context.lifecycle.state, context.ulak.getMicroserviceTransports()),
+    transports: describeTransports(context),
+    ...(dropped > 0 && { dropped }),
+  });
 
-  const sample = (): DevtoolsMetrics => {
-    const now = performance.now();
-    const cpu = process.cpuUsage(lastCpu);
-    const elapsedMs = now - lastAt;
-    const memory = process.memoryUsage();
+  const answer = (request: DevtoolsCommandRequest): void => {
+    const { id, command } = request;
 
-    lastCpu = process.cpuUsage();
-    lastAt = now;
+    void runCommand(context, request)
+      .then((outcome) => {
+        const result = { ...outcome, serverId };
 
-    return {
-      rss: memory.rss,
-      heapUsed: memory.heapUsed,
-      heapTotal: memory.heapTotal,
-      cpuPercent: elapsedMs > 0 ? (cpu.user + cpu.system) / 10 / elapsedMs : 0,
-      // How late this tick fired: the event loop was busy for that long.
-      eventLoopLagMs: Math.max(0, elapsedMs - interval),
-      uptimeSeconds: Math.round(process.uptime()),
-      readiness: computeReadiness(context.lifecycle.state, context.ulak.getMicroserviceTransports()),
-      transports: describeTransports(context),
-      ...(dropped > 0 && { dropped }),
-    };
-  };
-
-  const sampler = setInterval(() => {
-    let metrics: DevtoolsMetrics;
-
-    try {
-      metrics = sample();
-    } catch {
-      return;
-    }
-
-    sendTelemetry(agentMessage('metrics', metrics));
-  }, interval);
-
-  sampler.unref();
-
-  const onCommand = (message: unknown): void => {
-    if (!isDevtoolsHostMessage(message) || message.type !== 'command') {
-      return;
-    }
-
-    const { id, command } = message.payload;
-
-    void runCommand(context, message.payload)
-      .then((result) => {
         if (!send(agentMessage('commandResult', result)) && result.ok) {
           send(
             agentMessage('commandResult', {
-              id: result.id,
+              id,
+              serverId,
               ok: false,
               error: { name: 'DataCloneError', message: 'The result could not be sent over IPC' },
             }),
@@ -368,31 +348,137 @@ export const startDevtoolsAgent = (
         send(
           agentMessage(
             'commandResult',
-            failed(id, 'The command failed and the agent could not turn its error into a result'),
+            failed(id, 'The command failed and the agent could not turn its error into a result', serverId),
           ),
         );
       });
   };
 
+  let lastCpu = process.cpuUsage();
+  let lastAt = performance.now();
+
+  /** @returns `undefined` when no attached server's state could be read */
+  const sample = (): DevtoolsMetrics | undefined => {
+    const now = performance.now();
+    const cpu = process.cpuUsage(lastCpu);
+    const elapsedMs = now - lastAt;
+    const memory = process.memoryUsage();
+    const servers: Record<string, DevtoolsServerState> = {};
+    let latest: DevtoolsServerState | undefined;
+    let droppedInAll = 0;
+
+    lastCpu = process.cpuUsage();
+    lastAt = now;
+
+    for (const speaker of hostSpeakers()) {
+      try {
+        latest = speaker.state();
+        servers[speaker.serverId] = latest;
+        droppedInAll += latest.dropped ?? 0;
+      } catch {
+        // Teardown destroys transports while the sampler still ticks; that server is left out this once.
+      }
+    }
+
+    return (
+      latest && {
+        rss: memory.rss,
+        heapUsed: memory.heapUsed,
+        heapTotal: memory.heapTotal,
+        cpuPercent: elapsedMs > 0 ? (cpu.user + cpu.system) / 10 / elapsedMs : 0,
+        // How late this tick fired: the event loop was busy for that long.
+        eventLoopLagMs: Math.max(0, elapsedMs - interval),
+        uptimeSeconds: Math.round(process.uptime()),
+        readiness: latest.readiness,
+        transports: latest.transports,
+        ...(droppedInAll > 0 && { dropped: droppedInAll }),
+        servers,
+      }
+    );
+  };
+
+  const onCommand = (message: unknown): void => {
+    if (!isDevtoolsHostMessage(message) || message.type !== 'command') {
+      return;
+    }
+
+    const { id, serverId: target } = message.payload as { id: string; serverId?: unknown };
+
+    if (target === undefined) {
+      answer(message.payload);
+
+      return;
+    }
+
+    if (typeof target !== 'string') {
+      send(
+        agentMessage(
+          'commandResult',
+          failed(id, `A command's "serverId" must be a string, got ${target === null ? 'null' : typeof target}`),
+        ),
+      );
+
+      return;
+    }
+
+    const speaker = hostSpeakers().find((candidate) => candidate.serverId === target);
+
+    if (speaker) {
+      speaker.answer(message.payload);
+    } else {
+      send(
+        agentMessage(
+          'commandResult',
+          failed(id, `No attached server has the id ${JSON.stringify(target)}; the command was not run`),
+        ),
+      );
+    }
+  };
+
   let removeListener: (() => void) | undefined;
+  let sampler: Timer | undefined;
   const releaseHost = claimHost({
+    serverId,
+    state,
+    answer,
     listen: () => {
-      speaking = true;
       removeListener ??= channel.onMessage(onCommand);
+
+      if (sampler) {
+        return;
+      }
+
+      lastCpu = process.cpuUsage();
+      lastAt = performance.now();
+      sampler = setInterval(() => {
+        const metrics = sample();
+
+        if (metrics) {
+          sendTelemetry(agentMessage('metrics', metrics));
+        }
+      }, interval);
+      sampler.unref();
     },
     unlisten: () => {
-      speaking = false;
       removeListener?.();
       removeListener = undefined;
+      clearInterval(sampler);
+      sampler = undefined;
     },
   });
+  let detached = false;
 
   return {
     detach: () => {
-      clearInterval(sampler);
+      if (detached) {
+        return;
+      }
+
+      detached = true;
       unsubscribe();
       releaseOutput();
       releaseHost();
+      send(agentMessage('serverStopped', { serverId }));
     },
   };
 };

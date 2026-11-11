@@ -192,8 +192,17 @@ export interface DevtoolsTransport {
   connected: boolean;
 }
 
+/**
+ * Names one `AsenaServer` of the app process. The id is opaque, unique among the servers of that
+ * process and fixed for the server's life; a restarted process may hand out the same ids again.
+ * @internal
+ */
+export interface DevtoolsServerRef {
+  serverId: string;
+}
+
 /** @internal */
-export interface DevtoolsHello {
+export interface DevtoolsHello extends DevtoolsServerRef {
   coreVersion: string;
   /** Adapter name, `null` in headless mode. */
   adapter: string | null;
@@ -212,7 +221,24 @@ export type DevtoolsReadiness =
   | { status: 'up' }
   | { status: 'up' | 'degraded'; transports: Record<string, 'connected' | 'disconnected'> };
 
-/** @internal */
+/**
+ * The part of a metrics sample that belongs to one server.
+ * @internal
+ */
+export interface DevtoolsServerState {
+  readiness: DevtoolsReadiness;
+  transports?: DevtoolsTransport[];
+  /**
+   * This server's request records, and the metrics samples it was the one to send, dropped since it
+   * attached because the host was not reading; absent when none.
+   */
+  dropped?: number;
+}
+
+/**
+ * One sample per process and tick: the process numbers once, then every attached server's state.
+ * @internal
+ */
 export interface DevtoolsMetrics {
   rss: number;
   heapUsed: number;
@@ -220,10 +246,17 @@ export interface DevtoolsMetrics {
   cpuPercent: number;
   eventLoopLagMs: number;
   uptimeSeconds: number;
+  /** Of the most recently attached server in `servers`. */
   readiness: DevtoolsReadiness;
+  /** Of the most recently attached server in `servers`. */
   transports?: DevtoolsTransport[];
-  /** Request records and metrics dropped since the agent attached because the host was not reading; absent when none. */
+  /** The `dropped` counts of the attached servers, added up; absent when none. */
   dropped?: number;
+  /**
+   * Every attached server by `serverId`. A server whose state could not be read on this tick is
+   * left out of the sample; one that stopped is announced by `serverStopped`.
+   */
+  servers: Record<string, DevtoolsServerState>;
 }
 
 /** @internal */
@@ -278,22 +311,33 @@ export type DevtoolsCommand =
   | { command: 'sendMessage'; transport: string; pattern: string; kind: 'message' | 'event'; data?: unknown };
 
 /**
- * `id` correlates the command with its `commandResult`.
+ * `id` correlates the command with its `commandResult`. With `serverId` the command runs on that
+ * server, and is refused when no attached server has the id; without it, on the most recently
+ * attached one.
  * @internal
  */
-export type DevtoolsCommandRequest = { id: string } & DevtoolsCommand;
+export type DevtoolsCommandRequest = { id: string; serverId?: string } & DevtoolsCommand;
 
-/** @internal */
-export type DevtoolsCommandResult =
-  { id: string; ok: true; result?: unknown } | { id: string; ok: false; error: { name: string; message: string } };
+/**
+ * `serverId` is the server that answered; absent when the command named a server that is not attached.
+ * @internal
+ */
+export type DevtoolsCommandResult = { id: string; serverId?: string } & (
+  { ok: true; result?: unknown } | { ok: false; error: { name: string; message: string } }
+);
 
 /** @internal */
 export interface DevtoolsAgentPayloads {
+  /** One per server, when it attaches. */
   hello: DevtoolsHello;
-  snapshot: DevtoolsSnapshot;
+  /** One per server, right after its `hello`. */
+  snapshot: DevtoolsSnapshot & DevtoolsServerRef;
   metrics: DevtoolsMetrics;
-  request: DevtoolsRequestRecord;
+  /** Sent once, with the server whose handler, job or adapter produced the record. */
+  request: DevtoolsRequestRecord & DevtoolsServerRef;
   commandResult: DevtoolsCommandResult;
+  /** The server detached from the console: it sends nothing more and takes no commands. */
+  serverStopped: DevtoolsServerRef;
 }
 
 /** @internal */
@@ -330,6 +374,7 @@ const AGENT_MESSAGE_TYPES: readonly string[] = [
   'metrics',
   'request',
   'commandResult',
+  'serverStopped',
 ] satisfies DevtoolsAgentMessageType[];
 
 const HOST_MESSAGE_TYPES: readonly string[] = ['command'] satisfies DevtoolsHostMessageType[];
@@ -368,7 +413,7 @@ export const isDevtoolsAgentMessage = (value: unknown): value is DevtoolsAgentMe
   isEnvelope(value, AGENT_MESSAGE_TYPES);
 
 /**
- * Envelope check, plus the string `id` the agent answers under; the command's own fields are the agent's to check.
+ * Envelope check, plus the string `id` the agent answers under; `serverId` and the command's own fields are the agent's to check.
  * @internal
  */
 export const isDevtoolsHostMessage = (value: unknown): value is DevtoolsHostMessage =>

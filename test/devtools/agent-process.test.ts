@@ -1,7 +1,12 @@
 import { afterEach, describe, expect, test } from 'bun:test';
 import { join } from 'node:path';
 import type { Subprocess } from 'bun';
-import { hostMessage, isDevtoolsAgentMessage, type DevtoolsAgentMessage } from '../../lib/devtools/protocol';
+import {
+  hostMessage,
+  isDevtoolsAgentMessage,
+  type DevtoolsAgentMessage,
+  type DevtoolsHello,
+} from '../../lib/devtools/protocol';
 
 const ROOT = join(import.meta.dir, '..', '..');
 const CHILD = join(import.meta.dir, 'fixtures', 'console-child.ts');
@@ -53,6 +58,7 @@ describe('devtools agent in an IPC child process', () => {
     await waitFor(() => types().includes('commandResult'), 5_000, 'the command result');
     expect(received.find((message) => message.type === 'commandResult')!.payload).toEqual({
       id: 'run-1',
+      serverId: (received[0].payload as DevtoolsHello).serverId,
       ok: true,
       result: { ran: 'NightlyRestock' },
     });
@@ -65,6 +71,9 @@ describe('devtools agent in an IPC child process', () => {
 
     expect(exited).toBe(0);
     expect(performance.now() - signalledAt).toBeLessThan(2_000);
+    expect(received.filter((message) => message.type === 'serverStopped').map((message) => message.payload)).toEqual([
+      { serverId: (received[0].payload as DevtoolsHello).serverId },
+    ]);
   }, 20_000);
 
   // The agent counts a message as pending until process.send's callback fires; if Bun never called

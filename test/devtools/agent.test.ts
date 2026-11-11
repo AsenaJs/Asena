@@ -1,5 +1,13 @@
 import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test';
-import { attachDevtoolsAgent, startDevtoolsAgent, type DevtoolsChannel } from '../../lib/devtools/agent';
+import {
+  attachDevtoolsAgent,
+  startDevtoolsAgent,
+  type DevtoolsAgentOptions,
+  type DevtoolsChannel,
+} from '../../lib/devtools/agent';
+import { EventService, Schedule } from '../../lib/server/decorators';
+import { On } from '../../lib/server/event';
+import type { AsenaSchedule } from '../../lib/server/schedule';
 import type { DevtoolsAttachment, DevtoolsServerContext } from '../../lib/devtools/context';
 import { buildDevtoolsSnapshot } from '../../lib/devtools/snapshot';
 import { hostMessage, type DevtoolsAgentMessage, type DevtoolsCommand } from '../../lib/devtools/protocol';
@@ -81,6 +89,7 @@ describe('attachDevtoolsAgent', () => {
     expect(sent.every((message) => message.v === 1)).toBe(true);
     expect(payloadsOf(sent, 'hello')).toEqual([
       {
+        serverId: context.serverId,
         coreVersion: manifest.version,
         adapter: null,
         port: null,
@@ -88,7 +97,9 @@ describe('attachDevtoolsAgent', () => {
         transports: [{ name: 'default', connected: true }],
       },
     ]);
-    expect(payloadsOf(sent, 'snapshot')).toEqual([buildDevtoolsSnapshot(context.container, context)]);
+    expect(payloadsOf(sent, 'snapshot')).toEqual([
+      { ...buildDevtoolsSnapshot(context.container, context), serverId: context.serverId },
+    ]);
   });
 
   test('samples metrics on the interval, readiness by the health probe rule', async () => {
@@ -113,6 +124,10 @@ describe('attachDevtoolsAgent', () => {
       expect(sample.eventLoopLagMs).toBeGreaterThanOrEqual(0);
       expect(sample.uptimeSeconds).toBeGreaterThanOrEqual(0);
       expect(sample.transports).toEqual([{ name: 'default', connected: true }]);
+      expect(sample.servers).toEqual({
+        [context.serverId]: { readiness: sample.readiness, transports: [{ name: 'default', connected: true }] },
+      });
+      expect(sample).not.toHaveProperty('dropped');
     }
 
     expect(metrics.at(-1)!.readiness).toEqual(
@@ -188,6 +203,7 @@ describe('attachDevtoolsAgent', () => {
 
     // The three records plus every metrics tick of the 30 ms stall.
     expect(firstAfterDrain.dropped).toBeGreaterThan(3);
+    expect(firstAfterDrain.servers[context.serverId].dropped).toBe(firstAfterDrain.dropped);
 
     drain();
     emitEvent('e4');
@@ -227,19 +243,22 @@ describe('attachDevtoolsAgent', () => {
 
     const results = Object.fromEntries(payloadsOf(sent, 'commandResult').map((result) => [result.id, result]));
 
+    const { serverId } = context;
+
     expect(Object.keys(results).sort()).toEqual(['c1', 'c2', 'c3', 'c4', 'c5', 'c6', 'c7', 'c8']);
-    expect(results.c1).toEqual({ id: 'c1', ok: true, result: { ran: 'NightlyRestock' } });
+    expect(results.c1).toEqual({ id: 'c1', serverId, ok: true, result: { ran: 'NightlyRestock' } });
     expect(NightlyRestock.runs).toBe(runsBefore + 1);
-    expect(results.c2).toEqual({ id: 'c2', ok: true, result: { delivered: true } });
+    expect(results.c2).toEqual({ id: 'c2', serverId, ok: true, result: { delivered: true } });
     expect(PantryEvents.received.at(-1)).toEqual({ item: 'flour' });
-    expect(results.c3).toEqual({ id: 'c3', ok: true, result: { reply: { item: 'rice', count: 3 } } });
+    expect(results.c3).toEqual({ id: 'c3', serverId, ok: true, result: { reply: { item: 'rice', count: 3 } } });
     // The @Catch answered, so the reply is its return value, exactly as for any other caller.
-    expect(results.c4).toEqual({ id: 'c4', ok: true, result: { reply: { reserved: false } } });
-    expect(results.c5).toMatchObject({ id: 'c5', ok: false, error: { name: 'UlakError' } });
-    expect(results.c6).toEqual({ id: 'c6', ok: false, error: { name: 'Error', message: 'audit failed' } });
-    expect(results.c7).toEqual({ id: 'c7', ok: true, result: { emitted: true } });
+    expect(results.c4).toEqual({ id: 'c4', serverId, ok: true, result: { reply: { reserved: false } } });
+    expect(results.c5).toMatchObject({ id: 'c5', serverId, ok: false, error: { name: 'UlakError' } });
+    expect(results.c6).toEqual({ id: 'c6', serverId, ok: false, error: { name: 'Error', message: 'audit failed' } });
+    expect(results.c7).toEqual({ id: 'c7', serverId, ok: true, result: { emitted: true } });
     expect(results.c8).toEqual({
       id: 'c8',
+      serverId,
       ok: false,
       error: { name: 'Error', message: 'Unknown command "teleport"' },
     });
@@ -297,9 +316,11 @@ describe('attachDevtoolsAgent', () => {
 
     const results = payloadsOf(sent, 'commandResult');
 
+    const { serverId } = context;
+
     expect(results).toEqual([
-      { id: 'k1', ok: false, error: { name: 'Error', message: 'Unknown sendMessage kind "bogus"' } },
-      { id: 'k2', ok: false, error: { name: 'Error', message: 'Unknown sendMessage kind undefined' } },
+      { id: 'k1', serverId, ok: false, error: { name: 'Error', message: 'Unknown sendMessage kind "bogus"' } },
+      { id: 'k2', serverId, ok: false, error: { name: 'Error', message: 'Unknown sendMessage kind undefined' } },
     ]);
   });
 
@@ -331,7 +352,12 @@ describe('attachDevtoolsAgent', () => {
       spies.forEach((spy) => spy.mockRestore());
     }
 
-    const refused = (id: string, message: string) => ({ id, ok: false, error: { name: 'Error', message } });
+    const refused = (id: string, message: string) => ({
+      id,
+      serverId: context.serverId,
+      ok: false,
+      error: { name: 'Error', message },
+    });
 
     expect(payloadsOf(sent, 'commandResult')).toEqual([
       refused('t1', 'emitEvent needs a string "event", got number'),
@@ -381,87 +407,11 @@ describe('attachDevtoolsAgent', () => {
     expect(payloadsOf(sent, 'commandResult')).toEqual([
       {
         id: 'h1',
+        serverId: context.serverId,
         ok: false,
         error: { name: 'Error', message: 'The command failed and the agent could not turn its error into a result' },
       },
     ]);
-  });
-
-  // Two servers in one process, or a `--hot` reload that leaves the previous one running, share one
-  // IPC channel: a command must run once, not once per attachment.
-  test('only the most recent attachment answers commands; the previous one takes over when it detaches', async () => {
-    const { channel, sent, deliver } = fakeChannel();
-    const runsBefore = NightlyRestock.runs;
-    const older = startDevtoolsAgent(context, { channel });
-    const newer = startDevtoolsAgent(context, { channel });
-
-    try {
-      deliver(hostMessage('command', { id: 'once', command: 'runSchedule', name: 'NightlyRestock' }));
-      await Bun.sleep(20);
-
-      expect(NightlyRestock.runs).toBe(runsBefore + 1);
-      expect(payloadsOf(sent, 'commandResult').map((result) => result.id)).toEqual(['once']);
-
-      newer.detach();
-      deliver(hostMessage('command', { id: 'after', command: 'runSchedule', name: 'NightlyRestock' }));
-      await Bun.sleep(20);
-
-      expect(NightlyRestock.runs).toBe(runsBefore + 2);
-      expect(payloadsOf(sent, 'commandResult').map((result) => result.id)).toEqual(['once', 'after']);
-    } finally {
-      newer.detach();
-      older.detach();
-    }
-  });
-
-  // Every attachment sees every record of the process-wide bus, and the host cannot tell two copies of
-  // one record apart from two requests.
-  test('with two attachments a record reaches the host once; the previous one forwards when the newer detaches', async () => {
-    const { channel, sent } = fakeChannel();
-    const older = startDevtoolsAgent(context, { channel });
-    const newer = startDevtoolsAgent(context, { channel });
-
-    try {
-      context.events.emit('pantry.restocked', {});
-      await Bun.sleep(10);
-
-      expect(payloadsOf(sent, 'request').map(({ path }) => path)).toEqual(['pantry.restocked']);
-
-      newer.detach();
-      context.events.emit('pantry.restocked', {});
-      await Bun.sleep(10);
-
-      expect(payloadsOf(sent, 'request').map(({ path }) => path)).toEqual(['pantry.restocked', 'pantry.restocked']);
-    } finally {
-      newer.detach();
-      older.detach();
-    }
-  });
-
-  test('with two attachments the host gets one metrics sample per interval, not one per attachment', async () => {
-    const olderHost = fakeChannel();
-    const newerHost = fakeChannel();
-    const older = startDevtoolsAgent(context, { channel: olderHost.channel, sampleIntervalMs: 5 });
-    const newer = startDevtoolsAgent(context, { channel: newerHost.channel, sampleIntervalMs: 5 });
-
-    try {
-      await Bun.sleep(40);
-
-      expect(payloadsOf(newerHost.sent, 'metrics').length).toBeGreaterThan(0);
-      expect(payloadsOf(olderHost.sent, 'metrics')).toEqual([]);
-
-      newer.detach();
-      await Bun.sleep(40);
-
-      const handedOver = payloadsOf(olderHost.sent, 'metrics');
-
-      expect(handedOver.length).toBeGreaterThan(0);
-      // Sampled while it was not sending, so the first sample it sends does not count that time as lag.
-      expect(handedOver[0].eventLoopLagMs).toBeLessThan(30);
-    } finally {
-      newer.detach();
-      older.detach();
-    }
   });
 
   // Teardown closes pools, transports and ulak before the agent detaches; a command run then hits a
@@ -477,7 +427,12 @@ describe('attachDevtoolsAgent', () => {
 
     expect(NightlyRestock.runs).toBe(runsBefore);
     expect(payloadsOf(sent, 'commandResult')).toEqual([
-      { id: 'late', ok: false, error: { name: 'Error', message: 'The server is stopping; the command was not run' } },
+      {
+        id: 'late',
+        serverId: context.serverId,
+        ok: false,
+        error: { name: 'Error', message: 'The server is stopping; the command was not run' },
+      },
     ]);
   });
 
@@ -491,16 +446,18 @@ describe('attachDevtoolsAgent', () => {
 
     expect(
       payloadsOf(sent, 'request')
-        .map(({ method, path, status, answeredBy }) => ({ method, path, status, answeredBy }))
+        .map(({ serverId, method, path, status, answeredBy }) => ({ serverId, method, path, status, answeredBy }))
         .sort((a, b) => a.method.localeCompare(b.method)),
     ).toEqual([
       {
+        serverId: context.serverId,
         method: '@On',
         path: 'pantry.restocked',
         status: 200,
         answeredBy: { kind: 'controller', name: 'PantryEvents.restocked' },
       },
       {
+        serverId: context.serverId,
         method: '@Schedule',
         path: 'NightlyRestock',
         status: 200,
@@ -509,18 +466,22 @@ describe('attachDevtoolsAgent', () => {
     ]);
   });
 
-  test('detach releases the IPC listener, the sampler and the bus subscription', async () => {
+  test('detach tells the host the server is gone, then releases the IPC listener, the sampler and the bus subscription', async () => {
     const { channel, sent, listeners, deliver } = fakeChannel();
+    const detached = startDevtoolsAgent(context, { channel, sampleIntervalMs: 5 });
 
-    startDevtoolsAgent(context, { channel, sampleIntervalMs: 5 }).detach();
+    detached.detach();
+    detached.detach();
 
-    const countAfterDetach = sent.length;
+    expect(sent.map((message) => message.type)).toEqual(['hello', 'snapshot', 'serverStopped']);
+    expect(payloadsOf(sent, 'serverStopped')).toEqual([{ serverId: context.serverId }]);
 
     deliver(hostMessage('command', { id: 'late', command: 'emitEvent', event: 'pantry.restocked' }));
+    context.events.emit('pantry.restocked', {});
     await Bun.sleep(25);
 
     expect(listeners.size).toBe(0);
-    expect(sent.length).toBe(countAfterDetach);
+    expect(sent).toHaveLength(3);
   });
 
   // The commands run any schedule and publish to real brokers; a production process started under a
@@ -576,5 +537,380 @@ describe('attachDevtoolsAgent', () => {
       (process as any).send = previousSend;
       warn.mockRestore();
     }
+  });
+});
+
+@EventService('cellar')
+class CellarEvents {
+  @On('opened')
+  public opened() {}
+}
+
+@Schedule({ cron: '0 3 * * *' })
+class CellarCount implements AsenaSchedule {
+  public static runs = 0;
+
+  public async execute() {
+    CellarCount.runs += 1;
+  }
+}
+
+// The pantry server attaches first, the cellar server second: the cellar is "the most recent".
+describe('attachDevtoolsAgent with two servers in one process', () => {
+  let pantryServer: AsenaServer<any>;
+  let cellarServer: AsenaServer<any>;
+  let pantry: DevtoolsServerContext;
+  let cellar: DevtoolsServerContext;
+  let restore: () => void;
+  let attachments: DevtoolsAttachment[];
+
+  const boot = async (components: any[]) => {
+    const server = await AsenaServerFactory.create({
+      headless: true,
+      logger: silentLogger,
+      components,
+      shutdown: { signals: false },
+    });
+
+    await server.start();
+
+    return server;
+  };
+
+  const attachBoth = (pantryOptions: DevtoolsAgentOptions, cellarOptions: DevtoolsAgentOptions = pantryOptions) => {
+    const older = startDevtoolsAgent(pantry, pantryOptions);
+    const newer = startDevtoolsAgent(cellar, cellarOptions);
+
+    attachments.push(older, newer);
+
+    return { older, newer };
+  };
+
+  beforeEach(async () => {
+    const contexts: DevtoolsServerContext[] = [];
+
+    attachments = [];
+    restore = installDevtoolsHook((handed) => {
+      contexts.push(handed);
+    });
+    pantryServer = await boot(consoleAppComponents);
+    cellarServer = await boot([CellarEvents, CellarCount]);
+    [pantry, cellar] = contexts;
+  });
+
+  afterEach(async () => {
+    attachments.forEach((attachment) => attachment.detach());
+    await pantryServer.stop();
+    await cellarServer.stop();
+    restore();
+  });
+
+  test('each server says hello and sends its own snapshot under its own id', () => {
+    const { channel, sent } = fakeChannel();
+
+    attachBoth({ channel });
+
+    expect(pantry.serverId).not.toBe(cellar.serverId);
+    expect(sent.map((message) => [message.type, (message.payload as { serverId: string }).serverId])).toEqual([
+      ['hello', pantry.serverId],
+      ['snapshot', pantry.serverId],
+      ['hello', cellar.serverId],
+      ['snapshot', cellar.serverId],
+    ]);
+    expect(payloadsOf(sent, 'hello').map((hello) => hello.transports)).toEqual([
+      [{ name: 'default', connected: true }],
+      [],
+    ]);
+    expect(payloadsOf(sent, 'snapshot').map((snapshot) => snapshot.schedules.map((job) => job.name).sort())).toEqual([
+      ['FailingAudit', 'NightlyRestock'],
+      ['CellarCount'],
+    ]);
+  });
+
+  test('a command runs on the server it names, on the most recent one when it names none, and once', async () => {
+    const { channel, sent, listeners, deliver } = fakeChannel();
+    const command = (id: string, body: Record<string, unknown>) =>
+      deliver(hostMessage('command', { id, ...body } as any));
+    const pantryRuns = NightlyRestock.runs;
+    const cellarRuns = CellarCount.runs;
+    const consoleError = spyOn(console, 'error').mockImplementation(() => {});
+
+    attachBoth({ channel });
+
+    try {
+      expect(listeners.size).toBe(1);
+
+      command('recent', { command: 'runSchedule', name: 'CellarCount' });
+      command('recent-miss', { command: 'runSchedule', name: 'NightlyRestock' });
+      command('named-older', { serverId: pantry.serverId, command: 'runSchedule', name: 'NightlyRestock' });
+      command('named-newer', { serverId: cellar.serverId, command: 'emitEvent', event: 'cellar.opened' });
+      command('named-miss', { serverId: cellar.serverId, command: 'runSchedule', name: 'NightlyRestock' });
+      command('unknown', { serverId: 'server-0', command: 'runSchedule', name: 'NightlyRestock' });
+      command('not-a-string', { serverId: 7, command: 'runSchedule', name: 'NightlyRestock' });
+      command('null', { serverId: null, command: 'runSchedule', name: 'NightlyRestock' });
+      await Bun.sleep(20);
+    } finally {
+      consoleError.mockRestore();
+    }
+
+    const results = payloadsOf(sent, 'commandResult');
+    const byId = Object.fromEntries(results.map((result) => [result.id, result]));
+
+    expect(results).toHaveLength(8);
+    expect(NightlyRestock.runs).toBe(pantryRuns + 1);
+    expect(CellarCount.runs).toBe(cellarRuns + 1);
+    expect(byId.recent).toEqual({ id: 'recent', serverId: cellar.serverId, ok: true, result: { ran: 'CellarCount' } });
+    expect(byId['recent-miss']).toMatchObject({ serverId: cellar.serverId, ok: false });
+    expect(byId['named-older']).toEqual({
+      id: 'named-older',
+      serverId: pantry.serverId,
+      ok: true,
+      result: { ran: 'NightlyRestock' },
+    });
+    expect(byId['named-newer']).toEqual({
+      id: 'named-newer',
+      serverId: cellar.serverId,
+      ok: true,
+      result: { delivered: true },
+    });
+    expect(byId['named-miss']).toMatchObject({ serverId: cellar.serverId, ok: false });
+    expect(byId.unknown).toEqual({
+      id: 'unknown',
+      ok: false,
+      error: { name: 'Error', message: 'No attached server has the id "server-0"; the command was not run' },
+    });
+    expect(byId['not-a-string']).toEqual({
+      id: 'not-a-string',
+      ok: false,
+      error: { name: 'Error', message: 'A command\'s "serverId" must be a string, got number' },
+    });
+    expect(byId.null).toEqual({
+      id: 'null',
+      ok: false,
+      error: { name: 'Error', message: 'A command\'s "serverId" must be a string, got null' },
+    });
+  });
+
+  test('a record reaches the host once, from the server that produced it', async () => {
+    const { channel, sent } = fakeChannel();
+
+    attachBoth({ channel });
+    pantry.events.emit('pantry.restocked', {});
+    cellar.events.emit('cellar.opened');
+    await pantry.cron.runNow('NightlyRestock');
+    await cellar.cron.runNow('CellarCount');
+    await Bun.sleep(10);
+
+    expect(
+      payloadsOf(sent, 'request')
+        .map(({ serverId, path }) => [path, serverId])
+        .sort(),
+    ).toEqual(
+      [
+        ['pantry.restocked', pantry.serverId],
+        ['cellar.opened', cellar.serverId],
+        ['NightlyRestock', pantry.serverId],
+        ['CellarCount', cellar.serverId],
+      ].sort(),
+    );
+  });
+
+  test('one metrics sample per tick carries the process numbers once and every server by id', async () => {
+    const olderHost = fakeChannel();
+    const newerHost = fakeChannel();
+    const { newer } = attachBoth(
+      { channel: olderHost.channel, sampleIntervalMs: 5 },
+      { channel: newerHost.channel, sampleIntervalMs: 5 },
+    );
+
+    await Bun.sleep(40);
+
+    const samples = payloadsOf(newerHost.sent, 'metrics');
+
+    expect(samples.length).toBeGreaterThan(0);
+    expect(payloadsOf(olderHost.sent, 'metrics')).toEqual([]);
+
+    for (const sample of samples) {
+      expect(sample.rss).toBeGreaterThan(0);
+      expect(sample.servers).toEqual({
+        [pantry.serverId]: {
+          readiness: { status: 'up', transports: { default: 'connected' } },
+          transports: [{ name: 'default', connected: true }],
+        },
+        [cellar.serverId]: { readiness: { status: 'up' }, transports: [] },
+      });
+      // What a host that does not read `servers` sees: the most recent server, as before.
+      expect(sample.readiness).toEqual({ status: 'up' });
+      expect(sample.transports).toEqual([]);
+    }
+
+    newer.detach();
+    await Bun.sleep(40);
+
+    const handedOver = payloadsOf(olderHost.sent, 'metrics');
+
+    expect(handedOver.length).toBeGreaterThan(0);
+    // The sampler starts when the server takes over, so the time before is not counted as lag.
+    expect(handedOver[0].eventLoopLagMs).toBeLessThan(30);
+
+    for (const sample of handedOver) {
+      expect(Object.keys(sample.servers)).toEqual([pantry.serverId]);
+      expect(sample.transports).toEqual([{ name: 'default', connected: true }]);
+    }
+  });
+
+  // A transport getter of one server that throws must not cost the other server its sample.
+  test('a server whose state cannot be read is left out of the sample; the other one is still reported', async () => {
+    for (const broken of ['older', 'newer'] as const) {
+      const { channel, sent } = fakeChannel();
+      const both = attachBoth({ channel, sampleIntervalMs: 5 });
+      const [unreadable, readable] = broken === 'older' ? [pantry, cellar] : [cellar, pantry];
+      const transports = spyOn(unreadable.ulak, 'getMicroserviceTransports').mockImplementation(() => {
+        throw new Error('client destroyed');
+      });
+
+      try {
+        sent.length = 0;
+        await Bun.sleep(40);
+
+        const samples = payloadsOf(sent, 'metrics');
+
+        expect(samples.length).toBeGreaterThan(0);
+
+        for (const sample of samples) {
+          expect(Object.keys(sample.servers)).toEqual([readable.serverId]);
+          expect(sample.readiness).toEqual(sample.servers[readable.serverId].readiness);
+        }
+      } finally {
+        transports.mockRestore();
+        both.newer.detach();
+        both.older.detach();
+      }
+    }
+  });
+
+  test('when a server detaches the host is told, and the other one keeps reporting and answering', async () => {
+    for (const first of ['older', 'newer'] as const) {
+      const { channel, sent, listeners, deliver } = fakeChannel();
+      const both = attachBoth({ channel, sampleIntervalMs: 5 });
+      const [gone, left] = first === 'older' ? [pantry, cellar] : [cellar, pantry];
+      const [event, job] = left === pantry ? ['pantry.restocked', 'NightlyRestock'] : ['cellar.opened', 'CellarCount'];
+
+      both[first].detach();
+      both[first].detach();
+
+      expect(payloadsOf(sent, 'serverStopped')).toEqual([{ serverId: gone.serverId }]);
+      expect(listeners.size).toBe(1);
+
+      const from = sent.length;
+
+      gone.events.emit(gone === pantry ? 'pantry.restocked' : 'cellar.opened', {});
+      left.events.emit(event, {});
+      deliver(hostMessage('command', { id: 'to-gone', serverId: gone.serverId, command: 'runSchedule', name: job }));
+      deliver(hostMessage('command', { id: 'to-left', serverId: left.serverId, command: 'runSchedule', name: job }));
+      deliver(hostMessage('command', { id: 'to-recent', command: 'emitEvent', event }));
+      await Bun.sleep(40);
+
+      const after = sent.slice(from);
+
+      expect(payloadsOf(after, 'request').map(({ serverId }) => serverId)).toEqual([
+        left.serverId,
+        left.serverId,
+        left.serverId,
+      ]);
+      expect(payloadsOf(after, 'commandResult').sort((a, b) => a.id.localeCompare(b.id))).toEqual([
+        {
+          id: 'to-gone',
+          ok: false,
+          error: {
+            name: 'Error',
+            message: `No attached server has the id ${JSON.stringify(gone.serverId)}; the command was not run`,
+          },
+        },
+        { id: 'to-left', serverId: left.serverId, ok: true, result: { ran: job } },
+        { id: 'to-recent', serverId: left.serverId, ok: true, result: { delivered: true } },
+      ]);
+      expect(payloadsOf(after, 'metrics').length).toBeGreaterThan(0);
+
+      for (const sample of payloadsOf(after, 'metrics')) {
+        expect(Object.keys(sample.servers)).toEqual([left.serverId]);
+      }
+
+      const other = first === 'older' ? 'newer' : 'older';
+
+      both[other].detach();
+
+      const silent = sent.length;
+
+      expect(payloadsOf(sent, 'serverStopped')).toEqual([{ serverId: gone.serverId }, { serverId: left.serverId }]);
+      expect(listeners.size).toBe(0);
+
+      deliver(hostMessage('command', { id: 'nobody', command: 'runSchedule', name: job }));
+      left.events.emit(event, {});
+      await Bun.sleep(25);
+
+      expect(sent).toHaveLength(silent);
+    }
+  });
+
+  test('a stopping server refuses a command sent to it, and the other server still runs its own', async () => {
+    const { channel, sent, deliver } = fakeChannel();
+    const pantryRuns = NightlyRestock.runs;
+
+    attachBoth({ channel });
+    // The hook returned no attachment, so stop() detaches nothing: the agent sees the stopped lifecycle.
+    await pantryServer.stop();
+
+    deliver(
+      hostMessage('command', {
+        id: 'stopped',
+        serverId: pantry.serverId,
+        command: 'runSchedule',
+        name: 'NightlyRestock',
+      }),
+    );
+    deliver(
+      hostMessage('command', { id: 'live', serverId: cellar.serverId, command: 'emitEvent', event: 'cellar.opened' }),
+    );
+    await Bun.sleep(20);
+
+    expect(NightlyRestock.runs).toBe(pantryRuns);
+    expect(payloadsOf(sent, 'commandResult')).toEqual([
+      {
+        id: 'stopped',
+        serverId: pantry.serverId,
+        ok: false,
+        error: { name: 'Error', message: 'The server is stopping; the command was not run' },
+      },
+      { id: 'live', serverId: cellar.serverId, ok: true, result: { delivered: true } },
+    ]);
+  });
+
+  test('records the host did not read are counted against the server that produced them', async () => {
+    const { channel, sent, drain } = fakeChannel({ stalled: true });
+
+    // hello and the snapshot fill each server's two slots.
+    attachBoth({ channel, sampleIntervalMs: 5, maxPendingMessages: 2 });
+    pantry.events.emit('pantry.restocked', {});
+    pantry.events.emit('pantry.restocked', {});
+    pantry.events.emit('pantry.restocked', {});
+    await Bun.sleep(30);
+
+    expect(payloadsOf(sent, 'request')).toEqual([]);
+    expect(payloadsOf(sent, 'metrics')).toEqual([]);
+
+    drain();
+
+    for (let waited = 0; payloadsOf(sent, 'metrics').length === 0 && waited < 2000; waited += 5) {
+      await Bun.sleep(5);
+    }
+
+    const [sample] = payloadsOf(sent, 'metrics');
+    const sampler = sample.servers[cellar.serverId].dropped!;
+
+    expect(sample.servers[pantry.serverId].dropped).toBe(3);
+    // The metrics ticks of the stall, which the most recent server was the one to send.
+    expect(sampler).toBeGreaterThan(0);
+    expect(sample.dropped).toBe(3 + sampler);
   });
 });
