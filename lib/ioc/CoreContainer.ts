@@ -18,6 +18,7 @@ import { EventDispatchService } from '../server/event';
 import { EventEmitter } from '../server/event';
 import { CronRunner } from '../server/schedule';
 import { LifecycleService } from '../server/lifecycle/LifecycleService';
+import { DevtoolsScope } from '../devtools/DevtoolsScope';
 
 /**
  * @description CoreContainer manages framework-level services
@@ -134,6 +135,9 @@ export class CoreContainer {
    */
   private async registerPrepareServices(): Promise<void> {
     const services = [
+      // Injected by the services that open devtools records, so it comes before all of them
+      { name: ICoreServiceNames.DEVTOOLS_SCOPE, Class: DevtoolsScope },
+
       // Internal messaging system (must be registered before prepare services)
       { name: ICoreServiceNames.__ULAK__, Class: Ulak },
 

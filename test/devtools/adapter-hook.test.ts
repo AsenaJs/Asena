@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, mock, test } from 'bun:test';
 import { devtoolsBus } from '../../lib/devtools/DevtoolsBus';
+import { ICoreServiceNames } from '../../lib/ioc';
 import type { AsenaContext } from '../../lib/adapter';
 import { Controller, Service } from '../../lib/server/decorators';
 import { Get } from '../../lib/server/web/decorators';
@@ -71,10 +72,11 @@ describe('adapter.attachDevtools in AsenaServer.start()', () => {
 
     // The adapter decides at registration time whether to wrap, so it must already hold the bus.
     expect(attach).toHaveBeenCalledTimes(1);
-    expect(attach.mock.calls[0][0]).toBe(devtoolsBus);
+    expect(attach.mock.calls[0][0]).toBe(await app.server.coreContainer.resolve(ICoreServiceNames.DEVTOOLS_SCOPE));
     expect(calls).toEqual(['attachDevtools', 'registerRoute', 'start']);
     // The bus is live when the adapter gets it, so `enabled` is a usable switch.
-    expect((attach.mock.calls[0][0] as typeof devtoolsBus).enabled).toBe(true);
+    expect((attach.mock.calls[0][0] as { enabled: boolean }).enabled).toBe(true);
+    expect(devtoolsBus.enabled).toBe(true);
 
     await app.stop();
     expect(attach).toHaveBeenCalledTimes(1);

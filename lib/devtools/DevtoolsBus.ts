@@ -12,6 +12,8 @@ export interface DevtoolsOpenRecord {
   readonly startedAt: number;
   readonly method: string;
   readonly path: string;
+  /** The server whose emit site opened the record; absent when it was opened on the bare bus. */
+  readonly serverId?: string;
   readonly steps: DevtoolsRequestStep[];
   readonly startTime: number;
   readonly logs: DevtoolsRequestLog[];
@@ -20,7 +22,7 @@ export interface DevtoolsOpenRecord {
   closed: boolean;
 }
 
-export type DevtoolsRecordListener = (record: DevtoolsRequestRecord) => void;
+export type DevtoolsRecordListener = (record: DevtoolsRequestRecord, serverId: string | undefined) => void;
 
 /**
  * Collects the steps a request or a dispatch went through, for the console's request inspector.
@@ -112,7 +114,7 @@ export class DevtoolsBus {
     return this.contractNames?.get(schemas) ?? 'Context';
   }
 
-  public open(method: string, path: string): DevtoolsOpenRecord {
+  public open(method: string, path: string, serverId?: string): DevtoolsOpenRecord {
     this.sequence += 1;
 
     return {
@@ -120,6 +122,7 @@ export class DevtoolsBus {
       startedAt: Date.now(),
       method,
       path,
+      serverId,
       steps: [],
       startTime: performance.now(),
       logs: [],
@@ -191,7 +194,7 @@ export class DevtoolsBus {
 
     for (const listener of this.listeners) {
       try {
-        listener(finished);
+        listener(finished, record.serverId);
       } catch {
         // Reporting a dispatch must not fail it, nor keep the record from the other listeners.
       }
@@ -206,9 +209,10 @@ export class DevtoolsBus {
    * @param method - What kind of dispatch, e.g. `@On`
    * @param path - The event, pattern or job name
    * @param handler - `Component.method` of the handler
+   * @param serverId - The server that owns the dispatch
    */
-  public observe<T>(method: string, path: string, handler: string, fn: () => T): T {
-    const record = this.open(method, path);
+  public observe<T>(method: string, path: string, handler: string, fn: () => T, serverId?: string): T {
+    const record = this.open(method, path, serverId);
     const handlerStep: DevtoolsRequestStep = { kind: 'controller', name: handler };
 
     record.steps.push(handlerStep);

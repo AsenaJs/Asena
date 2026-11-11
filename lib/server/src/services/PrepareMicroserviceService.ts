@@ -10,7 +10,7 @@ import type { MessageHandlerMetadata, MessagingInterceptor } from '../../microse
 import type { DestroyOptions, MessageContext, MicroserviceTransport } from '../../microservice';
 import type { PrepareExceptionHandlerService } from './PrepareExceptionHandlerService';
 import type { MicroserviceExceptionContext } from '../../exception/types';
-import { devtoolsBus } from '../../../devtools/DevtoolsBus';
+import type { DevtoolsScope } from '../../../devtools/DevtoolsScope';
 
 const EVENT_CATCH_TIMEOUT_MS = 5_000;
 const EVENT_CATCH_TIMEOUT = Symbol('event-catch-timeout');
@@ -52,6 +52,9 @@ export class PrepareMicroserviceService implements ICoreService {
 
   @Inject(ICoreServiceNames.PREPARE_EXCEPTION_HANDLER_SERVICE)
   private exceptions!: PrepareExceptionHandlerService;
+
+  @Inject(ICoreServiceNames.DEVTOOLS_SCOPE)
+  private devtools?: DevtoolsScope;
 
   private transports: Map<string, MicroserviceTransport> = new Map();
 
@@ -219,9 +222,10 @@ export class PrepareMicroserviceService implements ICoreService {
         : intercepted;
 
       const dispatch = metadata.type === 'message' ? '@MessagePattern' : '@EventPattern';
-      const wrapped = devtoolsBus.enabled
+      const devtools = this.devtools;
+      const wrapped = devtools?.enabled
         ? (data: unknown, context: MessageContext) =>
-            devtoolsBus.observe(dispatch, context.pattern, source, () => routed(data, context))
+            devtools.observe(dispatch, context.pattern, source, () => routed(data, context))
         : routed;
 
       const finalPattern = this.buildPattern(prefix, metadata.pattern, applyPrefix);

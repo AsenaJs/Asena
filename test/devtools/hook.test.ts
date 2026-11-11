@@ -58,6 +58,7 @@ describe('devtools hook in AsenaServer.start()', () => {
       'lifecycle',
       'logger',
       'port',
+      'serverId',
       'ulak',
     ]);
 

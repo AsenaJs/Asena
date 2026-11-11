@@ -12,7 +12,7 @@ import type { AsenaWebsocketAdapter } from './AsenaWebsocketAdapter';
 import type { ServerLogger } from '../logger';
 import type { AsenaContext } from './AsenaContext';
 import type { GlobalMiddlewareRouteConfig } from '../server/config';
-import type { DevtoolsBus } from '../devtools/DevtoolsBus';
+import type { DevtoolsScope } from '../devtools/DevtoolsScope';
 
 /**
  * Abstract class representing an adapter for the Asena framework.
@@ -167,9 +167,9 @@ export abstract class AsenaAdapter<C extends AsenaContext<any, any>, VS> {
    * - `validator` - a legacy `validator:` schema the adapter checks itself;
    * - `middleware` - a middleware call core's prepared chain did not record.
    *
-   * @param bus - The server's devtools bus
+   * @param bus - The devtools bus as this server sees it: a record opened through it is reported as this server's
    */
-  public attachDevtools?(bus: Pick<DevtoolsBus, 'enabled' | 'open' | 'run' | 'step' | 'close'>): void;
+  public attachDevtools?(bus: Pick<DevtoolsScope, 'enabled' | 'open' | 'run' | 'step' | 'close'>): void;
 
   /**
    * Configures server options.

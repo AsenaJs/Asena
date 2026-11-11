@@ -14,6 +14,8 @@ export const devtoolsRefusal = (): string | undefined =>
 
 /** What `AsenaServer.start()` hands the devtools agent once the server is ready. */
 export interface DevtoolsServerContext {
+  /** Unique among the servers of this process and fixed for the server's life; the records it opens carry it. */
+  serverId: string;
   /** Bound HTTP port, `null` in headless mode. */
   port: number | null;
   /** Adapter name, `null` in headless mode. */
@@ -25,7 +27,7 @@ export interface DevtoolsServerContext {
   events: { emit(event: string, data?: unknown): boolean };
   /** The `@Config.globalMiddlewares()` list as applied at boot; empty in headless mode. */
   globalMiddlewares: readonly GlobalMiddlewareConfig[];
-  /** The server's own bus, not the one the agent's module copy would import. */
+  /** The process-wide bus the server records on, not the one the agent's module copy would import. */
   bus: DevtoolsBus;
   /** The server's logger: where the agent reports its own failures, rather than the console it captures. */
   logger: ServerLogger;

@@ -2,7 +2,7 @@ import { CoreService, ICoreServiceNames } from '../../ioc';
 import type { ICoreService } from '../../ioc';
 import { Inject } from '../../ioc/component';
 import type { ServerLogger } from '../../logger';
-import { devtoolsBus } from '../../devtools/DevtoolsBus';
+import type { DevtoolsScope } from '../../devtools/DevtoolsScope';
 
 interface ScheduledJob {
   name: string;
@@ -30,6 +30,9 @@ export class CronRunner implements ICoreService {
 
   @Inject(ICoreServiceNames.SERVER_LOGGER)
   private logger!: ServerLogger;
+
+  @Inject(ICoreServiceNames.DEVTOOLS_SCOPE)
+  private devtools?: DevtoolsScope;
 
   private jobs: ScheduledJob[] = [];
 
@@ -186,8 +189,8 @@ export class CronRunner implements ICoreService {
     job.inFlight = true;
 
     try {
-      await (devtoolsBus.enabled
-        ? devtoolsBus.observe('@Schedule', job.name, `${job.name}.execute`, job.handler)
+      await (this.devtools?.enabled
+        ? this.devtools.observe('@Schedule', job.name, `${job.name}.execute`, job.handler)
         : job.handler());
 
       return undefined;

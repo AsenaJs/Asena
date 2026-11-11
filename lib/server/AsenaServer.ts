@@ -63,6 +63,7 @@ import type { AsenaStopOptions, ShutdownOptions } from './types';
 import type { EventEmitter } from './event/EventEmitter';
 import { DEVTOOLS_HOOK, devtoolsRefusal, type DevtoolsAttachment, type DevtoolsHook } from '../devtools/context';
 import { devtoolsBus } from '../devtools/DevtoolsBus';
+import type { DevtoolsScope } from '../devtools/DevtoolsScope';
 
 /**
  * Whatever a catch block or a signal handler received, in a shape safe to put in a log line.
@@ -175,6 +176,9 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
   @Inject(ICoreServiceNames.LIFECYCLE_SERVICE)
   private lifecycleService: LifecycleService;
 
+  @Inject(ICoreServiceNames.DEVTOOLS_SCOPE)
+  private devtoolsScope: DevtoolsScope;
+
   // Instance state
   private _port!: number;
 
@@ -270,7 +274,7 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
       this._adapter.setPort(this._port);
 
       if (this.enabledDevtoolsBus) {
-        this._adapter.attachDevtools?.(devtoolsBus);
+        this._adapter.attachDevtools?.(this.devtoolsScope);
       }
     } else {
       this._logger.info('Headless mode: no HTTP adapter configured');
@@ -816,6 +820,7 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
       }
 
       const attachment = hook({
+        serverId: this.devtoolsScope.serverId,
         port: this._httpServer?.port ?? null,
         adapter: this._adapter?.name ?? null,
         container: this._coreContainer.container,

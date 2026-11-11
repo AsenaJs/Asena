@@ -5,7 +5,7 @@ import { Inject } from '../../ioc/component';
 import type { EventExceptionContext } from '../exception/types';
 import type { PrepareExceptionHandlerService } from '../src/services/PrepareExceptionHandlerService';
 import { PatternHandlerIndex } from './PatternHandlerIndex';
-import { devtoolsBus } from '../../devtools/DevtoolsBus';
+import type { DevtoolsScope } from '../../devtools/DevtoolsScope';
 import type { EventHandler, EventSubscription } from './types';
 import { isThenable } from '../../utils/isThenable';
 
@@ -30,6 +30,9 @@ export class EventDispatchService implements ICoreService {
 
   @Inject(ICoreServiceNames.PREPARE_EXCEPTION_HANDLER_SERVICE)
   private exceptions?: PrepareExceptionHandlerService;
+
+  @Inject(ICoreServiceNames.DEVTOOLS_SCOPE)
+  private devtools?: DevtoolsScope;
 
   /**
    * All registered event subscriptions
@@ -118,8 +121,8 @@ export class EventDispatchService implements ICoreService {
 
     // 4. Call all matching handlers (fire-and-forget, error isolation)
     for (const sub of handlersToCall) {
-      if (devtoolsBus.enabled) {
-        this.dispatchObserved(sub, eventName, data);
+      if (this.devtools?.enabled) {
+        this.dispatchObserved(this.devtools, sub, eventName, data);
         continue;
       }
 
@@ -152,8 +155,8 @@ export class EventDispatchService implements ICoreService {
    * The same call and failure handling as the plain loop, framed as a devtools record that stays
    * open until a matching `@Catch` has observed the failure.
    */
-  private dispatchObserved(sub: EventSubscription, eventName: string, data: unknown): void {
-    devtoolsBus
+  private dispatchObserved(devtools: DevtoolsScope, sub: EventSubscription, eventName: string, data: unknown): void {
+    devtools
       .observe('@On', eventName, sub.source ?? sub.pattern, async () => {
         let result: unknown;
 

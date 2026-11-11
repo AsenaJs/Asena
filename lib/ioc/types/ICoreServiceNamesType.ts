@@ -35,6 +35,9 @@ export enum ICoreServiceNames {
   // Lifecycle Services (Phase 5)
   LIFECYCLE_SERVICE = 'LifecycleService',
 
+  // Devtools (Phase 5)
+  DEVTOOLS_SCOPE = 'DevtoolsScope',
+
   // Factory Services (Phase 6+)
   CORE_CONTAINER = 'CoreContainer',
   ASENA_SERVER = 'AsenaServer',
