@@ -75,3 +75,32 @@ describe('the second-signal listener of a signal stop', () => {
     expect(process.listenerCount(SIGNAL)).toBe(0);
   });
 });
+
+describe('the exit of a signal stop under a file watcher', () => {
+  test('with no other listener of the signal it exits once and arms nothing behind an exit that returns', async () => {
+    const exit = spyOn(process, 'exit').mockImplementation((() => undefined) as never);
+    const beforeExitListeners = process.listenerCount('beforeExit');
+    const server = await AsenaServerFactory.create({
+      headless: true,
+      logger: silentLogger,
+      shutdown: { signals: [SIGNAL] },
+    });
+
+    process.execArgv.push('--watch');
+
+    try {
+      await server.start();
+      process.emit(SIGNAL, SIGNAL);
+
+      for (let waited = 0; exit.mock.calls.length === 0 && waited < 2000; waited += 5) {
+        await Bun.sleep(5);
+      }
+
+      expect(exit.mock.calls).toEqual([[0]]);
+      expect(process.listenerCount('beforeExit')).toBe(beforeExitListeners);
+    } finally {
+      process.execArgv.splice(process.execArgv.indexOf('--watch'), 1);
+      exit.mockRestore();
+    }
+  });
+});

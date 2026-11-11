@@ -706,6 +706,8 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
 
     if (others.length === 0) {
       process.exit(code);
+
+      return;
     }
 
     process.once('beforeExit', () => process.exit(code));
