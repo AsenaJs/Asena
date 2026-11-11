@@ -201,6 +201,19 @@ describe('graceful shutdown', () => {
     expect(await worker.exited).toBe(7);
   }, 20_000);
 
+  test('a clean shutdown keeps the non-zero exit code the app already set', async () => {
+    const worker = spawnWorker('graceful-worker', [], { APP_EXIT_CODE: '7' });
+    const stdout = tail(worker.stdout);
+
+    await stdout.waitFor('SERVER_STARTED');
+
+    worker.kill('SIGTERM');
+
+    expect(await worker.exited).toBe(7);
+    await stdout.drained;
+    expect(stdout.text()).toContain('WORKER_STOPPED');
+  }, 20_000);
+
   // The app that calls stop() itself owns its process: it reads the outcome from the promise.
   test('an explicit stop() with a throwing stop hook leaves the exit code alone', async () => {
     const worker = spawnWorker('failing-stop-worker', [], { EXPLICIT_STOP: '1' });
@@ -332,6 +345,35 @@ describe('graceful shutdown under a file watcher', () => {
       expect(await exitCodeWithin(run.worker, EXIT_BOUND_MS)).toBe(1);
       await run.stdout.drained;
       expect(run.stdout.text()).toContain('EARLIER_STOPPED');
+    },
+    20_000,
+  );
+
+  // The watcher path ends the process itself, so it has to pass on what plain mode leaves in process.exitCode.
+  test.each(FLAGS)(
+    'bun %s: a failed shutdown keeps the non-zero exit code the app already set',
+    async (flag) => {
+      await using run = await startWorker('failing-stop-worker', flag, 'SERVER_STARTED', { APP_EXIT_CODE: '7' });
+
+      run.worker.kill('SIGINT');
+
+      expect(await exitCodeWithin(run.worker, EXIT_BOUND_MS)).toBe(7);
+      await run.stdout.drained;
+      expect(run.stdout.text()).toContain('EARLIER_STOPPED');
+    },
+    20_000,
+  );
+
+  test.each(FLAGS)(
+    'bun %s: a clean shutdown keeps the non-zero exit code the app already set',
+    async (flag) => {
+      await using run = await startWorker('graceful-worker', flag, 'SERVER_STARTED', { APP_EXIT_CODE: '7' });
+
+      run.worker.kill('SIGINT');
+
+      expect(await exitCodeWithin(run.worker, EXIT_BOUND_MS)).toBe(7);
+      await run.stdout.drained;
+      expect(run.stdout.text()).toContain('WORKER_STOPPED');
     },
     20_000,
   );

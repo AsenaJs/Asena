@@ -9,9 +9,9 @@
  *
  * A signal-triggered shutdown that fails ends the process with exit code 1: `stop()` rejected, or
  * an `@OnStop` hook threw, rejected or ran out of `timeout`. The remaining hooks and teardown steps
- * still run. Outside `bun --hot` / `--watch` the process still exits on its own, with
- * `process.exitCode` set to 1 unless the application already set a non-zero one. An explicit
- * `server.stop()` never sets the exit code.
+ * still run. A non-zero `process.exitCode` the application already set is kept, after a failed
+ * shutdown and after a clean one, with or without `bun --hot` / `--watch`; outside them the process
+ * still exits on its own. An explicit `server.stop()` never sets the exit code.
  */
 export interface ShutdownOptions {
   /**
@@ -45,7 +45,7 @@ export interface ShutdownOptions {
    * over. Exits non-zero, because a forced exit is not a clean one.
    *
    * Under `bun --hot` and `bun --watch` the process exits once every stop in it has settled -
-   * code 0, or 1 when a signal-triggered shutdown failed - whatever this is set to: the file watcher
+   * with the code described above - whatever this is set to: the file watcher
    * would hold it open otherwise. Another listener of the same signal gets until the event loop
    * empties, at most `timeout` (default 5000 ms), before that exit.
    *

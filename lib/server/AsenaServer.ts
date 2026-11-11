@@ -700,7 +700,7 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
         // Bun's file watcher holds the process after a clean stop, and an unref'd force timer never
         // fires while it idles. Everywhere else a leaked handle must keep the process visibly alive.
         if (underFileWatcher()) {
-          this.exitAfterOtherListeners(signal, shutdown.failed ? 1 : 0);
+          this.exitAfterOtherListeners(signal, process.exitCode || (shutdown.failed ? 1 : 0));
 
           return;
         }
@@ -719,10 +719,10 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
    * under the watcher once the event loop has nothing left, which is when that flush is done; the
    * unref'd grace timer bounds a listener that never settles or a handle left behind.
    * @param {NodeJS.Signals} signal - The signal that asked for the shutdown, if one did
-   * @param {number} code - Exit code
+   * @param {number | string} code - Exit code
    * @returns {void}
    */
-  private exitAfterOtherListeners(signal: NodeJS.Signals | undefined, code: number): void {
+  private exitAfterOtherListeners(signal: NodeJS.Signals | undefined, code: number | string): void {
     const ours = new Set<unknown>(processShutdown().forceExit.values());
     const others = signal ? process.listeners(signal).filter((listener) => !ours.has(listener)) : [];
 
