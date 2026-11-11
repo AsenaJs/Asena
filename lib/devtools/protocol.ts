@@ -2,6 +2,8 @@
 // Self-contained on purpose: the CLI has no core dependency and carries a copy of this file.
 // Every export is @internal: the console's wire format, versioned by DEVTOOLS_PROTOCOL_VERSION, not by semver.
 
+// Bump when a peer on the old version would misread a message: a payload field removed, retyped or made
+// required. A new message type or optional field needs none - the envelope check drops an unknown type.
 /** @internal */
 export const DEVTOOLS_PROTOCOL_VERSION = 1;
 
