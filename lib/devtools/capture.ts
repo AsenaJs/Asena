@@ -275,8 +275,8 @@ const install = (onlyNative: boolean): (() => void) => {
   };
 };
 
-// Installed at import and never removed, inert while no capture is held: the `asena console` prelude imports
-// this module before the entry, so a console wrapper the app installs at any later time sits above it.
+// Installed at import and never removed, inert while no capture is held: a console wrapper the app
+// installs at any later time sits above it.
 const pinned = typeof process.send === 'function';
 
 if (pinned) {
@@ -291,8 +291,8 @@ if (pinned) {
  * left alone. Wrapping it would record the arguments before the app's replacement redacts them, and what
  * the replacement passes on to the native method it saved cannot be observed: Bun's console writes to the
  * descriptor without calling `process.stdout/stderr.write`. A line printed through such a replacement is
- * in the record only when the replacement writes to those streams; load this module before the app's code,
- * as the `asena console` prelude does, and the line is recorded as the replacement prints it.
+ * in the record only when the replacement writes to those streams. A console method replaced after this
+ * module loads is recorded as the replacement prints it.
  * The original function still receives every call; inside a record, a console method whose arguments
  * are not plain data, or that formats printf specifiers, gets the rendered text instead.
  *
