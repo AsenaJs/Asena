@@ -231,6 +231,26 @@ describe('lifecycle hooks', () => {
       expect(events).toEqual(['hanging:stop', 'exploding:stop', 'first:stop']);
     });
 
+    // The count is what turns a signal stop into exit 1: stop() itself resolves either way.
+    test('stop() reports how many hooks threw, rejected or timed out', async () => {
+      const server = await createServer([First, Exploding, Hanging]);
+      const lifecycle = await server.resolve<LifecycleService>(ICoreServiceNames.LIFECYCLE_SERVICE);
+
+      await server.start();
+
+      expect(await lifecycle.stop(50)).toBe(2);
+      expect(await lifecycle.stop(50)).toBe(0);
+    });
+
+    test('stop() reports 0 when every hook finished', async () => {
+      const server = await createServer([First]);
+      const lifecycle = await server.resolve<LifecycleService>(ICoreServiceNames.LIFECYCLE_SERVICE);
+
+      await server.start();
+
+      expect(await lifecycle.stop()).toBe(0);
+    });
+
     test('logs the cause chain of a failed stop hook', async () => {
       @Service()
       class Wrapping {

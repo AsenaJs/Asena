@@ -20,7 +20,17 @@ class BrokenTeardown {
   }
 
   @OnStop()
-  public stop(): void {
+  public stop(): void | Promise<void> {
+    if (process.env.STOP_FAILURE === 'rejects') {
+      return Bun.sleep(20).then(() => {
+        throw new Error('teardown rejected');
+      });
+    }
+
+    if (process.env.STOP_FAILURE === 'times-out') {
+      return new Promise<void>(() => {});
+    }
+
     throw new Error('teardown blew up');
   }
 }
@@ -44,6 +54,7 @@ const server = await AsenaServerFactory.create({
   headless: true,
   logger: silentLogger,
   components: [RegisteredEarlier, BrokenTeardown],
+  shutdown: process.env.SHUTDOWN_TIMEOUT ? { timeout: Number(process.env.SHUTDOWN_TIMEOUT) } : undefined,
 });
 
 await server.start();

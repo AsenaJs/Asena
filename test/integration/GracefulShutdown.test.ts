@@ -172,6 +172,32 @@ describe('graceful shutdown', () => {
     expect(exitCode).toBe(1);
   }, 20_000);
 
+  // The promise is "throws, rejects or runs out of shutdown.timeout"; the throw is the test above.
+  test.each([
+    { failure: 'rejects', env: { STOP_FAILURE: 'rejects' } },
+    { failure: 'times-out', env: { STOP_FAILURE: 'times-out', SHUTDOWN_TIMEOUT: '200' } },
+  ])(
+    'a stop hook that $failure exits 1 after the hooks behind it ran',
+    async ({ env }) => {
+      const worker = spawnWorker('failing-stop-worker', [], env);
+      const stdout = tail(worker.stdout);
+
+      try {
+        await stdout.waitFor('SERVER_STARTED');
+
+        worker.kill('SIGTERM');
+
+        expect(await exitCodeWithin(worker, 3_000)).toBe(1);
+        await stdout.drained;
+        expect(stdout.text()).toContain('EARLIER_STOPPED');
+      } finally {
+        worker.kill('SIGKILL');
+        await worker.exited;
+      }
+    },
+    20_000,
+  );
+
   test('a rejected stop is logged and exits 1', async () => {
     const worker = spawnWorker('rejecting-stop-server');
     const stdout = tail(worker.stdout);
