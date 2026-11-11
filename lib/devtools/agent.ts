@@ -52,23 +52,24 @@ const processChannel: DevtoolsChannel = {
   },
 };
 
-interface CommandListener {
+interface HostSpeaker {
   listen(): void;
   unlisten(): void;
 }
 
 // On globalThis rather than in module scope: a `--hot` reload evaluates a fresh copy of this module.
-const COMMAND_LISTENERS = Symbol.for('asena.devtools.commandListeners');
+const HOST_SPEAKERS = Symbol.for('asena.devtools.commandListeners');
 
 /**
- * Only the most recent live attachment listens for host commands, so one command runs once however
- * many servers the process holds. When it detaches, the one before it listens again.
+ * Only the most recent live attachment speaks to the host: it alone listens for commands and sends
+ * records and metrics, so the host gets each once however many servers the process holds. When it
+ * detaches, the one before it takes over.
  *
  * @returns Releases the claim
  */
-const claimCommands = (claimant: CommandListener): (() => void) => {
+const claimHost = (claimant: HostSpeaker): (() => void) => {
   const slot = globalThis as Record<symbol, unknown>;
-  const stack = (slot[COMMAND_LISTENERS] ??= []) as CommandListener[];
+  const stack = (slot[HOST_SPEAKERS] ??= []) as HostSpeaker[];
 
   stack.at(-1)?.unlisten();
   stack.push(claimant);
@@ -189,7 +190,8 @@ const runCommand = async (
  * Sends `hello` and the snapshot, then a metrics sample every second and every record the bus
  * closes, with what the app wrote to the console and the std streams while that record was in
  * scope, and answers the host's commands through the app's real dispatch paths; with several
- * attachments in one process, only the most recent one answers commands. It opens no port
+ * attachments in one process, only the most recent one sends records and metrics and answers
+ * commands. It opens no port
  * and registers nothing; `detach` puts the console and stream functions back. Called without an
  * IPC channel, or with `NODE_ENV=production`, it does nothing and says so once.
  *
@@ -218,6 +220,7 @@ export const startDevtoolsAgent = (
   const maxPending = options.maxPendingMessages ?? 1000;
   let pending = 0;
   let dropped = 0;
+  let speaking = false;
 
   const send = (message: DevtoolsAgentMessage): boolean => {
     pending += 1;
@@ -237,6 +240,10 @@ export const startDevtoolsAgent = (
 
   // Commands, hello and the snapshot are always sent: the host asked for them, and they are few.
   const sendTelemetry = (message: DevtoolsAgentMessage): void => {
+    if (!speaking) {
+      return;
+    }
+
     if (pending >= maxPending) {
       dropped += 1;
     } else {
@@ -321,11 +328,13 @@ export const startDevtoolsAgent = (
   };
 
   let removeListener: (() => void) | undefined;
-  const releaseCommands = claimCommands({
+  const releaseHost = claimHost({
     listen: () => {
+      speaking = true;
       removeListener ??= channel.onMessage(onCommand);
     },
     unlisten: () => {
+      speaking = false;
       removeListener?.();
       removeListener = undefined;
     },
@@ -336,7 +345,7 @@ export const startDevtoolsAgent = (
       clearInterval(sampler);
       unsubscribe();
       releaseOutput();
-      releaseCommands();
+      releaseHost();
     },
   };
 };

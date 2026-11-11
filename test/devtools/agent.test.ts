@@ -329,6 +329,56 @@ describe('attachDevtoolsAgent', () => {
     }
   });
 
+  // Every attachment sees every record of the process-wide bus, and the host cannot tell two copies of
+  // one record apart from two requests.
+  test('with two attachments a record reaches the host once; the previous one forwards when the newer detaches', async () => {
+    const { channel, sent } = fakeChannel();
+    const older = startDevtoolsAgent(context, { channel });
+    const newer = startDevtoolsAgent(context, { channel });
+
+    try {
+      context.events.emit('pantry.restocked', {});
+      await Bun.sleep(10);
+
+      expect(payloadsOf(sent, 'request').map(({ path }) => path)).toEqual(['pantry.restocked']);
+
+      newer.detach();
+      context.events.emit('pantry.restocked', {});
+      await Bun.sleep(10);
+
+      expect(payloadsOf(sent, 'request').map(({ path }) => path)).toEqual(['pantry.restocked', 'pantry.restocked']);
+    } finally {
+      newer.detach();
+      older.detach();
+    }
+  });
+
+  test('with two attachments the host gets one metrics sample per interval, not one per attachment', async () => {
+    const olderHost = fakeChannel();
+    const newerHost = fakeChannel();
+    const older = startDevtoolsAgent(context, { channel: olderHost.channel, sampleIntervalMs: 5 });
+    const newer = startDevtoolsAgent(context, { channel: newerHost.channel, sampleIntervalMs: 5 });
+
+    try {
+      await Bun.sleep(40);
+
+      expect(payloadsOf(newerHost.sent, 'metrics').length).toBeGreaterThan(0);
+      expect(payloadsOf(olderHost.sent, 'metrics')).toEqual([]);
+
+      newer.detach();
+      await Bun.sleep(40);
+
+      const handedOver = payloadsOf(olderHost.sent, 'metrics');
+
+      expect(handedOver.length).toBeGreaterThan(0);
+      // Sampled while it was not sending, so the first sample it sends does not count that time as lag.
+      expect(handedOver[0].eventLoopLagMs).toBeLessThan(30);
+    } finally {
+      newer.detach();
+      older.detach();
+    }
+  });
+
   // Teardown closes pools, transports and ulak before the agent detaches; a command run then hits a
   // half-stopped app, and runNow would even run a job the cron runner has already stopped.
   test('refuses commands once the server is stopping, without running them', async () => {
