@@ -167,8 +167,51 @@ describe('graceful shutdown', () => {
 
     // BrokenTeardown throws; RegisteredEarlier stops after it because stop order is the reverse
     // of start order. Seeing its line is the proof that one component failing to let go does not
-    // end the shutdown - and the process still exits cleanly.
+    // end the shutdown. Exit 0 would tell a supervisor that everything was released.
     expect(stdout.text()).toContain('EARLIER_STOPPED');
+    expect(exitCode).toBe(1);
+  }, 20_000);
+
+  test('a rejected stop is logged and exits 1', async () => {
+    const worker = spawnWorker('rejecting-stop-server');
+    const stdout = tail(worker.stdout);
+
+    try {
+      await stdout.waitFor('SERVER_STARTED');
+
+      worker.kill('SIGTERM');
+
+      expect(await exitCodeWithin(worker, 5_000)).toBe(1);
+      await stdout.drained;
+      expect(stdout.text()).toContain('shutdown failed');
+    } finally {
+      worker.kill('SIGKILL');
+      await worker.exited;
+    }
+  }, 20_000);
+
+  test('a failed shutdown keeps the non-zero exit code the app already set', async () => {
+    const worker = spawnWorker('failing-stop-worker', [], { APP_EXIT_CODE: '7' });
+    const stdout = tail(worker.stdout);
+
+    await stdout.waitFor('SERVER_STARTED');
+
+    worker.kill('SIGTERM');
+
+    expect(await worker.exited).toBe(7);
+  }, 20_000);
+
+  // The app that calls stop() itself owns its process: it reads the outcome from the promise.
+  test('an explicit stop() with a throwing stop hook leaves the exit code alone', async () => {
+    const worker = spawnWorker('failing-stop-worker', [], { EXPLICIT_STOP: '1' });
+    const stdout = tail(worker.stdout);
+
+    const exitCode = await worker.exited;
+
+    await stdout.drained;
+
+    expect(stdout.text()).toContain('EARLIER_STOPPED');
+    expect(stdout.text()).toContain('EXPLICIT_STOP_RESOLVED');
     expect(exitCode).toBe(0);
   }, 20_000);
 
@@ -275,6 +318,20 @@ describe('graceful shutdown under a file watcher', () => {
       await run.stdout.drained;
       expect(run.stdout.text()).toContain('LOGGED_ERROR');
       expect(run.stdout.text()).toContain('shutdown failed');
+    },
+    20_000,
+  );
+
+  test.each(FLAGS)(
+    'bun %s: a throwing stop hook exits 1 after the hooks behind it ran',
+    async (flag) => {
+      await using run = await startWorker('failing-stop-worker', flag);
+
+      run.worker.kill('SIGINT');
+
+      expect(await exitCodeWithin(run.worker, EXIT_BOUND_MS)).toBe(1);
+      await run.stdout.drained;
+      expect(run.stdout.text()).toContain('EARLIER_STOPPED');
     },
     20_000,
   );

@@ -76,7 +76,7 @@ const describeError = (error: unknown): string =>
 interface ProcessShutdown {
   /** Every stop() still running in the process, explicit ones included. */
   running: Set<Promise<void>>;
-  /** Whether a signal-triggered stop rejected. */
+  /** Whether a signal-triggered stop rejected or had a failing @OnStop hook. */
   failed: boolean;
   /** The listeners that turn a second signal during the drain into an exit. */
   forceExit: Map<NodeJS.Signals, () => void>;
@@ -206,6 +206,9 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
   // What the latched teardown runs with, so a later stop() asking for the opposite draining
   // mode can be named in a warning instead of being silently swallowed by the latch.
   private stoppingCloseActive?: boolean;
+
+  // stop() resolves when only @OnStop hooks failed; the signal path reads this for the exit code.
+  private stopHookFailed = false;
 
   private signalHandlers = new Map<NodeJS.Signals, () => void>();
 
@@ -434,7 +437,11 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
     // transports must outlive the HTTP surface that uses them
     await release('adapter', () => this._adapter?.stop(closeActiveConnections));
 
-    await release('component stop hooks', () => this.lifecycleService.stop(hookTimeout ?? this._shutdown?.timeout));
+    await release('component stop hooks', async () => {
+      const failedHooks = await this.lifecycleService.stop(hookTimeout ?? this._shutdown?.timeout);
+
+      this.stopHookFailed = failedHooks > 0;
+    });
 
     await release('microservice transports', () =>
       this.prepareMicroserviceService.destroy(drainTimeout === undefined ? undefined : { drainTimeout }),
@@ -671,6 +678,17 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
       .finally(async () => {
         if (code !== 0) {
           process.exit(code);
+
+          return;
+        }
+
+        if (this.stopHookFailed) {
+          shutdown.failed = true;
+        }
+
+        // Before the wait below: another server's stop settling first resets the shared flag.
+        if (shutdown.failed && !process.exitCode) {
+          process.exitCode = 1;
         }
 
         await settleRunningStops();

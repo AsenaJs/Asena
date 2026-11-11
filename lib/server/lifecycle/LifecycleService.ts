@@ -98,18 +98,20 @@ export class LifecycleService implements ICoreService {
    * brought up. Safe to call twice - a stopped component is not stopped again.
    *
    * @param {number} hookTimeout - Per-hook ceiling in milliseconds
-   * @returns {Promise<void>}
+   * @returns {Promise<number>} How many hooks threw, rejected or ran out of time
    */
-  public async stop(hookTimeout: number = DEFAULT_HOOK_TIMEOUT): Promise<void> {
+  public async stop(hookTimeout: number = DEFAULT_HOOK_TIMEOUT): Promise<number> {
     this.markStopping();
 
-    const stopped = await this.stopComponents(this.container.lifecycle, hookTimeout);
+    const { stopped, failedHooks } = await this.stopComponents(this.container.lifecycle, hookTimeout);
 
     this._state = LifecycleState.STOPPED;
 
     if (stopped > 0) {
       this.logger.debug?.(`[Lifecycle] stopped ${stopped} component(s)`);
     }
+
+    return failedHooks;
   }
 
   /**
@@ -129,10 +131,14 @@ export class LifecycleService implements ICoreService {
    * @description Walk components backwards running their @OnStop hooks, containing every failure.
    * @param {LifecycleComponent[]} components - The registration-ordered list
    * @param {number} hookTimeout - Per-hook ceiling in milliseconds
-   * @returns {Promise<number>} How many components were stopped
+   * @returns {Promise<{ stopped: number; failedHooks: number }>} Components stopped, and hooks that failed
    */
-  private async stopComponents(components: LifecycleComponent[], hookTimeout: number): Promise<number> {
+  private async stopComponents(
+    components: LifecycleComponent[],
+    hookTimeout: number,
+  ): Promise<{ stopped: number; failedHooks: number }> {
     let stopped = 0;
+    let failedHooks = 0;
 
     for (let index = components.length - 1; index >= 0; index--) {
       const component = components[index];
@@ -151,6 +157,7 @@ export class LifecycleService implements ICoreService {
         try {
           await this.withTimeout(component.instance[hook](), hookTimeout, label);
         } catch (error) {
+          failedHooks++;
           this.logger.error(
             `[Lifecycle] @OnStop hook '${label}' failed, continuing shutdown: ${describeErrorChain(error)}`,
           );
@@ -158,7 +165,7 @@ export class LifecycleService implements ICoreService {
       }
     }
 
-    return stopped;
+    return { stopped, failedHooks };
   }
 
   /**

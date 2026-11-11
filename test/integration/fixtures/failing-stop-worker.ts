@@ -2,8 +2,8 @@
  * A headless worker whose stop hook throws, run as a real process by GracefulShutdown.test.ts.
  *
  * The question it answers: does a component that fails to let go take the process down with it,
- * or does the shutdown carry on and exit cleanly? A deploy that rolls a pod must not depend on
- * every component's teardown being flawless.
+ * or does the shutdown carry on, release everything else and report the failure in the exit code?
+ * A deploy that rolls a pod must not depend on every component's teardown being flawless.
  *
  * Not a *.test.ts file, so the test runner does not pick it up on its own.
  */
@@ -48,4 +48,14 @@ const server = await AsenaServerFactory.create({
 
 await server.start();
 
+if (process.env.APP_EXIT_CODE) {
+  process.exitCode = Number(process.env.APP_EXIT_CODE);
+}
+
 console.log('SERVER_STARTED');
+
+if (process.env.EXPLICIT_STOP) {
+  await server.stop();
+
+  console.log('EXPLICIT_STOP_RESOLVED');
+}
