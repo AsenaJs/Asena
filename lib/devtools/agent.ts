@@ -58,7 +58,7 @@ interface HostSpeaker {
 }
 
 // On globalThis rather than in module scope: a `--hot` reload evaluates a fresh copy of this module.
-const HOST_SPEAKERS = Symbol.for('asena.devtools.commandListeners');
+const HOST_SPEAKERS = Symbol.for('asena.devtools.hostSpeakers');
 
 /**
  * Only the most recent live attachment speaks to the host: it alone listens for commands and sends
