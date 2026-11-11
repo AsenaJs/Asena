@@ -8,6 +8,7 @@ import {
   agentMessage,
   isDevtoolsHostMessage,
   type DevtoolsAgentMessage,
+  type DevtoolsCommand,
   type DevtoolsCommandRequest,
   type DevtoolsCommandResult,
   type DevtoolsMetrics,
@@ -141,6 +142,29 @@ const failed = (id: string, message: string): DevtoolsCommandResult => ({
   error: { name: 'Error', message },
 });
 
+const REQUIRED_STRINGS = {
+  runSchedule: ['name'],
+  emitEvent: ['event'],
+  sendMessage: ['transport', 'pattern'],
+} as const satisfies Record<DevtoolsCommand['command'], readonly string[]>;
+
+/** @returns Why the command cannot run as sent, or `undefined` when its required fields are strings. */
+const wrongField = (request: DevtoolsCommandRequest): string | undefined => {
+  if (!Object.hasOwn(REQUIRED_STRINGS, request.command)) {
+    return undefined;
+  }
+
+  for (const field of REQUIRED_STRINGS[request.command]) {
+    const value = (request as unknown as Record<string, unknown>)[field];
+
+    if (typeof value !== 'string') {
+      return `${request.command} needs a string "${field}", got ${value === null ? 'null' : typeof value}`;
+    }
+  }
+
+  return undefined;
+};
+
 const runCommand = async (
   context: DevtoolsServerContext,
   request: DevtoolsCommandRequest,
@@ -152,6 +176,12 @@ const runCommand = async (
 
     if (context.lifecycle.state !== LifecycleState.STARTED) {
       return failed(id, 'The server is stopping; the command was not run');
+    }
+
+    const refusal = wrongField(request);
+
+    if (refusal) {
+      return failed(id, refusal);
     }
 
     switch (request.command) {

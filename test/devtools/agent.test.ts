@@ -302,6 +302,45 @@ describe('attachDevtoolsAgent', () => {
     ]);
   });
 
+  test('refuses a command whose required field has the wrong type, without running it', async () => {
+    const { channel, sent, deliver } = fakeChannel();
+    const spies = [
+      spyOn(context.events, 'emit'),
+      spyOn(context.cron, 'runNow'),
+      spyOn(context.ulak, 'send'),
+      spyOn(context.ulak, 'emit'),
+    ];
+    const command = (id: string, body: Record<string, unknown>) =>
+      deliver(hostMessage('command', { id, ...body } as any));
+
+    attachment = startDevtoolsAgent(context, { channel });
+
+    try {
+      command('t1', { command: 'emitEvent', event: 42 });
+      command('t2', { command: 'emitEvent' });
+      command('t3', { command: 'runSchedule', name: { job: 'NightlyRestock' } });
+      command('t4', { command: 'sendMessage', transport: 'default', pattern: 7, kind: 'message' });
+      command('t5', { command: 'sendMessage', transport: null, pattern: 'pantry.audit', kind: 'event' });
+      await Bun.sleep(20);
+
+      for (const spy of spies) {
+        expect(spy).not.toHaveBeenCalled();
+      }
+    } finally {
+      spies.forEach((spy) => spy.mockRestore());
+    }
+
+    const refused = (id: string, message: string) => ({ id, ok: false, error: { name: 'Error', message } });
+
+    expect(payloadsOf(sent, 'commandResult')).toEqual([
+      refused('t1', 'emitEvent needs a string "event", got number'),
+      refused('t2', 'emitEvent needs a string "event", got undefined'),
+      refused('t3', 'runSchedule needs a string "name", got object'),
+      refused('t4', 'sendMessage needs a string "pattern", got number'),
+      refused('t5', 'sendMessage needs a string "transport", got null'),
+    ]);
+  });
+
   // Two servers in one process, or a `--hot` reload that leaves the previous one running, share one
   // IPC channel: a command must run once, not once per attachment.
   test('only the most recent attachment answers commands; the previous one takes over when it detaches', async () => {
