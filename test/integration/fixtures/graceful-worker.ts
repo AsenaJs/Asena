@@ -72,4 +72,8 @@ const server = await AsenaServerFactory.create({
 
 await server.start();
 
+if (process.env.APP_EXIT_CODE) {
+  process.exitCode = Number(process.env.APP_EXIT_CODE);
+}
+
 console.log('SERVER_STARTED');

@@ -27,12 +27,16 @@ export enum ICoreServiceNames {
   PREPARE_SCHEDULE_SERVICE = 'PrepareScheduleService',
   PREPARE_FRONTEND_CONTROLLER_SERVICE = 'PrepareFrontendControllerService',
   PREPARE_MICROSERVICE_SERVICE = 'PrepareMicroserviceService',
+  PREPARE_EXCEPTION_HANDLER_SERVICE = 'PrepareExceptionHandlerService',
 
   // Schedule Services (Phase 5)
   CRON_RUNNER = 'CronRunner',
 
   // Lifecycle Services (Phase 5)
   LIFECYCLE_SERVICE = 'LifecycleService',
+
+  // Devtools (Phase 5)
+  DEVTOOLS_SCOPE = 'DevtoolsScope',
 
   // Factory Services (Phase 6+)
   CORE_CONTAINER = 'CoreContainer',

@@ -63,4 +63,9 @@ export class ComponentConstants {
   public static readonly MessagePrefixKey = Symbol('microservice:prefix');
 
   public static readonly MessageTransportKey = Symbol('microservice:transport');
+
+  // Exception handling specific
+  public static readonly ExceptionHandlersKey = Symbol('exception:handlers');
+
+  public static readonly NotFoundHandlerKey = Symbol('exception:notFound');
 }

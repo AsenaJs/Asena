@@ -154,9 +154,11 @@ export interface AsenaConfig<C extends AsenaContext<any, any> = AsenaContext<any
    * Error handler function for the application
    * @param error - The error object that was thrown
    * @param context - The current Asena context
-   * @returns Response object or a Promise that resolves to a Response
+   * @returns The response, or nothing to decline and leave the answer to the adapter's default
+   * @deprecated Removed in 1.0. Use an `@ExceptionHandler` class with `@Catch()` methods; this hook
+   * runs only after every `@Catch` has declined.
    */
-  onError?(error: Error, context: C): Response | Promise<Response>;
+  onError?(error: Error, context: C): Response | undefined | Promise<Response | undefined>;
 
   /**
    * Answers a request that matched no route.
@@ -169,7 +171,7 @@ export interface AsenaConfig<C extends AsenaContext<any, any> = AsenaContext<any
    *
    * @param context - The current Asena context
    * @param request - The unmatched request's path and method
-   * @returns Response object or a Promise that resolves to a Response
+   * @returns The response, or nothing to decline and leave the answer to the adapter's default
    *
    * @example
    * ```typescript
@@ -180,8 +182,11 @@ export interface AsenaConfig<C extends AsenaContext<any, any> = AsenaContext<any
    *   );
    * }
    * ```
+   *
+   * @deprecated Removed in 1.0. Use a `@NotFound()` method in an `@ExceptionHandler` class; this
+   * hook runs only when no `@NotFound()` handler answers.
    */
-  onNotFound?(context: C, request: NotFoundRequest): Response | Promise<Response>;
+  onNotFound?(context: C, request: NotFoundRequest): Response | undefined | Promise<Response | undefined>;
 
   /**
    * Configuration options for the server

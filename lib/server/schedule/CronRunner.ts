@@ -2,6 +2,7 @@ import { CoreService, ICoreServiceNames } from '../../ioc';
 import type { ICoreService } from '../../ioc';
 import { Inject } from '../../ioc/component';
 import type { ServerLogger } from '../../logger';
+import type { DevtoolsScope } from '../../devtools/DevtoolsScope';
 
 interface ScheduledJob {
   name: string;
@@ -9,6 +10,7 @@ interface ScheduledJob {
   handler: () => Promise<void> | void;
   timer: Timer | null;
   running: boolean;
+  inFlight: boolean;
 }
 
 /**
@@ -29,7 +31,12 @@ export class CronRunner implements ICoreService {
   @Inject(ICoreServiceNames.SERVER_LOGGER)
   private logger!: ServerLogger;
 
+  @Inject(ICoreServiceNames.DEVTOOLS_SCOPE)
+  private devtools?: DevtoolsScope;
+
   private jobs: ScheduledJob[] = [];
+
+  private stopped = false;
 
   /**
    * Register a new scheduled job.
@@ -46,6 +53,7 @@ export class CronRunner implements ICoreService {
       handler,
       timer: null,
       running: false,
+      inFlight: false,
     });
   }
 
@@ -54,6 +62,8 @@ export class CronRunner implements ICoreService {
    * Idempotent - already running jobs are skipped.
    */
   public startAll(): void {
+    this.stopped = false;
+
     for (const job of this.jobs) {
       if (job.running) continue;
 
@@ -67,8 +77,40 @@ export class CronRunner implements ICoreService {
    * Stop all running jobs and clear timers.
    */
   public stopAll(): void {
+    this.stopped = true;
+
     for (const job of this.jobs) {
       this.stopJob(job);
+    }
+  }
+
+  /**
+   * Run a registered job once, now, through the same path a timed run takes: a failure is logged
+   * the same way. Its schedule is left as it is.
+   *
+   * @param name - The job name, as registered
+   * @throws When no job has that name, when `stopAll()` ran, when the job is already running, or
+   *         with the job's own failure after it is logged
+   */
+  public async runNow(name: string): Promise<void> {
+    const job = this.jobs.find((candidate) => candidate.name === name);
+
+    if (!job) {
+      throw new Error(`No @Schedule job named "${name}"`);
+    }
+
+    if (this.stopped) {
+      throw new Error(`@Schedule job "${name}" not run: the scheduler is stopped`);
+    }
+
+    if (job.inFlight) {
+      throw new Error(`@Schedule job "${name}" not run: it is already running`);
+    }
+
+    const failure = await this.execute(job);
+
+    if (failure) {
+      throw failure.error;
     }
   }
 
@@ -129,13 +171,35 @@ export class CronRunner implements ICoreService {
     job.timer = setTimeout(() => {
       if (!job.running) return;
 
-      void Promise.resolve(job.handler())
-        .catch((error) => {
-          this.logger.error(`[Schedule] Error in "${job.name}":`, error);
-        })
-        .then(() => {
-          this.scheduleNext(job);
-        });
+      if (job.inFlight) {
+        this.logger.warn(`[Schedule] Skipped "${job.name}": the previous run has not finished`);
+        this.scheduleNext(job);
+
+        return;
+      }
+
+      void this.execute(job).then(() => {
+        this.scheduleNext(job);
+      });
     }, delay);
+  }
+
+  /** @returns The failure, already logged, or `undefined` when the job succeeded */
+  private async execute(job: ScheduledJob): Promise<{ error: unknown } | undefined> {
+    job.inFlight = true;
+
+    try {
+      await (this.devtools?.enabled
+        ? this.devtools.observe('@Schedule', job.name, `${job.name}.execute`, job.handler)
+        : job.handler());
+
+      return undefined;
+    } catch (error) {
+      this.logger.error(`[Schedule] Error in "${job.name}":`, error);
+
+      return { error };
+    } finally {
+      job.inFlight = false;
+    }
   }
 }

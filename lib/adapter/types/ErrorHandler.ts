@@ -1,6 +1,18 @@
 import type { AsenaContext } from '../AsenaContext';
 
-export type ErrorHandler<C extends AsenaContext<any, any>> = (error: Error, context: C) => Response | Promise<Response>;
+/**
+ * Answers an error raised while handling a request.
+ *
+ * **Returning nothing declines**: the adapter answers with its own default and writes the log
+ * line, because whoever answers is who records. Both adapters have implemented that since 0.9.0 -
+ * `Ergenecore.respondToError` filters on `instanceof Response`, `HonoAdapter.onError` on
+ * truthiness. An adapter must therefore await the result and check it is a `Response`, never hand
+ * the handler to a framework that expects one.
+ */
+export type ErrorHandler<C extends AsenaContext<any, any>> = (
+  error: Error,
+  context: C,
+) => Response | undefined | Promise<Response | undefined>;
 
 /**
  * The request that matched no route, normalised by the adapter.
@@ -23,8 +35,10 @@ export interface NotFoundRequest {
  * Deliberately separate from {@link ErrorHandler}: a missing route is not an error, it is a
  * routing outcome. Keeping the two apart means `onError` only ever sees something that was
  * actually thrown, and `onNotFound` never has to discriminate.
+ *
+ * Returning nothing declines, as for {@link ErrorHandler}.
  */
 export type NotFoundHandler<C extends AsenaContext<any, any>> = (
   context: C,
   request: NotFoundRequest,
-) => Response | Promise<Response>;
+) => Response | undefined | Promise<Response | undefined>;

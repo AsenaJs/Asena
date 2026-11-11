@@ -3,6 +3,7 @@ import type { BaseMiddleware } from '../../../adapter';
 import { getChainedTypedMetadataList, getOwnTypedMetadata } from '../../../utils/typedMetadata';
 import { ComponentConstants, type Container, CoreService, type ICoreService, ICoreServiceNames } from '../../../ioc';
 import { Inject } from '../../../ioc/component';
+import { devtoolsBus } from '../../../devtools/DevtoolsBus';
 
 /**
  * @description Core service for preparing middleware instances
@@ -18,9 +19,13 @@ export class PrepareMiddlewareService implements ICoreService {
   /**
    * @description Prepares middleware instances from middleware classes
    * @param {MiddlewareClass[]} middlewares - Middleware classes to prepare
+   * @param {'global-middleware' | 'middleware'} step - The devtools step these record, if they are on the request path
    * @returns {Promise<BaseMiddleware[]>} Prepared middleware instances
    */
-  public async prepare(middlewares: MiddlewareClass[]): Promise<BaseMiddleware[]> {
+  public async prepare(
+    middlewares: MiddlewareClass[],
+    step?: 'global-middleware' | 'middleware',
+  ): Promise<BaseMiddleware[]> {
     const preparedMiddlewares: BaseMiddleware[] = [];
 
     for (const middleware of middlewares) {
@@ -52,8 +57,10 @@ export class PrepareMiddlewareService implements ICoreService {
 
         isOverride = override ? override.includes('handle') : false;
 
+        const handle = instance.handle.bind(instance);
+
         preparedMiddlewares.push({
-          handle: instance.handle.bind(instance),
+          handle: step ? devtoolsBus.wrap(step, `${name}.handle`, handle) : handle,
           override: isOverride,
         });
       }

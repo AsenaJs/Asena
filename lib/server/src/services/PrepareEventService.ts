@@ -98,6 +98,9 @@ export class PrepareEventService implements ICoreService {
 
     this.logInheritedHandlers(service, handlers);
 
+    const componentName =
+      getTypedMetadata<string>(ComponentConstants.NameKey, service.constructor) || service.constructor.name;
+
     // Register each handler
     for (const [methodName, metadata] of Object.entries(handlers)) {
       // Skip if explicitly marked
@@ -114,7 +117,7 @@ export class PrepareEventService implements ICoreService {
       const boundHandler = service[methodName].bind(service);
 
       // Register with EventEmitter
-      this.dispatchService.registerHandler(finalPattern, boundHandler);
+      this.dispatchService.registerHandler(finalPattern, boundHandler, false, `${componentName}.${methodName}`);
     }
   }
 

@@ -1,8 +1,13 @@
 import { CoreService } from '../../ioc';
 import { ICoreServiceNames } from '../../ioc';
 import type { ICoreService } from '../../ioc';
+import { Inject } from '../../ioc/component';
+import type { EventExceptionContext } from '../exception/types';
+import type { PrepareExceptionHandlerService } from '../src/services/PrepareExceptionHandlerService';
 import { PatternHandlerIndex } from './PatternHandlerIndex';
+import type { DevtoolsScope } from '../../devtools/DevtoolsScope';
 import type { EventHandler, EventSubscription } from './types';
+import { isThenable } from '../../utils/isThenable';
 
 /**
  * @description Internal event dispatch service
@@ -22,6 +27,12 @@ import type { EventHandler, EventSubscription } from './types';
 @CoreService(ICoreServiceNames.EVENT_DISPATCH_SERVICE)
 export class EventDispatchService implements ICoreService {
   public readonly serviceName = 'EventDispatchService';
+
+  @Inject(ICoreServiceNames.PREPARE_EXCEPTION_HANDLER_SERVICE)
+  private exceptions?: PrepareExceptionHandlerService;
+
+  @Inject(ICoreServiceNames.DEVTOOLS_SCOPE)
+  private devtools?: DevtoolsScope;
 
   /**
    * All registered event subscriptions
@@ -50,8 +61,8 @@ export class EventDispatchService implements ICoreService {
    * registerHandler('user.created', (eventName, data) => { ... });
    * registerHandler('download.*', (eventName, data) => { ... });
    */
-  public registerHandler(pattern: string, handler: EventHandler, once = false): void {
-    this.handlers.push({ pattern, handler, once });
+  public registerHandler(pattern: string, handler: EventHandler, once = false, source?: string): void {
+    this.handlers.push(source === undefined ? { pattern, handler, once } : { pattern, handler, once, source });
 
     // Invalidate warmup cache - will rebuild on next dispatch
     this.warmedUp = false;
@@ -110,19 +121,23 @@ export class EventDispatchService implements ICoreService {
 
     // 4. Call all matching handlers (fire-and-forget, error isolation)
     for (const sub of handlersToCall) {
+      if (this.devtools?.enabled) {
+        this.dispatchObserved(this.devtools, sub, eventName, data);
+        continue;
+      }
+
       try {
         const result = sub.handler(eventName, data);
 
-        // Smart async detection: If Promise, handle errors but DON'T await
-        // Benchmark showed await Promise.resolve(syncHandler()) is 13x slower!
-        if (result instanceof Promise) {
-          result.catch((error) => {
-            console.error(`[EventDispatchService] Async error in handler for event "${eventName}":`, error);
+        // Wrapping every result in Promise.resolve() measured ~80x slower for sync handlers.
+        if (isThenable(result)) {
+          Promise.resolve(result).catch((error) => {
+            void this.handleFailure(sub, eventName, data, error, 'Async');
           });
         }
       } catch (error) {
         // Sync handler error - log but continue with other handlers
-        console.error(`[EventDispatchService] Sync error in handler for event "${eventName}":`, error);
+        void this.handleFailure(sub, eventName, data, error, 'Sync');
       }
     }
 
@@ -134,6 +149,63 @@ export class EventDispatchService implements ICoreService {
     }
 
     return true;
+  }
+
+  /**
+   * The same call and failure handling as the plain loop, framed as a devtools record that stays
+   * open until a matching `@Catch` has observed the failure.
+   */
+  private dispatchObserved(devtools: DevtoolsScope, sub: EventSubscription, eventName: string, data: unknown): void {
+    devtools
+      .observe('@On', eventName, sub.source ?? sub.pattern, async () => {
+        let result: unknown;
+
+        try {
+          result = sub.handler(eventName, data);
+        } catch (error) {
+          await this.handleFailure(sub, eventName, data, error, 'Sync');
+          throw error;
+        }
+
+        try {
+          await result;
+        } catch (error) {
+          await this.handleFailure(sub, eventName, data, error, 'Async');
+          throw error;
+        }
+      })
+      .catch(() => undefined);
+  }
+
+  /**
+   * Log a handler failure, then show it to a matching `@Catch`.
+   *
+   * Events are observe-only: the error line is logged in the same tick whether or not a `@Catch`
+   * matches, and nothing the `@Catch` returns or throws changes that.
+   *
+   * @returns The `@Catch` run, which only the devtools path waits for
+   */
+  private handleFailure(
+    sub: EventSubscription,
+    eventName: string,
+    data: unknown,
+    error: unknown,
+    kind: 'Sync' | 'Async',
+  ): Promise<void> | undefined {
+    console.error(`[EventDispatchService] ${kind} error in handler for event "${eventName}":`, error);
+
+    const exceptions = this.exceptions;
+
+    if (!exceptions?.handles(error)) {
+      return undefined;
+    }
+
+    const context: EventExceptionContext =
+      sub.source === undefined
+        ? { scope: 'event', event: eventName, data }
+        : { scope: 'event', event: eventName, data, source: sub.source };
+
+    return exceptions.observe(error, context).catch(() => undefined);
   }
 
   /**
