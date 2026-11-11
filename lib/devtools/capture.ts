@@ -288,10 +288,13 @@ if (pinned) {
  * `process.stdout/stderr.write` are patched once for the whole process, however many captures are held.
  * With an IPC channel the patch is installed at import and kept; without one it is removed when the last
  * capture is released. With an IPC channel, a console method already replaced when this module loads is
- * left alone: the record cannot see what that replacement passes on, so it holds only what reaches
- * `process.stdout/stderr.write`. The original function still receives every call; inside a record, a
- * console method whose arguments are not plain data, or that formats printf specifiers, gets the rendered
- * text instead.
+ * left alone. Wrapping it would record the arguments before the app's replacement redacts them, and what
+ * the replacement passes on to the native method it saved cannot be observed: Bun's console writes to the
+ * descriptor without calling `process.stdout/stderr.write`. A line printed through such a replacement is
+ * in the record only when the replacement writes to those streams; load this module before the app's code,
+ * as the `asena console` prelude does, and the line is recorded as the replacement prints it.
+ * The original function still receives every call; inside a record, a console method whose arguments
+ * are not plain data, or that formats printf specifiers, gets the rendered text instead.
  *
  * @returns Releases this capture; calling it again does nothing
  */
