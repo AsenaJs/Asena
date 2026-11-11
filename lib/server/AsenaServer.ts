@@ -76,7 +76,7 @@ const describeError = (error: unknown): string =>
 
 interface ProcessShutdown {
   /** Every stop() still running in the process, explicit ones included. */
-  running: Set<Promise<void>>;
+  running: Set<Promise<unknown>>;
   /** Whether a signal-triggered stop rejected or had a failing @OnStop hook. */
   failed: boolean;
   /** The listeners that turn a second signal during the drain into an exit. */
@@ -93,7 +93,7 @@ const processShutdown = (): ProcessShutdown => {
   return (holder[PROCESS_SHUTDOWN] ??= { running: new Set(), failed: false, forceExit: new Map() });
 };
 
-const trackStop = (stopping: Promise<void>): void => {
+const trackStop = (stopping: Promise<unknown>): void => {
   const { running } = processShutdown();
   const settled = (): void => {
     running.delete(stopping);
@@ -204,15 +204,13 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
   private _keepAlive?: boolean;
 
   // The shutdown, once started. Set for the life of the instance rather than for the duration
-  // of the teardown, so it answers both a concurrent stop() and a later one.
-  private stopping?: Promise<void>;
+  // of the teardown, so it answers both a concurrent stop() and a later one. Resolves with whether
+  // an @OnStop hook failed: stop() resolves in that case, and the signal path needs the exit code.
+  private stopping?: Promise<boolean>;
 
   // What the latched teardown runs with, so a later stop() asking for the opposite draining
   // mode can be named in a warning instead of being silently swallowed by the latch.
   private stoppingCloseActive?: boolean;
-
-  // stop() resolves when only @OnStop hooks failed; the signal path reads this for the exit code.
-  private stopHookFailed = false;
 
   private signalHandlers = new Map<NodeJS.Signals, () => void>();
 
@@ -392,7 +390,7 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
       trackStop(this.stopping);
     }
 
-    return this.stopping;
+    await this.stopping;
   }
 
   /**
@@ -400,9 +398,13 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
    * @param {boolean} closeActiveConnections - Whether to close active connections immediately
    * @param {number | undefined} drainTimeout - How long transports may drain
    * @param {number | undefined} hookTimeout - Per-@OnStop ceiling
-   * @returns {Promise<void>}
+   * @returns {Promise<boolean>} Whether an @OnStop hook failed
    */
-  private async runStop(closeActiveConnections: boolean, drainTimeout?: number, hookTimeout?: number): Promise<void> {
+  private async runStop(
+    closeActiveConnections: boolean,
+    drainTimeout?: number,
+    hookTimeout?: number,
+  ): Promise<boolean> {
     this.removeShutdownHandlers();
     this.clearKeepAlive();
 
@@ -441,10 +443,10 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
     // transports must outlive the HTTP surface that uses them
     await release('adapter', () => this._adapter?.stop(closeActiveConnections));
 
-    await release('component stop hooks', async () => {
-      const failedHooks = await this.lifecycleService.stop(hookTimeout ?? this._shutdown?.timeout);
+    let hookFailed = false;
 
-      this.stopHookFailed = failedHooks > 0;
+    await release('component stop hooks', async () => {
+      hookFailed = (await this.lifecycleService.stop(hookTimeout ?? this._shutdown?.timeout)) > 0;
     });
 
     await release('microservice transports', () =>
@@ -461,6 +463,8 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
     if (failures.length > 0) {
       throw new AggregateError(failures, `Server shutdown completed with ${failures.length} failure(s)`);
     }
+
+    return hookFailed;
   }
 
   /**
@@ -675,6 +679,11 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
       closeActiveConnections: this._shutdown?.closeActiveConnections ?? false,
       drainTimeout: this._shutdown?.drainTimeout,
     })
+      .then(async () => {
+        if (await this.stopping) {
+          shutdown.failed = true;
+        }
+      })
       .catch((error: unknown) => {
         this._logger.error(`${yellow('[AsenaServer]')} shutdown failed: ${describeError(error)}`);
         shutdown.failed = true;
@@ -684,10 +693,6 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
           process.exit(code);
 
           return;
-        }
-
-        if (this.stopHookFailed) {
-          shutdown.failed = true;
         }
 
         // Before the wait below: another server's stop settling first resets the shared flag.
