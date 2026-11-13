@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test';
+import type { ComponentPostProcessor } from '../../lib/ioc';
 import { CircularDependencyError, Container } from '../../lib/ioc';
 import { Service } from '../../lib/server/decorators';
 import { Inject } from '../../lib/ioc/component';
@@ -45,13 +46,28 @@ class CycleB {
 class Unrelated {}
 
 @Service()
-class LateDependent {
-  @Inject('LateMissing')
-  public missing: unknown;
-}
+class PoisonInner {}
 
 @Service()
-class LateMissingImpl {}
+class PoisonOuter {
+  @Inject('PoisonInner')
+  public inner: PoisonInner;
+}
+
+class FailOnceFor implements ComponentPostProcessor {
+  private failed = false;
+
+  public constructor(private readonly target: unknown) {}
+
+  public async postProcess<T>(instance: T, Class: unknown): Promise<T> {
+    if (Class === this.target && !this.failed) {
+      this.failed = true;
+      throw new Error('construction failed once');
+    }
+
+    return instance;
+  }
+}
 
 describe('concurrent resolve()', () => {
   test('two concurrent resolve() of the same singleton both resolve to that instance', async () => {
@@ -137,17 +153,21 @@ describe('concurrent resolve()', () => {
     );
   });
 
-  test('a failed resolve leaves nothing behind that poisons the next resolve of the same key', async () => {
+  test('a resolve that fails midway through its chain does not poison the next resolve of the same key', async () => {
     const container = new Container();
 
-    await container.register('LateDependent', LateDependent, false);
+    container.registerPostProcessor(new FailOnceFor(PoisonInner));
+    await container.register('PoisonInner', PoisonInner, false);
+    await container.register('PoisonOuter', PoisonOuter, false);
 
-    await expect(container.resolve('LateDependent')).rejects.toThrow(/LateMissing' is not registered/);
+    await expect(container.resolve('PoisonOuter')).rejects.toThrow('construction failed once');
 
-    await container.register('LateMissing', LateMissingImpl, false);
+    const resolved = await container.resolve<PoisonOuter>('PoisonOuter');
 
-    const resolved = await container.resolve<LateDependent>('LateDependent');
+    if (!(resolved instanceof PoisonOuter)) {
+      throw new Error('expected a single PoisonOuter');
+    }
 
-    expect(resolved).toBeInstanceOf(LateDependent);
+    expect(resolved.inner).toBeInstanceOf(PoisonInner);
   });
 });
