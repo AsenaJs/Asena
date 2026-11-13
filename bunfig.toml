@@ -11,6 +11,9 @@ junit = "junit.xml"
 [fmt]
 printWidth = 120
 singleQuote = true
+tabWidth = 2
+useTabs = false
+endOfLine = "lf"
 ignorePatterns = [
   ".changeset/",
   ".claude/",
