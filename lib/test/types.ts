@@ -83,7 +83,7 @@ export interface FieldMetadata {
   fieldName: string;
 
   /**
-   * Service name (from @Inject decorator)
+   * Name the container resolves for the field: the registered name of a class injection, the given name of a string one
    */
   serviceName: string;
 

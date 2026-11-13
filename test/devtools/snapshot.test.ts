@@ -415,7 +415,7 @@ describe('buildDevtoolsSnapshot class injections', () => {
 
     await using app = await bootFixture([Ledger, Bookkeeper]);
 
-    const snapshot = await buildDevtoolsSnapshot(app.container);
+    const snapshot = buildDevtoolsSnapshot(app.container);
     const bookkeeper = snapshot.components.find((component) => component.name === 'Bookkeeper')!;
 
     expect(snapshot.components.map((component) => component.name)).toContain('MainLedger');

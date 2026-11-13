@@ -461,7 +461,6 @@ export class Container {
 
       await this.injectStrategies(newInstance, Class, path); // strategy injection
 
-      // Post-processing
       let processed: any = newInstance;
 
       for (const processor of this.postProcessors) {
