@@ -271,8 +271,9 @@ describe('Container', () => {
 
     expect(spy).toBeCalled();
 
-    const chain = spy.mock.calls[0]?.[1] as { key: string }[];
+    const [preparedClass, chain] = spy.mock.calls[0] as unknown as [unknown, { key: string }[]];
 
+    expect(preparedClass).toBe(TestClass);
     expect(chain.map((link) => link.key)).toEqual(['TestClass']);
   });
 

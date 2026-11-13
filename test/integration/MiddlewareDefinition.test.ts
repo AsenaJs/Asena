@@ -10,7 +10,7 @@ const fixture = join(import.meta.dir, 'fixtures', 'broken-middleware-worker.ts')
  */
 describe('@Middleware definition in a real process', () => {
   test('a middleware without handle() makes the process exit non-zero', async () => {
-    const worker = Bun.spawn(['bun', fixture], { stdout: 'pipe', stderr: 'pipe' });
+    const worker = Bun.spawn([process.execPath, fixture], { stdout: 'pipe', stderr: 'pipe' });
 
     const [stdout, stderr, exitCode] = await Promise.all([
       new Response(worker.stdout).text(),

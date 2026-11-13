@@ -4,7 +4,7 @@ import { ComponentConstants, type Dependencies, type Strategies } from '../../li
 import { Override } from '../../lib/server/decorators';
 import { getOwnTypedMetadata } from '../../lib/utils/typedMetadata';
 
-describe('field decorators accept symbol-keyed members, as they did before 0.13', () => {
+describe('field decorators accept symbol-keyed members', () => {
   const memberKey = Symbol('member');
 
   test('@Inject accepts a symbol key', () => {
@@ -22,7 +22,7 @@ describe('field decorators accept symbol-keyed members, as they did before 0.13'
     expect(() => Strategy('Dep')(Holder.prototype, memberKey)).not.toThrow();
   });
 
-  test('@Override accepts a symbol key, as it did before 0.13', () => {
+  test('@Override accepts a symbol key', () => {
     class Holder {}
     expect(() => Override()(Holder.prototype, memberKey)).not.toThrow();
   });
