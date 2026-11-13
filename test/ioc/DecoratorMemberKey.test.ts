@@ -4,22 +4,22 @@ import { ComponentConstants, type Dependencies, type Strategies } from '../../li
 import { Override } from '../../lib/server/decorators';
 import { getOwnTypedMetadata } from '../../lib/utils/typedMetadata';
 
-describe('field decorators reject symbol-keyed members', () => {
+describe('field decorators accept symbol-keyed members, as they did before 0.13', () => {
   const memberKey = Symbol('member');
 
-  test('@Inject throws for a symbol key and names the decorator', () => {
+  test('@Inject accepts a symbol key', () => {
     class Holder {}
-    expect(() => Inject('Dep')(Holder.prototype, memberKey)).toThrow(/@Inject supports string member names only/);
+    expect(() => Inject('Dep')(Holder.prototype, memberKey)).not.toThrow();
   });
 
-  test('@Value throws for a symbol key and names the decorator', () => {
+  test('@Value accepts a symbol key', () => {
     class Holder {}
-    expect(() => Value('ENV_KEY')(Holder.prototype, memberKey)).toThrow(/@Value supports string member names only/);
+    expect(() => Value('ENV_KEY')(Holder.prototype, memberKey)).not.toThrow();
   });
 
-  test('@Strategy throws for a symbol key and names the decorator', () => {
+  test('@Strategy accepts a symbol key', () => {
     class Holder {}
-    expect(() => Strategy('Dep')(Holder.prototype, memberKey)).toThrow(/@Strategy supports string member names only/);
+    expect(() => Strategy('Dep')(Holder.prototype, memberKey)).not.toThrow();
   });
 
   test('@Override accepts a symbol key, as it did before 0.13', () => {

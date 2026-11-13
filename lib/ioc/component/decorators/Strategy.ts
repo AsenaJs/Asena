@@ -2,7 +2,6 @@ import type { Class } from '../../../server/types';
 import type { Expressions, Strategies } from '../../types';
 import { ComponentConstants } from '../../constants';
 import { defineTypedMetadata, getOwnTypedMetadata, getTypedMetadata } from '../../../utils/typedMetadata';
-import { assertStringMemberKey } from '../../../utils/decoratorInput';
 
 /**
  * Property decorator to define a strategy.
@@ -13,8 +12,6 @@ import { assertStringMemberKey } from '../../../utils/decoratorInput';
  */
 export const Strategy = (Injection: Class | string, expression?: (injectedClass: any) => any): PropertyDecorator => {
   return (target: object, propertyKey: string | symbol) => {
-    assertStringMemberKey(propertyKey, '@Strategy');
-
     const strategies: Strategies =
       getOwnTypedMetadata<Strategies>(ComponentConstants.StrategyKey, target.constructor) || {};
 

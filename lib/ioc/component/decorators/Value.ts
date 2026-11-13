@@ -1,7 +1,6 @@
 import type { ValueFields, ValueOptions } from '../../types';
 import { ComponentConstants } from '../../constants';
 import { defineTypedMetadata, getOwnTypedMetadata } from '../../../utils/typedMetadata';
-import { assertStringMemberKey } from '../../../utils/decoratorInput';
 
 /**
  * Property decorator to inject a configuration value from the environment.
@@ -32,8 +31,6 @@ import { assertStringMemberKey } from '../../../utils/decoratorInput';
  */
 export const Value = (key: string, options: ValueOptions = {}): PropertyDecorator => {
   return (target: object, propertyKey: string | symbol): void => {
-    assertStringMemberKey(propertyKey, '@Value');
-
     const fields: ValueFields = getOwnTypedMetadata<ValueFields>(ComponentConstants.ValueKey, target.constructor) || {};
 
     if (!fields[propertyKey]) {

@@ -7,6 +7,7 @@ export interface InjectableComponent {
 
 export interface Dependencies {
   [key: string]: string;
+  [key: symbol]: string;
 }
 
 /**
@@ -18,14 +19,17 @@ export interface Dependencies {
  */
 export interface DependencyClasses {
   [key: string]: Class;
+  [key: symbol]: Class;
 }
 
 export interface Expressions {
   [key: string]: (injectedClass: any) => any;
+  [key: symbol]: (injectedClass: any) => any;
 }
 
 export interface Strategies {
   [key: string]: string;
+  [key: symbol]: string;
 }
 
 /**
@@ -47,4 +51,5 @@ export interface ValueSpec extends ValueOptions {
 
 export interface ValueFields {
   [field: string]: ValueSpec;
+  [field: symbol]: ValueSpec;
 }

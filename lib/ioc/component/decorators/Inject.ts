@@ -2,7 +2,6 @@ import type { Class } from '../../../server/types';
 import type { DependencyClasses, Dependencies, Expressions } from '../../types';
 import { ComponentConstants } from '../../constants';
 import { defineTypedMetadata, getOwnTypedMetadata, getTypedMetadata } from '../../../utils/typedMetadata';
-import { assertStringMemberKey } from '../../../utils/decoratorInput';
 
 /**
  * Property decorator to inject a dependency.
@@ -36,8 +35,6 @@ export const Inject = (
   expression?: (injectedClass: any) => any,
 ): PropertyDecorator => {
   return (target: object, propertyKey: string | symbol): void => {
-    assertStringMemberKey(propertyKey, '@Inject');
-
     let dependencyName: string;
     let resolvedExpression: ((injectedClass: any) => any) | undefined = expression;
     // Kept only for class-based injections - string injections carry no class reference
