@@ -17,6 +17,16 @@ export class CircularDependencyDetector {
   private resolutionStack: Set<string> = new Set();
 
   /**
+   * @description The message for a cycle, shared by every place that reports one so the format
+   * users and tests match on has a single source
+   * @param {string[]} chain - The cycle, first and last entry equal (`A -> B -> A`)
+   * @returns {string}
+   */
+  public static cycleMessage(chain: readonly string[]): string {
+    return `Circular dependency detected: ${chain.join(' -> ')}`;
+  }
+
+  /**
    * @description Check if service creates circular dependency
    * @param {string} serviceName - The service being resolved
    * @throws {CircularDependencyError} If circular dependency is detected
@@ -25,9 +35,8 @@ export class CircularDependencyDetector {
   public checkCircular(serviceName: string): void {
     if (this.resolutionStack.has(serviceName)) {
       const stack = Array.from(this.resolutionStack);
-      const chain = [...stack, serviceName].join(' -> ');
 
-      throw new CircularDependencyError(`Circular dependency detected: ${chain}`);
+      throw new CircularDependencyError(CircularDependencyDetector.cycleMessage([...stack, serviceName]));
     }
   }
 

@@ -354,7 +354,7 @@ describe('@Strategy override precedence', () => {
     // created before the container gets to inject anything.
     Object.defineProperty(instance, 'greeters', { value: undefined, writable: true, configurable: true });
 
-    await (container as any).injectStrategies(instance, DefineSemanticsConsumer);
+    await (container as any).injectStrategies(instance, DefineSemanticsConsumer, []);
 
     expect(instance.greeters).toBeDefined();
 

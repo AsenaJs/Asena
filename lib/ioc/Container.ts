@@ -11,9 +11,20 @@ import type {
 } from './types';
 import { ComponentConstants } from './constants';
 import { getOwnTypedMetadata, getTypedMetadata } from '../utils';
-import { CircularDependencyError } from './CircularDependencyDetector';
+import { AsyncLocalStorage } from 'node:async_hooks';
+import { CircularDependencyDetector, CircularDependencyError } from './CircularDependencyDetector';
 import { CORE_SERVICE } from './decorators';
 import { collectValueFields, readValue } from './helper/valueResolver';
+
+/**
+ * The resolution path of the construction a start hook or post-processor runs inside. `active`
+ * turns false once that construction settles, so a timer created by a hook cannot inherit a
+ * path that is no longer being resolved.
+ */
+interface ResolutionFrame {
+  readonly path: readonly string[];
+  active: boolean;
+}
 
 /**
  * The message behind an assignment to a wired field.
@@ -49,6 +60,12 @@ export class Container {
   private postProcessors: ComponentPostProcessor[] = [];
 
   private overriddenKeys = new Set<string>();
+
+  /**
+   * Carries the path into user code (start hooks, post-processors) that re-enters the container
+   * without a path parameter. Scoped per container, so two containers never see each other.
+   */
+  private readonly resolutionFrames = new AsyncLocalStorage<ResolutionFrame>();
 
   /** Key -> entries that live there only as an alias of their own key (see `registerAlias`). */
   private aliases = new Map<string, Set<ContainerService>>();
@@ -222,7 +239,14 @@ export class Container {
   }
 
   public async resolve<T>(key: string): Promise<(T | T[]) | null> {
-    return this.resolveChain<T>(key, []);
+    return this.resolveChain<T>(key, this.currentPath());
+  }
+
+  /** The path of the construction this call runs inside, empty when it starts a fresh chain. */
+  private currentPath(): readonly string[] {
+    const frame = this.resolutionFrames.getStore();
+
+    return frame?.active ? frame.path : [];
   }
 
   /**
@@ -249,7 +273,7 @@ export class Container {
 
   private assertNotCircular(path: readonly string[], key: string): void {
     if (path.includes(key)) {
-      throw new CircularDependencyError(`Circular dependency detected: ${[...path, key].join(' -> ')}`);
+      throw new CircularDependencyError(CircularDependencyDetector.cycleMessage([...path, key]));
     }
   }
 
@@ -280,7 +304,7 @@ export class Container {
    * @returns {Promise<T[]>} Every implementation, empty when the key has none
    */
   public async resolveStrategy<T>(key: string): Promise<T[]> {
-    return this.resolveStrategyChain<T>(key, []);
+    return this.resolveStrategyChain<T>(key, this.currentPath());
   }
 
   private async resolveStrategyChain<T>(key: string, path: readonly string[]): Promise<T[]> {
@@ -313,12 +337,13 @@ export class Container {
     }
 
     const instances: (T | T[])[] = [];
+    const path = this.currentPath();
 
     for (const containerService of matchingServices) {
       if (Array.isArray(containerService)) {
-        instances.push(await this.resolveMultipleContainerService<T>(containerService, []));
+        instances.push(await this.resolveMultipleContainerService<T>(containerService, path));
       } else {
-        instances.push(await this.resolveContainerService<T>(containerService, []));
+        instances.push(await this.resolveContainerService<T>(containerService, path));
       }
     }
 
@@ -405,21 +430,31 @@ export class Container {
 
     await this.injectStrategies(newInstance, Class, path); // strategy injection
 
-    // Post-processing (skipped when postProcessors is empty - zero overhead)
-    let processed: any = newInstance;
+    // Post-processors and start hooks are user code that may call back into the container
+    // without a path, so they run inside the frame that carries this chain.
+    const frame: ResolutionFrame = { path, active: true };
 
-    for (const processor of this.postProcessors) {
-      processed = (await processor.postProcess(processed, Class)) ?? processed;
+    try {
+      return await this.resolutionFrames.run(frame, async () => {
+        // Post-processing (skipped when postProcessors is empty - zero overhead)
+        let processed: any = newInstance;
+
+        for (const processor of this.postProcessors) {
+          processed = (await processor.postProcess(processed, Class)) ?? processed;
+        }
+
+        // Deferred mode leaves the start hooks to LifecycleService. The hook runs against the
+        // *processed* instance either way - a post-processor may have returned a proxy, and the
+        // hook has to see the same object every other component was injected with.
+        if (this.startHookMode === 'immediate') {
+          await this.executeStartHooks(processed, Class);
+        }
+
+        return processed as T;
+      });
+    } finally {
+      frame.active = false;
     }
-
-    // Deferred mode leaves the start hooks to LifecycleService. The hook runs against the
-    // *processed* instance either way - a post-processor may have returned a proxy, and the
-    // hook has to see the same object every other component was injected with.
-    if (this.startHookMode === 'immediate') {
-      await this.executeStartHooks(processed, Class);
-    }
-
-    return processed as T;
   }
 
   /**
@@ -500,7 +535,7 @@ export class Container {
     return methods;
   }
 
-  private async injectStrategies(newInstance: any, Class: Class, path: readonly string[] = []) {
+  private async injectStrategies(newInstance: any, Class: Class, path: readonly string[]) {
     const prototypeChain = this.getPrototypeChain(Class);
 
     for (const classInChain of prototypeChain.reverse()) {
