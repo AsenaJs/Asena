@@ -637,41 +637,38 @@ export class IocEngine implements ICoreService {
 
   private findCycle(adjacencyList: Map<string, string[]>): string[] {
     const visited = new Set<string>();
-    const recStack = new Set<string>();
-    const cycle: string[] = [];
+    const path: string[] = [];
 
-    const dfs = (node: string): boolean => {
-      if (recStack.has(node)) {
-        cycle.push(node);
-        return true;
+    const dfs = (node: string): string[] | null => {
+      const start = path.indexOf(node);
+
+      if (start !== -1) {
+        return [...path.slice(start), node];
       }
 
-      if (visited.has(node)) return false;
+      if (visited.has(node)) return null;
 
       visited.add(node);
-      recStack.add(node);
+      path.push(node);
 
-      const neighbors = adjacencyList.get(node) || [];
+      for (const neighbor of adjacencyList.get(node) || []) {
+        const cycle = dfs(neighbor);
 
-      for (const neighbor of neighbors) {
-        if (dfs(neighbor)) {
-          if (cycle[0] !== cycle[cycle.length - 1]) {
-            cycle.push(node);
-          }
-
-          return true;
-        }
+        if (cycle) return cycle;
       }
 
-      recStack.delete(node);
-      return false;
+      path.pop();
+
+      return null;
     };
 
     for (const node of adjacencyList.keys()) {
-      if (dfs(node)) break;
+      const cycle = dfs(node);
+
+      if (cycle) return cycle;
     }
 
-    return cycle.reverse();
+    return [];
   }
 
   /**
