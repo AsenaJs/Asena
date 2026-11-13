@@ -18,7 +18,8 @@ import { getStrategyClass } from './helper/iocHelper';
 import { getOwnTypedMetadata, getTypedMetadata } from '../utils';
 import { getComponentsDeclaredIn, Inject, Scope } from './component';
 import { CoreService } from './decorators';
-import { CircularDependencyDetector, CircularDependencyError } from './CircularDependencyDetector';
+import { CircularDependencyError } from './CircularDependencyDetector';
+import { cycleMessage } from './cycleMessage';
 import type { ServerLogger } from '../logger';
 
 /**
@@ -574,7 +575,7 @@ export class IocEngine implements ICoreService {
     if (visitedCount !== inDegree.size) {
       const cycle = this.findCycle(adjacencyList);
 
-      throw new CircularDependencyError(CircularDependencyDetector.cycleMessage(cycle));
+      throw new CircularDependencyError(cycleMessage(cycle));
     }
 
     return sorted.reverse();

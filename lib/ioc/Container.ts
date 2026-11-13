@@ -12,7 +12,8 @@ import type {
 import { ComponentConstants } from './constants';
 import { getOwnTypedMetadata, getTypedMetadata } from '../utils';
 import { AsyncLocalStorage } from 'node:async_hooks';
-import { CircularDependencyDetector, CircularDependencyError } from './CircularDependencyDetector';
+import { CircularDependencyError } from './CircularDependencyDetector';
+import { cycleMessage } from './cycleMessage';
 import { CORE_SERVICE } from './decorators';
 import { collectValueFields, readValue } from './helper/valueResolver';
 
@@ -273,7 +274,7 @@ export class Container {
 
   private assertNotCircular(path: readonly string[], key: string): void {
     if (path.includes(key)) {
-      throw new CircularDependencyError(CircularDependencyDetector.cycleMessage([...path, key]));
+      throw new CircularDependencyError(cycleMessage([...path, key]));
     }
   }
 
