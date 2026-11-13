@@ -4,7 +4,8 @@
 
 Compile the package under `strict` and fix what that surfaced:
 
-- Field decorators (`@Inject`, `@Value`, `@Strategy`, `@Override`) throw a `TypeError` for a symbol-keyed member instead of silently ignoring it.
+- `@Inject`, `@Value` and `@Strategy` throw a `TypeError` for a symbol-keyed member instead of silently ignoring it.
+- A class-based `@Inject(Class)` is looked up by the dependency's registered name at boot as well as at resolve time, so a dependency listed after its dependent boots.
 - `@OnStart`, `@PostConstruct` and `@OnStop` accept symbol-keyed methods and run them like string-named ones. A symbol-keyed `@OnStop` used to abort `server.stop()` with a `TypeError`.
 - `@Inject(Class)` and `@Strategy(Class)` of a class that is not a registered component fall back to the class name, as the container already does when it reads component names.
 - `container.registerInstance()` rejects `null` and `undefined` with a `TypeError` before the key is taken.
