@@ -4,8 +4,7 @@ import type { AsenaValidationService, ValidatorClass } from '../../web/middlewar
 import { type BaseValidator, type ValidatorHandler } from '../../../adapter';
 import { type Container, CoreService, type ICoreService, ICoreServiceNames } from '../../../ioc';
 import { Inject } from '../../../ioc/component';
-
-const VALIDATOR_KEYS: readonly (keyof BaseValidator)[] = ['json', 'query', 'form', 'param', 'header'];
+import { VALIDATOR_KEYS } from '../../../adapter/types/validatorKeys';
 
 /**
  * @description Core service for preparing validator instances

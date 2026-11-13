@@ -1,6 +1,7 @@
 import type { Class } from '../../server/types';
 import type { ApiParams } from './ApiParams';
 import type { AsenaContext, AsenaMiddlewareHandler } from '../index';
+import { VALIDATOR_KEYS } from './validatorKeys';
 
 /**
  * Interface representing a base middleware.
@@ -63,4 +64,4 @@ export interface PrepareMiddlewareParams {
   params?: ApiParams;
 }
 
-export const VALIDATOR_METHODS = ['json', 'query', 'form', 'param', 'header'];
+export const VALIDATOR_METHODS: string[] = [...VALIDATOR_KEYS];
