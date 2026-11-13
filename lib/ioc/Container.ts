@@ -21,8 +21,7 @@ import { collectValueFields, readValue } from './helper/valueResolver';
 
 /**
  * One component in a resolution chain. `active` turns false once the resolve that created it
- * settles, so a resolve started from a hook can carry a chain whose links are finished without
- * reading them as a cycle.
+ * settles, so a chain carried into a hook does not read its finished links as a cycle.
  */
 interface ChainLink {
   readonly key: string;
@@ -462,7 +461,7 @@ export class Container {
 
       await this.injectStrategies(newInstance, Class, path); // strategy injection
 
-      // Post-processing (skipped when postProcessors is empty - zero overhead)
+      // Post-processing
       let processed: any = newInstance;
 
       for (const processor of this.postProcessors) {
@@ -511,7 +510,7 @@ export class Container {
    * was brought up, matching how LifecycleService walks the components themselves.
    *
    * @param {Class} Class - The class to inspect
-   * @returns {string[]} Method names, empty when the class declares none
+   * @returns {(string | symbol)[]} Method names, empty when the class declares none
    */
   public getStopHooks(Class: Class): (string | symbol)[] {
     return this.collectHookMethods(Class, ComponentConstants.OnStopKey).reverse();
@@ -643,14 +642,12 @@ export class Container {
 
       let property: PropertyDescriptor | undefined;
 
-      for (const [k, frozenName] of Object.entries(deps)) {
+      for (const [k, injectedName] of Object.entries(deps)) {
         property = Object.getOwnPropertyDescriptor(newInstance, k);
 
         if (property?.value !== undefined) continue;
 
-        // @Inject(Class) snapshots the name at decoration time; registration reads it at boot,
-        // so a class named after its dependent is looked up by the name it was registered under.
-        const name = resolveDependencyName(frozenName, dependencyClasses?.[k]);
+        const name = resolveDependencyName(injectedName, dependencyClasses?.[k]);
 
         let instance: Class | Class[] | null;
 

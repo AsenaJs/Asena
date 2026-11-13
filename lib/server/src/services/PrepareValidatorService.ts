@@ -47,7 +47,7 @@ export class PrepareValidatorService implements ICoreService {
       throw new Error('Validator cannot be array');
     }
 
-    const overrides: string[] = getChainedTypedMetadataList<string>(ComponentConstants.OverrideKey, validator);
+    const overrides = getChainedTypedMetadataList<string | symbol>(ComponentConstants.OverrideKey, validator);
 
     const baseValidatorMiddleware: BaseValidator = {};
 

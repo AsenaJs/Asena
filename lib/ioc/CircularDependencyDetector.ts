@@ -12,9 +12,8 @@ export class CircularDependencyError extends Error {
 }
 
 /**
- * @description Public detector for circular dependencies, kept for API compatibility.
- * The container no longer uses it: it keeps the resolution path per call chain, so a
- * shared stack like this one cannot tell two overlapping resolves apart.
+ * @description Standalone cycle detector over one shared stack. The container does not use it:
+ * a shared stack cannot tell two overlapping resolves apart.
  */
 export class CircularDependencyDetector {
   private resolutionStack: Set<string> = new Set();
