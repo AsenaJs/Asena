@@ -1,6 +1,5 @@
 import { ComponentConstants } from '../../ioc';
 import { defineTypedMetadata, getOwnTypedMetadata } from '../../utils/typedMetadata';
-import { assertStringMemberKey } from '../../utils/decoratorInput';
 
 /**
  * Decorator for marking a property as an override.
@@ -13,14 +12,13 @@ import { assertStringMemberKey } from '../../utils/decoratorInput';
  */
 export const Override = (): PropertyDecorator => {
   return (target: object, propertyKey: string | symbol) => {
-    assertStringMemberKey(propertyKey, '@Override');
-
-    const overrides: string[] = getOwnTypedMetadata<string[]>(ComponentConstants.OverrideKey, target) || [];
+    const overrides: (string | symbol)[] =
+      getOwnTypedMetadata<(string | symbol)[]>(ComponentConstants.OverrideKey, target) || [];
 
     if (!overrides.includes(propertyKey)) {
       overrides.push(propertyKey);
     }
 
-    defineTypedMetadata<string[]>(ComponentConstants.OverrideKey, overrides, target);
+    defineTypedMetadata<(string | symbol)[]>(ComponentConstants.OverrideKey, overrides, target);
   };
 };

@@ -22,9 +22,9 @@ describe('field decorators reject symbol-keyed members', () => {
     expect(() => Strategy('Dep')(Holder.prototype, memberKey)).toThrow(/@Strategy supports string member names only/);
   });
 
-  test('@Override throws for a symbol key and names the decorator', () => {
+  test('@Override accepts a symbol key, as it did before 0.13', () => {
     class Holder {}
-    expect(() => Override()(Holder.prototype, memberKey)).toThrow(/@Override supports string member names only/);
+    expect(() => Override()(Holder.prototype, memberKey)).not.toThrow();
   });
 
   test('the same decorators accept a string member name', () => {
