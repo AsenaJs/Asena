@@ -340,19 +340,23 @@ export class Container {
     const instances: (T | T[])[] = [];
     const path = this.currentPath();
 
-    for (const containerService of matchingServices) {
+    for (const [key, containerService] of matchingServices) {
+      this.assertNotCircular(path, key);
+
+      const chain = [...path, key];
+
       if (Array.isArray(containerService)) {
-        instances.push(await this.resolveMultipleContainerService<T>(containerService, path));
+        instances.push(await this.resolveMultipleContainerService<T>(containerService, chain));
       } else {
-        instances.push(await this.resolveContainerService<T>(containerService, path));
+        instances.push(await this.resolveContainerService<T>(containerService, chain));
       }
     }
 
     return instances;
   }
 
-  private filterServices(typeOfComponent: ComponentType): (ContainerService | ContainerService[])[] {
-    const matches: (ContainerService | ContainerService[])[] = [];
+  private filterServices(typeOfComponent: ComponentType): [string, ContainerService | ContainerService[]][] {
+    const matches: [string, ContainerService | ContainerService[]][] = [];
 
     for (const [key, value] of Object.entries(this._services)) {
       const aliased = this.aliases.get(key);
@@ -366,7 +370,7 @@ export class Container {
         continue;
       }
 
-      matches.push(entries.length > 1 ? entries : entries[0]);
+      matches.push([key, entries.length > 1 ? entries : entries[0]]);
     }
 
     return matches;

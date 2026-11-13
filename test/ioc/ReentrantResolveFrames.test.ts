@@ -98,3 +98,38 @@ describe('re-entrant resolveAll() from a start hook', () => {
     expect(rootCause(caught)).toBeInstanceOf(CircularDependencyError);
   });
 });
+
+let soloAllReentries = 0;
+
+@Service()
+class SoloAll {
+  @OnStart()
+  public async onStart(): Promise<void> {
+    soloAllReentries++;
+
+    if (soloAllReentries > REENTRY_LIMIT) {
+      throw new Error('re-entered past the limit: the cycle was not detected');
+    }
+
+    await container.resolveAll(ComponentType.SERVICE);
+  }
+}
+
+describe('re-entrant resolveAll() that rebuilds its own caller', () => {
+  test('a prototype service whose start hook resolveAll()s rejects with CircularDependencyError', async () => {
+    soloAllReentries = 0;
+    container = new Container();
+    await container.register('SoloAll', SoloAll, false);
+
+    let caught: unknown;
+
+    try {
+      await container.resolve('SoloAll');
+    } catch (error) {
+      caught = error;
+    }
+
+    expect(rootCause(caught)).toBeInstanceOf(CircularDependencyError);
+    expect((rootCause(caught) as Error).message).toBe('Circular dependency detected: SoloAll -> SoloAll');
+  });
+});
