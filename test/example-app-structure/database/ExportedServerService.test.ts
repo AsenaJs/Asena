@@ -3,7 +3,7 @@ import { Service } from '../../../lib/server/decorators';
 
 @Service()
 export class ExportedServerService {
-  public testValue: string;
+  public testValue!: string;
 
   @PostConstruct()
   protected async onStart() {

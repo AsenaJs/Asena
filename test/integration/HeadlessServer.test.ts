@@ -69,7 +69,7 @@ describe('Headless Server Integration', () => {
     @Service()
     class CheckoutService {
       @Inject(ulak.messages('order'))
-      public orders: Ulak.Messages<'order'>;
+      public orders!: Ulak.Messages<'order'>;
     }
 
     return { HeadlessConfig, OrderHandler, CheckoutService, transport, received, absolute };

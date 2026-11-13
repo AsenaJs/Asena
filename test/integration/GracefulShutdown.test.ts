@@ -173,7 +173,7 @@ describe('graceful shutdown', () => {
   }, 20_000);
 
   // The promise is "throws, rejects or runs out of shutdown.timeout"; the throw is the test above.
-  test.each([
+  test.each<{ failure: string; env: Record<string, string> }>([
     { failure: 'rejects', env: { STOP_FAILURE: 'rejects' } },
     { failure: 'times-out', env: { STOP_FAILURE: 'times-out', SHUTDOWN_TIMEOUT: '200' } },
   ])(

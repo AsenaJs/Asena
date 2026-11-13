@@ -36,7 +36,7 @@ const engineWith = (components: any[]) => {
   return {
     engine,
     warnings,
-    register: () => engine.searchAndRegister(components.map((Class) => ({ Class, interface: null }))),
+    register: () => engine.searchAndRegister(components.map((Class) => ({ Class, interface: undefined }))),
   };
 };
 
@@ -103,8 +103,8 @@ describe('component identity is own-only', () => {
 
     // Identity, not membership: a ChildService instance is also `instanceof ParentService`, so
     // toBeInstanceOf(ParentService) passes for both the right and the wrong answer.
-    expect((await engine.container.resolve('ParentService')).constructor).toBe(ParentService);
-    expect((await engine.container.resolve('ChildService')).constructor).toBe(ChildService);
+    expect((await engine.container.resolve<object>('ParentService'))?.constructor).toBe(ParentService);
+    expect((await engine.container.resolve<object>('ChildService'))?.constructor).toBe(ChildService);
   });
 
   test('a @Service extending a @Controller is not a controller', () => {
@@ -146,7 +146,7 @@ describe('component identity is own-only', () => {
     const controllers = await container.resolveAll(ComponentType.CONTROLLER);
 
     expect(controllers).toHaveLength(1);
-    expect((controllers[0] as any).constructor).toBe(RealController);
+    expect((controllers?.[0] as any).constructor).toBe(RealController);
   });
 
   // Skipping the class silently is what the originating report explicitly asked us not to do:
@@ -193,8 +193,8 @@ describe('component identity is own-only', () => {
 
     await register();
 
-    expect((await engine.container.resolve('Alpha')).constructor).toBe(Alpha);
-    expect((await engine.container.resolve('Beta')).constructor).toBe(Beta);
+    expect((await engine.container.resolve<object>('Alpha'))?.constructor).toBe(Alpha);
+    expect((await engine.container.resolve<object>('Beta'))?.constructor).toBe(Beta);
   });
 });
 
@@ -261,13 +261,13 @@ describe('@Implements is inherited, deliberately', () => {
     @Service('ClockConsumer')
     class ClockConsumer {
       @Strategy('IClock')
-      public clocks: SystemClock[];
+      public clocks!: SystemClock[];
     }
 
     // Through the factory rather than the engineWith helper: the ordering half of the mechanism
     // runs off `InjectableComponent.interface`, which only the real entry points populate
     // (AsenaServerFactory reads InterfaceKey off the class, chained, exactly like the scan).
-    // The helper hard-codes `interface: null`, so it can register the implementations but never
+    // The helper hard-codes `interface: undefined`, so it can register the implementations but never
     // order them before their consumer.
     const logger: any = { info: () => {}, warn: () => {}, error: () => {}, profile: () => {} };
     const server: any = await AsenaServerFactory.create({

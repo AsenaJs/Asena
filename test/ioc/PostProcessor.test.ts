@@ -62,7 +62,7 @@ class HelperService {
 @PostProcessor({ name: 'DIPostProcessor' })
 class DIPostProcessor implements ComponentPostProcessor {
   @Inject('HelperService')
-  private helper: HelperService;
+  private helper!: HelperService;
 
   public postProcess<T>(instance: T, Class: any): T {
     // Verify DI works by accessing injected service
@@ -236,8 +236,8 @@ describe('PostProcessor', () => {
       const engine = createIocEngine();
 
       const components: InjectableComponent[] = [
-        { Class: SimpleService, interface: null },
-        { Class: ProxyPostProcessor, interface: null },
+        { Class: SimpleService, interface: undefined },
+        { Class: ProxyPostProcessor, interface: undefined },
       ];
 
       await engine.searchAndRegister(components);
@@ -252,9 +252,9 @@ describe('PostProcessor', () => {
       const engine = createIocEngine();
 
       const components: InjectableComponent[] = [
-        { Class: HelperService, interface: null },
-        { Class: DIPostProcessor, interface: null },
-        { Class: SimpleService, interface: null },
+        { Class: HelperService, interface: undefined },
+        { Class: DIPostProcessor, interface: undefined },
+        { Class: SimpleService, interface: undefined },
       ];
 
       await engine.searchAndRegister(components);
@@ -275,9 +275,9 @@ describe('PostProcessor', () => {
       const logger = (engine as any)['logger'];
 
       const components: InjectableComponent[] = [
-        { Class: HelperService, interface: null },
-        { Class: DIPostProcessor, interface: null },
-        { Class: SimpleService, interface: null },
+        { Class: HelperService, interface: undefined },
+        { Class: DIPostProcessor, interface: undefined },
+        { Class: SimpleService, interface: undefined },
       ];
 
       await engine.searchAndRegister(components);
@@ -295,8 +295,8 @@ describe('PostProcessor', () => {
       const engine = createIocEngine();
 
       const components: InjectableComponent[] = [
-        { Class: SimpleService, interface: null },
-        { Class: AnotherService, interface: null },
+        { Class: SimpleService, interface: undefined },
+        { Class: AnotherService, interface: undefined },
       ];
 
       await engine.searchAndRegister(components);
@@ -314,9 +314,9 @@ describe('PostProcessor', () => {
       // Simulate CoreService registration (Logger is already injected via mock in createIocEngine)
       // HelperService acts as a "pre-registered" dependency
       const components: InjectableComponent[] = [
-        { Class: HelperService, interface: null },
-        { Class: DIPostProcessor, interface: null },
-        { Class: SimpleService, interface: null },
+        { Class: HelperService, interface: undefined },
+        { Class: DIPostProcessor, interface: undefined },
+        { Class: SimpleService, interface: undefined },
       ];
 
       await engine.searchAndRegister(components);
@@ -332,9 +332,9 @@ describe('PostProcessor', () => {
       const engine = createIocEngine();
 
       const components: InjectableComponent[] = [
-        { Class: FirstPP, interface: null },
-        { Class: SecondPP, interface: null },
-        { Class: SimpleService, interface: null },
+        { Class: FirstPP, interface: undefined },
+        { Class: SecondPP, interface: undefined },
+        { Class: SimpleService, interface: undefined },
       ];
 
       await engine.searchAndRegister(components);
@@ -354,8 +354,8 @@ describe('PostProcessor', () => {
       const logger = (engine as any)['logger'];
 
       const components: InjectableComponent[] = [
-        { Class: ProxyPostProcessor, interface: null },
-        { Class: SimpleService, interface: null },
+        { Class: ProxyPostProcessor, interface: undefined },
+        { Class: SimpleService, interface: undefined },
       ];
 
       await engine.searchAndRegister(components);
@@ -375,8 +375,8 @@ describe('PostProcessor', () => {
       const engine = createIocEngine();
 
       const components: InjectableComponent[] = [
-        { Class: PostConstructPP, interface: null },
-        { Class: SimpleService, interface: null },
+        { Class: PostConstructPP, interface: undefined },
+        { Class: SimpleService, interface: undefined },
       ];
 
       await engine.searchAndRegister(components);
@@ -467,8 +467,8 @@ describe('PostProcessor', () => {
       const engine = createIocEngine();
 
       const components: InjectableComponent[] = [
-        { Class: TracingPP, interface: null },
-        { Class: SimpleService, interface: null },
+        { Class: TracingPP, interface: undefined },
+        { Class: SimpleService, interface: undefined },
       ];
 
       await engine.searchAndRegister(components);
@@ -492,9 +492,9 @@ describe('PostProcessor', () => {
       const engine = createIocEngine();
 
       const components: InjectableComponent[] = [
-        { Class: OpenApiPP, interface: null },
-        { Class: TestController, interface: null },
-        { Class: SimpleService, interface: null },
+        { Class: OpenApiPP, interface: undefined },
+        { Class: TestController, interface: undefined },
+        { Class: SimpleService, interface: undefined },
       ];
 
       await engine.searchAndRegister(components);

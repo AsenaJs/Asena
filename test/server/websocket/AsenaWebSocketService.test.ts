@@ -27,7 +27,7 @@ describe('AsenaWebSocketService', () => {
 
     service.in(testData);
 
-    expect(service.server.to).toHaveBeenCalledWith('base.__', testData);
+    expect(service.server?.to).toHaveBeenCalledWith('base.__', testData);
   });
 
   test('to() method sends data to a specific namespace', () => {
@@ -38,7 +38,7 @@ describe('AsenaWebSocketService', () => {
 
     service.to(namespace, testData);
 
-    expect(service.server.to).toHaveBeenCalledWith('base.test-room', testData);
+    expect(service.server?.to).toHaveBeenCalledWith('base.test-room', testData);
   });
 
   test('to() method sends data to a specific namespace', () => {
@@ -46,9 +46,9 @@ describe('AsenaWebSocketService', () => {
 
     service.namespace = 'base';
 
-    service.to(null, testData);
+    service.to('', testData);
 
-    expect(service.server.to).toHaveBeenCalledWith('base', testData);
+    expect(service.server?.to).toHaveBeenCalledWith('base', testData);
   });
 
   test('to() method throws error for invalid namespace', () => {

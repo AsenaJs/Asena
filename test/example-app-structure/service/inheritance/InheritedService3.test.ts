@@ -7,10 +7,10 @@ import type { InheritedService2Test } from './InheritedService2.test';
 @Service()
 export class InheritedService3Test extends BaseServiceTest {
   @Inject('InheritedService1Test')
-  public service1: InheritedService1Test;
+  public service1!: InheritedService1Test;
 
   @Inject('InheritedService2Test')
-  public service2: InheritedService2Test;
+  public service2!: InheritedService2Test;
 
   public test() {
     this.service1.test();

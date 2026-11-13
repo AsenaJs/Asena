@@ -2,6 +2,10 @@ import { afterEach, beforeEach, describe, expect, it, jest, mock, test } from 'b
 import type { AsenaWebSocketServer } from '../../../lib/server/web/websocket';
 import { AsenaSocket, AsenaWebSocketService, type Socket } from '../../../lib/server/web/websocket';
 
+declare global {
+  var spy: Record<'close' | 'terminate', ReturnType<typeof mock>>;
+}
+
 describe('WebSocket Tests', () => {
   let wsService: AsenaWebSocketService<any>;
   let mockServer: AsenaWebSocketServer;

@@ -162,7 +162,7 @@ class SubclassPrefixController extends DecoratedBase {}
 
 abstract class InjectingBase {
   @Inject(GreetingService)
-  protected greetingService: GreetingService;
+  protected greetingService!: GreetingService;
 
   @Get('/greeting')
   public greeting(context: AsenaContext<any, any>) {
@@ -338,12 +338,12 @@ describe('route inheritance', () => {
     // The middleware is declared next to the @Post on the base class, so losing it would be
     // an authorization hole rather than a missing route.
     expect(guarded).toBeDefined();
-    expect(guarded.method).toBe(HttpMethod.POST);
+    expect(guarded!.method).toBe(HttpMethod.POST);
     // Identity and order, not just count: the controller-level guard runs first and the route's
     // own is still there - dropping either, or swapping them, also reads as length 2.
-    expect(guarded.middlewares).toHaveLength(2);
-    expect(identify(guarded.middlewares[0])).toBe('TopLevelMiddleware');
-    expect(identify(guarded.middlewares[1])).toBe('BaseRouteMiddleware');
+    expect(guarded!.middlewares).toHaveLength(2);
+    expect(identify(guarded!.middlewares[0])).toBe('TopLevelMiddleware');
+    expect(identify(guarded!.middlewares[1])).toBe('BaseRouteMiddleware');
 
     // ...and nothing was registered as a global pattern
     expect(mockAdapter.use).not.toHaveBeenCalled();
@@ -378,8 +378,8 @@ describe('route inheritance', () => {
     const thing = registered.find((route) => route.path === '/subclass-prefix/thing');
 
     expect(thing).toBeDefined();
-    expect(thing.middlewares).toHaveLength(1);
-    expect(identify(thing.middlewares[0])).toBe('TopLevelMiddleware');
+    expect(thing!.middlewares).toHaveLength(1);
+    expect(identify(thing!.middlewares[0])).toBe('TopLevelMiddleware');
     expect(mockAdapter.use).not.toHaveBeenCalled();
   });
 
@@ -390,7 +390,7 @@ describe('route inheritance', () => {
     await boot([AddingController, TopLevelMiddleware, BaseRouteMiddleware]);
 
     const thing = registered.find((route) => route.path === '/adds/thing');
-    const applied = thing.middlewares.map((middleware: any) => identify(middleware));
+    const applied = thing!.middlewares.map((middleware: any) => identify(middleware));
 
     // Ancestors first, then its own - and the inherited one is not dropped
     expect(applied).toEqual(['TopLevelMiddleware', 'BaseRouteMiddleware']);
@@ -583,7 +583,7 @@ describe('route inheritance', () => {
         const guarded = registered.find((route) => route.path === '/undecorated-mw/danger');
 
         throw new Error(
-          `boot succeeded - /undecorated-mw/danger registered, guarded by ${identify(guarded.middlewares[0])}`,
+          `boot succeeded - /undecorated-mw/danger registered, guarded by ${identify(guarded!.middlewares[0])}`,
         );
       }
 
@@ -631,7 +631,7 @@ describe('route inheritance', () => {
         // validator is the only way to say which one the route actually got.
         const accepted = ((): boolean => {
           try {
-            (submit.validator as any).json.handle({ value: 'anything' });
+            (submit!.validator as any).json.handle({ value: 'anything' });
 
             return true;
           } catch {

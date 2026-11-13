@@ -22,7 +22,7 @@ class OutboxWriter {
 @Service()
 class NotificationService {
   @Inject(OutboxWriter)
-  private outbox: OutboxWriter;
+  private outbox!: OutboxWriter;
 
   public notify(): string {
     return this.outbox.append();
@@ -36,7 +36,7 @@ class EmailChannel {}
 @Service()
 class Broadcaster {
   @Strategy('IChannel')
-  private channels: unknown[];
+  private channels!: unknown[];
 
   public count(): number {
     return this.channels.length;
@@ -52,7 +52,7 @@ describe('assigning to an injected field', () => {
 
     const classes: Class[] = [OutboxWriter, NotificationService, EmailChannel, Broadcaster];
 
-    await engine.searchAndRegister(classes.map((Class) => ({ Class, interface: null }) as InjectableComponent));
+    await engine.searchAndRegister(classes.map((Class) => ({ Class, interface: undefined }) as InjectableComponent));
   });
 
   test('names the field, the class and the way out for @Inject', async () => {

@@ -24,7 +24,7 @@ class TestServerService {
 @Controller('/test')
 class TestController {
   @Inject(TestServerService)
-  private testServerService: TestServerService;
+  private testServerService!: TestServerService;
 
   @Get('/')
   public async get(context: AsenaContext<any, any>) {
@@ -134,7 +134,8 @@ describe('AsenaServer', () => {
 
     await server.start();
 
-    const instance: TestConfig | TestConfig[] = await server.coreContainer.container.resolve<TestConfig>('TestConfig');
+    const instance: TestConfig | TestConfig[] | null =
+      await server.coreContainer.container.resolve<TestConfig>('TestConfig');
 
     expect(instance).toBeDefined();
     expect(mockAdapter.options).toBe(options);
@@ -157,7 +158,7 @@ describe('AsenaServer', () => {
     const services = await container.resolveAll<TestServerService>(ComponentType.SERVICE);
 
     expect(services).toHaveLength(1);
-    expect((services[0] as TestServerService).testValue).toBe('Test Value');
+    expect((services?.[0] as TestServerService).testValue).toBe('Test Value');
     expect(await container.resolveAll(ComponentType.CONTROLLER)).toHaveLength(1);
     expect(await container.resolveAll(ComponentType.WEBSOCKET)).toHaveLength(1);
 
@@ -201,7 +202,7 @@ describe('AsenaServer', () => {
 
     await server.start();
 
-    const webSocketService: TestWebSocket[] | TestWebSocket =
+    const webSocketService: TestWebSocket[] | TestWebSocket | null =
       await server.coreContainer.container.resolve('TestWebSocket');
 
     const params: WebsocketRouteParams<any> = {

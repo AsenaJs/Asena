@@ -83,8 +83,8 @@ describe('PrepareWebsocketService', () => {
     const result = await service.prepare();
 
     expect(result).toHaveLength(2);
-    expect(result[0]).toBe(mockWebSocket1);
-    expect(result[1]).toBe(mockWebSocket2);
+    expect(result?.[0]).toBe(mockWebSocket1);
+    expect(result?.[1]).toBe(mockWebSocket2);
     expect(mockWebSocket1.namespace).toBe('ws1');
     expect(mockWebSocket2.namespace).toBe('ws2');
 
@@ -107,8 +107,8 @@ describe('PrepareWebsocketService', () => {
     const result = await service.prepare();
 
     expect(result).toHaveLength(2);
-    expect(result[0]).toBe(mockWebSocket1);
-    expect(result[1]).toBe(mockWebSocket2);
+    expect(result?.[0]).toBe(mockWebSocket1);
+    expect(result?.[1]).toBe(mockWebSocket2);
 
     // Verify Ulak registration for flattened arrays
     expect(mockUlak.registerNamespace).toHaveBeenCalledTimes(2);

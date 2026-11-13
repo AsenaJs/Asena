@@ -137,7 +137,7 @@ export const createMockAdapter = () => {
 
       if (route?.handler) {
         // Create mock context
-        const mockContext = createMockContext();
+        const mockContext: ReturnType<typeof createMockContext> & { params?: unknown } = createMockContext();
 
         // Extract route parameters from path
 

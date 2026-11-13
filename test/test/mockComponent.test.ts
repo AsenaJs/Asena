@@ -36,10 +36,10 @@ class LoginService {
 @Component()
 class AuthService {
   @Inject(UserService)
-  private userService: UserService;
+  private userService!: UserService;
 
   @Inject(LoginService)
-  private loginService: LoginService;
+  private loginService!: LoginService;
 
   public async register(name: string, email: string, password: string) {
     const user = await this.userService.createUser(name, email);
@@ -55,7 +55,7 @@ class AuthService {
 @Component()
 class PaymentService {
   @Inject(UserService)
-  private userService: UserService;
+  private userService!: UserService;
 
   public async processPayment(userId: string, amount: number) {
     const user = await this.userService.findById(userId);
@@ -67,7 +67,7 @@ class PaymentService {
 // @ts-ignore
 class ServiceWithExpression {
   @Inject('UserService', (s) => s.createUser)
-  private createUserFn: (name: string, email: string) => Promise<any>;
+  private createUserFn!: (name: string, email: string) => Promise<any>;
 
   public async addUser(name: string, email: string) {
     return await this.createUserFn(name, email);
@@ -79,7 +79,7 @@ class ServiceWithExpression {
 class StringInjectedService {
   // A string carries no class reference, so this field cannot be auto-mocked from a shape
   @Inject('UserService')
-  private userService: UserService;
+  private userService!: UserService;
 
   public async find(id: string) {
     return await this.userService.findById(id);
@@ -89,10 +89,10 @@ class StringInjectedService {
 @Component()
 class StatsService {
   @Inject(ulak('/stats'))
-  private statsChannel: Ulak.NameSpace<'/stats'>;
+  private statsChannel!: Ulak.NameSpace<'/stats'>;
 
   @Inject(UserService)
-  private userService: UserService;
+  private userService!: UserService;
 
   public async createAnonUser(name: string) {
     const user = await this.userService.createUser(name, `${name}@example.com`);
@@ -526,10 +526,10 @@ describe('mockComponent', () => {
     @Component()
     class ServiceWithValue {
       @Inject(UserService)
-      private userService: UserService;
+      private userService!: UserService;
 
       @Value(ENV_KEY)
-      private configValue: string;
+      private configValue!: string;
 
       public async createUser(name: string, email: string) {
         await this.userService.createUser(name, email);

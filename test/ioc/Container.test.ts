@@ -14,7 +14,7 @@ class TestClass {
 @Component()
 class TestClass2 {
   @Inject(TestClass)
-  private testClass: TestClass;
+  private testClass!: TestClass;
 
   public testMethod() {
     return this.testClass.testMethod();
@@ -24,10 +24,10 @@ class TestClass2 {
 @Component()
 class TestClass3 {
   @Inject(TestClass)
-  private testClass: TestClass;
+  private testClass!: TestClass;
 
   @Inject(TestClass2)
-  private testClass2: TestClass2;
+  private testClass2!: TestClass2;
 
   public testMethod() {
     return this.testClass.testMethod() + '-' + this.testClass2.testMethod();
@@ -48,7 +48,7 @@ class TestClass4 implements TestInterface {
 @Component()
 class TestClass5 implements TestInterface {
   @Inject(TestClass4)
-  private testClass4: TestClass4;
+  private testClass4!: TestClass4;
 
   public testMethod() {
     return this.testClass4.testMethod();
@@ -58,7 +58,7 @@ class TestClass5 implements TestInterface {
 @Component()
 class TestClass6 {
   @Strategy('TestInterface')
-  public services: TestInterface[];
+  public services!: TestInterface[];
 
   public testMethod() {
     return this.services.map((service) => service.testMethod()).join('-');
@@ -497,7 +497,7 @@ describe('Container', () => {
     @Component()
     class UserService {
       @Inject('LoggerService')
-      public logger: LoggerService;
+      public logger!: LoggerService;
 
       public getUser() {
         return this.logger.log('Getting user');
@@ -642,7 +642,7 @@ describe('Container dependency resolution errors', () => {
     @Component()
     class Dependent {
       @Inject(NeverRegistered)
-      private dependency: NeverRegistered;
+      private dependency!: NeverRegistered;
 
       public ping() {
         return this.dependency.ping();
@@ -667,13 +667,13 @@ describe('Container dependency resolution errors', () => {
     @Component()
     class Middle {
       @Inject(Leaf)
-      private leaf: Leaf;
+      private leaf!: Leaf;
     }
 
     @Component()
     class Root {
       @Inject(Middle)
-      private middle: Middle;
+      private middle!: Middle;
     }
 
     // Prototypes: neither class is constructed until resolve, so the miss for Leaf happens

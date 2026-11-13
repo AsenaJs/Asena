@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test } from 'bun:test';
 import { AsenaSocket, type WebSocketData } from '../../../lib/server/web/websocket';
 
-type BinaryType = AsenaSocket<unknown>['binaryType'];
+type BinaryType = NonNullable<AsenaSocket<unknown>['binaryType']>;
 
 describe('AsenaSocket.binaryType on a real Bun socket', () => {
   let server: Bun.Server<any> | undefined;

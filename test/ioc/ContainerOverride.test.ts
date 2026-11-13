@@ -31,7 +31,7 @@ class TrackedService {
 @Component()
 class ConsumerService {
   @Inject(UserService)
-  public userService: UserService;
+  public userService!: UserService;
 
   public async load(id: string) {
     return await this.userService.findById(id);

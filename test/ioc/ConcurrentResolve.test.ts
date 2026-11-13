@@ -12,19 +12,19 @@ class Leaf {
 @Service()
 class UserService {
   @Inject('Leaf')
-  public leaf: Leaf;
+  public leaf!: Leaf;
 }
 
 @Service()
 class AccountService {
   @Inject('Leaf')
-  public leaf: Leaf;
+  public leaf!: Leaf;
 }
 
 @Service()
 class ReportService {
   @Inject('Leaf')
-  public leaf: Leaf;
+  public leaf!: Leaf;
 }
 
 @Service()
@@ -51,7 +51,7 @@ class PoisonInner {}
 @Service()
 class PoisonOuter {
   @Inject('PoisonInner')
-  public inner: PoisonInner;
+  public inner!: PoisonInner;
 }
 
 class FailOnceFor implements ComponentPostProcessor {

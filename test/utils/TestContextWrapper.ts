@@ -31,7 +31,7 @@ export class TestContextWrapper implements AsenaContext<Request, Response> {
     this.res = new Response();
   }
 
-  getAllQueries: () => Record<string, string | string[]>;
+  getAllQueries!: () => Record<string, string | string[]>;
 
   getRequestIp?(): string | null {
     throw new Error('Method not implemented.');

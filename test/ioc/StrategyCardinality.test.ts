@@ -66,13 +66,13 @@ class BetaTool implements Tool {
 @Component()
 class Consumer {
   @Strategy('ToolIface')
-  public tools: Tool[];
+  public tools!: Tool[];
 }
 
 @Component()
 class ExprConsumer {
   @Strategy('ToolIface', (tool: Tool) => tool.name)
-  public names: string[];
+  public names!: string[];
 }
 
 /** Registers `impls` under the strategy key, then both consumers. */
@@ -183,7 +183,7 @@ describe('Container - @Strategy cardinality', () => {
 @Component()
 class SelfStrategy {
   @Strategy('SelfIface')
-  public peers: SelfStrategy[];
+  public peers!: SelfStrategy[];
 }
 
 @Component()
@@ -274,12 +274,12 @@ class DerivedSearchTool extends SearchTool {
 @Service('ToolRegistry')
 class ToolRegistry {
   @Strategy('AgentTool')
-  public handlers: Tool[];
+  public handlers!: Tool[];
 }
 
 class StrategyBase {
   @Strategy('AgentTool')
-  public inherited: Tool[];
+  public inherited!: Tool[];
 }
 
 @Service('DerivedRegistry')
@@ -410,7 +410,7 @@ describe('IocEngine - empty strategy key diagnostic', () => {
 @Component()
 class InjectConsumer {
   @Inject('ToolIface')
-  public tool: Tool | Tool[];
+  public tool!: Tool | Tool[];
 }
 
 describe('@Inject on a key with several implementations', () => {

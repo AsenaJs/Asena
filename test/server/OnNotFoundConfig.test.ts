@@ -13,7 +13,7 @@ class NoopService {}
 @Controller('/api')
 class ApiController {
   @Inject(NoopService)
-  private noop: NoopService;
+  private noop!: NoopService;
 
   @Get('/ping')
   public ping(context: AsenaContext<any, any>) {

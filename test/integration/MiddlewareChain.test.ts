@@ -198,7 +198,7 @@ describe('Middleware Chain Integration', () => {
     @Middleware()
     class LoggingMiddleware extends AsenaMiddlewareService {
       @Inject(LoggingService)
-      public loggingService: LoggingService;
+      public loggingService!: LoggingService;
 
       public async handle(_context: AsenaContext<any, any>, next: () => Promise<void>): Promise<void> {
         this.loggingService.log('middleware executed');

@@ -23,7 +23,7 @@ class UserService {
 @Service()
 class ReportService {
   @Inject(UserService)
-  private userService: UserService;
+  private userService!: UserService;
 
   public async describe(id: string) {
     const user = await this.userService.findById(id);
@@ -35,7 +35,7 @@ class ReportService {
 @Controller('/users')
 class UserController {
   @Inject(UserService)
-  private userService: UserService;
+  private userService!: UserService;
 
   @Get('/:id')
   public async find(context: AsenaContext<any, any>) {
@@ -53,7 +53,7 @@ class LeafService {
 @Service()
 class BranchService {
   @Inject(LeafService)
-  private leafService: LeafService;
+  private leafService!: LeafService;
 
   public async branch() {
     return `branch:${await this.leafService.leaf()}`;
@@ -63,7 +63,7 @@ class BranchService {
 @Controller('/closure')
 class ClosureController {
   @Inject(BranchService)
-  private branchService: BranchService;
+  private branchService!: BranchService;
 
   @Get('/branch')
   public async branch(context: AsenaContext<any, any>) {
@@ -92,7 +92,7 @@ class PlainUndecorated {
 @Service()
 class WantsUndecorated {
   @Inject(PlainUndecorated)
-  private dependency: PlainUndecorated;
+  private dependency!: PlainUndecorated;
 }
 
 const boot = (overrides?: Record<string, object>) =>
@@ -349,7 +349,7 @@ describe('createTestApp dependency closure - interfaces and strategies', () => {
   @Service()
   class GreetingService {
     @Inject('Greeter')
-    private greeter: EnglishGreeter;
+    private greeter!: EnglishGreeter;
 
     public hello(): string {
       return this.greeter.greet();
@@ -363,7 +363,7 @@ describe('createTestApp dependency closure - interfaces and strategies', () => {
   @Service()
   class PluginHost {
     @Strategy('Plugin')
-    private plugins: object[];
+    private plugins!: object[];
 
     public count(): number {
       return this.plugins.length;

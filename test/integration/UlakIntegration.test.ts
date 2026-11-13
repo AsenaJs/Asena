@@ -72,7 +72,7 @@ describe('Ulak Integration Tests', () => {
       const services = await prepareWebsocketService.prepare();
 
       // Verify services were registered
-      expect(services.length).toBe(2);
+      expect(services?.length).toBe(2);
       // `prepare()` is declared `Promise<AsenaWebSocketService<WebSocketData>[]>`, but T on
       // AsenaWebSocketService is documented as the `ws.data.values` payload - what a real
       // service passes (`AsenaWebSocketService<{ userId: string }>`), not the envelope. The two

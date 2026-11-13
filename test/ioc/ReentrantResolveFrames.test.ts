@@ -77,7 +77,7 @@ class ChainTail {
 @Service()
 class ChainHead {
   @Inject('ChainTail')
-  public tail: ChainTail;
+  public tail!: ChainTail;
 }
 
 describe('re-entrant resolveAll() from a start hook', () => {

@@ -6,7 +6,7 @@ import type { AsenaContext } from '../../../lib/adapter';
 
 @StaticServe({ root: './public', name: 'StaticServe' })
 export class MockStaticServeMiddleware extends AsenaStaticServeService<any> {
-  public extra = { foo: 'bar' };
+  public extra: { foo: string } | undefined = { foo: 'bar' };
 
   public rewriteRequestPath(path: string): string {
     return `/rewritten${path}`;
@@ -43,7 +43,7 @@ describe('PrepareStaticServeConfigService', () => {
   });
 
   it('should return undefined when staticServeClass is not provided', async () => {
-    const result = await service.prepare(null);
+    const result = await service.prepare(undefined);
 
     expect(result).toBeUndefined();
   });
@@ -79,10 +79,12 @@ describe('PrepareStaticServeConfigService', () => {
   });
 
   it('should prepare static serve config without optional properties', async () => {
-    mockStaticServe.extra = undefined;
-    mockStaticServe.rewriteRequestPath = undefined;
-    mockStaticServe.onFound = undefined;
-    mockStaticServe.onNotFound = undefined;
+    Object.assign(mockStaticServe, {
+      extra: undefined,
+      rewriteRequestPath: undefined,
+      onFound: undefined,
+      onNotFound: undefined,
+    });
     mockContainer.resolve = mock(() => mockStaticServe);
 
     const result = await service.prepare(MockStaticServeMiddleware);

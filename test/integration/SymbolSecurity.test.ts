@@ -201,7 +201,7 @@ describe('Symbol Security E2E Integration', () => {
     @Service()
     class TestService {
       @Inject(DependencyService)
-      public dependency: DependencyService;
+      public dependency!: DependencyService;
 
       public getData() {
         return this.dependency.getData();
@@ -452,7 +452,7 @@ describe('Symbol Security E2E Integration', () => {
     @Controller('/secure')
     class SecureController {
       @Inject(SecureService)
-      public secureService: SecureService;
+      public secureService!: SecureService;
 
       @Get({ path: '/' })
       public getData(context: AsenaContext<any, any>) {

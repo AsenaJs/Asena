@@ -260,7 +260,7 @@ describe('Circular Dependency E2E Integration', () => {
     @Service()
     class UserService {
       @Inject('DatabaseService')
-      public databaseService: DatabaseService;
+      public databaseService!: DatabaseService;
 
       public getUsers() {
         return [{ id: 1, name: 'User' }];
@@ -270,10 +270,10 @@ describe('Circular Dependency E2E Integration', () => {
     @Service()
     class PostService {
       @Inject('DatabaseService')
-      public databaseService: DatabaseService;
+      public databaseService!: DatabaseService;
 
       @Inject('UserService')
-      public userService: UserService;
+      public userService!: UserService;
 
       public getPosts() {
         return [{ id: 1, title: 'Post' }];
@@ -283,10 +283,10 @@ describe('Circular Dependency E2E Integration', () => {
     @Controller('/api')
     class ApiController {
       @Inject('UserService')
-      public userService: UserService;
+      public userService!: UserService;
 
       @Inject('PostService')
-      public postService: PostService;
+      public postService!: PostService;
 
       @Get({ path: '/users' })
       public getUsers(context: AsenaContext<any, any>) {

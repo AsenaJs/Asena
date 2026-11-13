@@ -111,7 +111,7 @@ describe('AsenaServer Core Service Integration', () => {
     @Controller('/')
     class TestController {
       @Inject('TestService')
-      public testService: TestService;
+      public testService!: TestService;
 
       public getData() {
         return this.testService.getData();
@@ -185,7 +185,7 @@ describe('AsenaServer Core Service Integration', () => {
 
     class UserService {
       @Inject('DatabaseService')
-      public databaseService: DatabaseService;
+      public databaseService!: DatabaseService;
 
       public getUsers() {
         return [{ id: 1, name: 'User' }];
@@ -195,7 +195,7 @@ describe('AsenaServer Core Service Integration', () => {
     @Controller('/')
     class UserController {
       @Inject('UserService')
-      public userService: UserService;
+      public userService!: UserService;
 
       public getUsers() {
         return this.userService.getUsers();

@@ -64,7 +64,7 @@ describe('IocEngine imports', () => {
 
     const engine = newEngine();
 
-    await engine.searchAndRegister([{ Class: ExplicitService, interface: null }], [ImportedGreetingService]);
+    await engine.searchAndRegister([{ Class: ExplicitService, interface: undefined }], [ImportedGreetingService]);
 
     expect(engine.container.has('ExplicitService')).toBe(true);
     expect(engine.container.has('ImportedGreetingService')).toBe(true);

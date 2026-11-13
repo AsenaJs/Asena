@@ -18,7 +18,7 @@ const setEnv = (key: string, value: string | undefined): void => {
 @Component()
 class UrlService {
   @Value('ASENA_TEST_VALUE_URL')
-  private url: string;
+  private url!: string;
 
   public getUrl(): string {
     return this.url;
@@ -28,7 +28,7 @@ class UrlService {
 @Component()
 class PoolService {
   @Value('ASENA_TEST_VALUE_POOL_MAX', { parse: Number, default: 10 })
-  private poolMax: number;
+  private poolMax!: number;
 
   public getPoolMax(): number {
     return this.poolMax;
@@ -38,10 +38,10 @@ class PoolService {
 @Component()
 class DefaultingService {
   @Value('ASENA_TEST_VALUE_ZERO', { default: 0 })
-  private zero: number;
+  private zero!: number;
 
   @Value('ASENA_TEST_VALUE_EMPTY', { default: '' })
-  private empty: string;
+  private empty!: string;
 
   @Value('ASENA_TEST_VALUE_NULL', { default: null })
   private nullable: unknown;
@@ -62,7 +62,7 @@ class DefaultingService {
 @Component()
 class RequiredService {
   @Value('ASENA_TEST_VALUE_REQUIRED')
-  private requiredField: string;
+  private requiredField!: string;
 
   public getRequired(): string {
     return this.requiredField;
@@ -72,13 +72,13 @@ class RequiredService {
 @Component()
 class BaseValueService {
   @Value('ASENA_TEST_VALUE_BASE')
-  public baseField: string;
+  public baseField!: string;
 }
 
 @Component()
 class SubValueService extends BaseValueService {
   @Value('ASENA_TEST_VALUE_SUB')
-  public override baseField: string;
+  public override baseField!: string;
 }
 
 @Component()

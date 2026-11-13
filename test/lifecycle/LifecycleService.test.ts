@@ -42,7 +42,7 @@ describe('lifecycle hooks', () => {
     @Service()
     class Repository {
       @Inject(Database)
-      private database: Database;
+      private database!: Database;
 
       @OnStart()
       public async warm() {
@@ -115,7 +115,7 @@ describe('lifecycle hooks', () => {
     @Service()
     class Broken {
       @Inject(Healthy)
-      private healthy: Healthy;
+      private healthy!: Healthy;
 
       @OnStart()
       public async open() {
@@ -197,7 +197,7 @@ describe('lifecycle hooks', () => {
     @Service()
     class Exploding {
       @Inject(First)
-      private first: First;
+      private first!: First;
 
       @OnStop()
       public async close() {
@@ -209,7 +209,7 @@ describe('lifecycle hooks', () => {
     @Service()
     class Hanging {
       @Inject(Exploding)
-      private exploding: Exploding;
+      private exploding!: Exploding;
 
       @OnStop()
       public async close() {
