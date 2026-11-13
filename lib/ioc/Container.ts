@@ -4,6 +4,7 @@ import type {
   ComponentType,
   ContainerService,
   Dependencies,
+  DependencyClasses,
   Expressions,
   LifecycleComponent,
   StartHookMode,
@@ -622,12 +623,24 @@ export class Container {
 
       if (!deps) continue;
 
+      const dependencyClasses = getOwnTypedMetadata<DependencyClasses>(
+        ComponentConstants.DependencyClassKey,
+        classInChain,
+      );
+
       let property: PropertyDescriptor | undefined;
 
-      for (const [k, name] of Object.entries(deps)) {
+      for (const [k, frozenName] of Object.entries(deps)) {
         property = Object.getOwnPropertyDescriptor(newInstance, k);
 
         if (property?.value !== undefined) continue;
+
+        // @Inject(Class) snapshots the name at decoration time; registration reads it at boot,
+        // so a class named after its dependent is looked up by the name it was registered under.
+        const dependencyClass = dependencyClasses?.[k];
+        const name = dependencyClass
+          ? (getTypedMetadata<string>(ComponentConstants.NameKey, dependencyClass) ?? dependencyClass.name)
+          : frozenName;
 
         let instance: Class | Class[] | null;
 
