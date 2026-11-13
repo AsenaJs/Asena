@@ -48,6 +48,20 @@ describe('PrepareStaticServeConfigService', () => {
     expect(result).toBeUndefined();
   });
 
+  it('should throw for a static serve class that is not a component', async () => {
+    class UndecoratedStaticServe extends AsenaStaticServeService<any> {}
+
+    expect(service.prepare(UndecoratedStaticServe)).rejects.toThrow(
+      'Static Serve service UndecoratedStaticServe not found.',
+    );
+  });
+
+  it('should return undefined when staticServeClass is null', async () => {
+    const result = await service.prepare(null as unknown as undefined);
+
+    expect(result).toBeUndefined();
+  });
+
   it('should throw error when service is not found', async () => {
     mockContainer.resolve = mock(() => null);
 
@@ -57,7 +71,7 @@ describe('PrepareStaticServeConfigService', () => {
   it('should throw error when service is an array', async () => {
     mockContainer.resolve = mock(() => []);
 
-    expect(service.prepare({} as any)).rejects.toThrow('Static serve service cannot be array');
+    expect(service.prepare(MockStaticServeMiddleware)).rejects.toThrow('Static serve service cannot be array');
   });
 
   it('should prepare static serve config with all properties', async () => {

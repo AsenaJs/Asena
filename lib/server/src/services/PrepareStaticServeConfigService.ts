@@ -23,8 +23,12 @@ export class PrepareStaticServeConfigService implements ICoreService {
     const name = getOwnTypedMetadata<string>(ComponentConstants.NameKey, staticServeClass);
     const root = getOwnTypedMetadata<string>(ComponentConstants.StaticServeRootKey, staticServeClass);
 
+    if (!name) {
+      throw new Error(`Static Serve service ${staticServeClass.name} not found.`);
+    }
+
     const staticServeServiceInstance: AsenaStaticServeService<any>[] | AsenaStaticServeService<any> | null =
-      await this.container.resolve<AsenaStaticServeService<any>>(name || staticServeClass.name);
+      await this.container.resolve<AsenaStaticServeService<any>>(name);
 
     if (!staticServeServiceInstance) {
       throw new Error(`Static Serve service ${name} not found.`);
