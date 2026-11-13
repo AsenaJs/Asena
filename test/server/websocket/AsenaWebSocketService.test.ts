@@ -51,6 +51,22 @@ describe('AsenaWebSocketService', () => {
     expect(service.server?.to).toHaveBeenCalledWith('base', testData);
   });
 
+  test('to() method treats a null namespace like an empty one', () => {
+    const testData = { message: 'test' };
+
+    service.namespace = 'base';
+
+    service.to(null as unknown as string, testData);
+
+    expect(service.server?.to).toHaveBeenCalledWith('base', testData);
+  });
+
+  test('to() method throws when no server is attached', () => {
+    service.server = null;
+
+    expect(() => service.to('test-room', {})).toThrow('WebSocket server is not attached');
+  });
+
   test('to() method throws error for invalid namespace', () => {
     // @ts-ignore
     expect(() => service.to({ test: 'hello' })).toThrow('Namespace must be a string');
