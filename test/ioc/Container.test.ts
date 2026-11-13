@@ -271,7 +271,9 @@ describe('Container', () => {
 
     expect(spy).toBeCalled();
 
-    expect(spy).toHaveBeenCalledWith(TestClass, ['TestClass']);
+    const chain = spy.mock.calls[0]?.[1] as { key: string }[];
+
+    expect(chain.map((link) => link.key)).toEqual(['TestClass']);
   });
 
   test('should inject dependency', async () => {

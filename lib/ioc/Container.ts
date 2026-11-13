@@ -20,12 +20,12 @@ import { resolveDependencyName } from './helper/iocHelper';
 import { collectValueFields, readValue } from './helper/valueResolver';
 
 /**
- * The resolution path of the construction a start hook or post-processor runs inside. `active`
- * turns false once that construction settles, so a timer created by a hook cannot inherit a
- * path that is no longer being resolved.
+ * One component in a resolution chain. `active` turns false once the resolve that created it
+ * settles, so a resolve started from a hook can carry a chain whose links are finished without
+ * reading them as a cycle.
  */
-interface ResolutionFrame {
-  readonly path: readonly string[];
+interface ChainLink {
+  readonly key: string;
   active: boolean;
 }
 
@@ -65,10 +65,10 @@ export class Container {
   private overriddenKeys = new Set<string>();
 
   /**
-   * Carries the path into user code (start hooks, post-processors) that re-enters the container
-   * without a path parameter. Scoped per container, so two containers never see each other.
+   * Carries the chain into user code (start hooks, post-processors) that re-enters the container
+   * without a chain parameter. Scoped per container, so two containers never see each other.
    */
-  private readonly resolutionFrames = new AsyncLocalStorage<ResolutionFrame>();
+  private readonly resolutionChains = new AsyncLocalStorage<readonly ChainLink[]>();
 
   /** Key -> entries that live there only as an alias of their own key (see `registerAlias`). */
   private aliases = new Map<string, Set<ContainerService>>();
@@ -108,7 +108,9 @@ export class Container {
       return this._services[key] as ContainerService;
     }
 
-    const instance = singleton ? await this.prepareInstance(Class, [...this.currentPath(), key]) : null;
+    const instance = singleton
+      ? await this.enterChain(this.currentPath(), key, (chain) => this.prepareInstance(Class, chain))
+      : null;
 
     if (singleton) {
       this.trackLifecycle(key, instance, Class);
@@ -249,18 +251,16 @@ export class Container {
     return this.resolveChain<T>(key, this.currentPath());
   }
 
-  /** The path of the construction this call runs inside, empty when it starts a fresh chain. */
-  private currentPath(): readonly string[] {
-    const frame = this.resolutionFrames.getStore();
-
-    return frame?.active ? frame.path : [];
+  /** The chain of the construction this call runs inside, empty when it starts a fresh chain. */
+  private currentPath(): readonly ChainLink[] {
+    return this.resolutionChains.getStore() ?? [];
   }
 
   /**
-   * The resolution path belongs to one call chain, not to the container: two resolves in flight at
-   * once must not see each other's keys. Each hop passes `[...path, key]` down to what it creates.
+   * The resolution chain belongs to one call chain, not to the container: two resolves in flight at
+   * once must not see each other's keys. Each hop hands the chain it extends to what it creates.
    */
-  private async resolveChain<T>(key: string, path: readonly string[]): Promise<(T | T[]) | null> {
+  private async resolveChain<T>(key: string, path: readonly ChainLink[]): Promise<(T | T[]) | null> {
     this.assertNotCircular(path, key);
 
     const service = this._services[key];
@@ -269,18 +269,36 @@ export class Container {
       throw new UnregisteredDependencyError(key + ' is not registered');
     }
 
-    const chain = [...path, key];
-
-    if (Array.isArray(service)) {
-      return await this.resolveMultipleContainerService<T>(service, chain);
-    }
-
-    return await this.resolveContainerService<T>(service, chain);
+    return this.enterChain<T | T[]>(path, key, (chain) =>
+      Array.isArray(service)
+        ? this.resolveMultipleContainerService<T>(service, chain)
+        : this.resolveContainerService<T>(service, chain),
+    );
   }
 
-  private assertNotCircular(path: readonly string[], key: string): void {
-    if (path.includes(key)) {
-      throw new CircularDependencyError(cycleMessage([...path, key]));
+  /**
+   * Runs `work` with the chain extended by `key`. The link is retired when `work` settles, and
+   * links already retired are dropped from the chain handed on.
+   */
+  private async enterChain<T>(
+    path: readonly ChainLink[],
+    key: string,
+    work: (chain: readonly ChainLink[]) => Promise<T>,
+  ): Promise<T> {
+    const link: ChainLink = { key, active: true };
+
+    try {
+      return await work([...path.filter((entry) => entry.active), link]);
+    } finally {
+      link.active = false;
+    }
+  }
+
+  private assertNotCircular(path: readonly ChainLink[], key: string): void {
+    const live = path.filter((entry) => entry.active);
+
+    if (live.some((entry) => entry.key === key)) {
+      throw new CircularDependencyError(cycleMessage([...live.map((entry) => entry.key), key]));
     }
   }
 
@@ -314,7 +332,7 @@ export class Container {
     return this.resolveStrategyChain<T>(key, this.currentPath());
   }
 
-  private async resolveStrategyChain<T>(key: string, path: readonly string[]): Promise<T[]> {
+  private async resolveStrategyChain<T>(key: string, path: readonly ChainLink[]): Promise<T[]> {
     // A cycle running through a strategy key must still be reported rather than recursing
     // until the stack overflows
     this.assertNotCircular(path, key);
@@ -325,11 +343,11 @@ export class Container {
       return [];
     }
 
-    const chain = [...path, key];
-
-    return Array.isArray(service)
-      ? await this.resolveMultipleContainerService<T>(service, chain)
-      : [await this.resolveContainerService<T>(service, chain)];
+    return this.enterChain(path, key, async (chain) =>
+      Array.isArray(service)
+        ? await this.resolveMultipleContainerService<T>(service, chain)
+        : [await this.resolveContainerService<T>(service, chain)],
+    );
   }
 
   /**
@@ -349,13 +367,13 @@ export class Container {
     for (const [key, containerService] of matchingServices) {
       this.assertNotCircular(path, key);
 
-      const chain = [...path, key];
-
-      if (Array.isArray(containerService)) {
-        instances.push(await this.resolveMultipleContainerService<T>(containerService, chain));
-      } else {
-        instances.push(await this.resolveContainerService<T>(containerService, chain));
-      }
+      instances.push(
+        await this.enterChain<T | T[]>(path, key, (chain) =>
+          Array.isArray(containerService)
+            ? this.resolveMultipleContainerService<T>(containerService, chain)
+            : this.resolveContainerService<T>(containerService, chain),
+        ),
+      );
     }
 
     return instances;
@@ -382,7 +400,7 @@ export class Container {
     return matches;
   }
 
-  private async resolveContainerService<T>(containerService: ContainerService, path: readonly string[]): Promise<T> {
+  private async resolveContainerService<T>(containerService: ContainerService, path: readonly ChainLink[]): Promise<T> {
     if (!containerService.singleton) {
       return await this.prepareInstance<T>(containerService.Class, path);
     }
@@ -396,7 +414,7 @@ export class Container {
 
   private async resolveMultipleContainerService<T>(
     containerService: ContainerService[],
-    path: readonly string[],
+    path: readonly ChainLink[],
   ): Promise<T[]> {
     return Promise.all(containerService.map(async (_service) => this.resolveContainerService<T>(_service, path)));
   }
@@ -432,40 +450,34 @@ export class Container {
     return this.lifecycleComponents;
   }
 
-  private async prepareInstance<T>(Class: Class, path: readonly string[]) {
-    // The frame covers construction too: a constructor or field initializer is user code that
+  private async prepareInstance<T>(Class: Class, path: readonly ChainLink[]) {
+    // The chain covers construction too: a constructor or field initializer is user code that
     // may resolve its own key, and it must see this chain rather than an empty one.
-    const frame: ResolutionFrame = { path, active: true };
+    return await this.resolutionChains.run(path, async () => {
+      const newInstance = new Class();
 
-    try {
-      return await this.resolutionFrames.run(frame, async () => {
-        const newInstance = new Class();
+      this.injectValues(newInstance, Class); // configuration injection
 
-        this.injectValues(newInstance, Class); // configuration injection
+      await this.injectDependencies(newInstance, Class, path); // dependency injection
 
-        await this.injectDependencies(newInstance, Class, path); // dependency injection
+      await this.injectStrategies(newInstance, Class, path); // strategy injection
 
-        await this.injectStrategies(newInstance, Class, path); // strategy injection
+      // Post-processing (skipped when postProcessors is empty - zero overhead)
+      let processed: any = newInstance;
 
-        // Post-processing (skipped when postProcessors is empty - zero overhead)
-        let processed: any = newInstance;
+      for (const processor of this.postProcessors) {
+        processed = (await processor.postProcess(processed, Class)) ?? processed;
+      }
 
-        for (const processor of this.postProcessors) {
-          processed = (await processor.postProcess(processed, Class)) ?? processed;
-        }
+      // Deferred mode leaves the start hooks to LifecycleService. The hook runs against the
+      // *processed* instance either way - a post-processor may have returned a proxy, and the
+      // hook has to see the same object every other component was injected with.
+      if (this.startHookMode === 'immediate') {
+        await this.executeStartHooks(processed, Class);
+      }
 
-        // Deferred mode leaves the start hooks to LifecycleService. The hook runs against the
-        // *processed* instance either way - a post-processor may have returned a proxy, and the
-        // hook has to see the same object every other component was injected with.
-        if (this.startHookMode === 'immediate') {
-          await this.executeStartHooks(processed, Class);
-        }
-
-        return processed as T;
-      });
-    } finally {
-      frame.active = false;
-    }
+      return processed as T;
+    });
   }
 
   /**
@@ -549,7 +561,7 @@ export class Container {
     return methods;
   }
 
-  private async injectStrategies(newInstance: any, Class: Class, path: readonly string[]) {
+  private async injectStrategies(newInstance: any, Class: Class, path: readonly ChainLink[]) {
     const prototypeChain = this.getPrototypeChain(Class);
 
     for (const classInChain of prototypeChain.reverse()) {
@@ -616,7 +628,7 @@ export class Container {
     }
   }
 
-  private async injectDependencies(newInstance: any, Class: Class, path: readonly string[]) {
+  private async injectDependencies(newInstance: any, Class: Class, path: readonly ChainLink[]) {
     const prototypeChain = this.getPrototypeChain(Class);
 
     for (const classInChain of prototypeChain.reverse()) {
