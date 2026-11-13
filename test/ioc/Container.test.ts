@@ -460,6 +460,16 @@ describe('Container', () => {
     }).toThrow("Service 'TestInstance' is already registered");
   });
 
+  test('registerInstance rejects null and undefined without taking the key', async () => {
+    await expect(container.registerInstance('Empty', null)).rejects.toThrow(TypeError);
+    await expect(container.registerInstance('Empty', undefined)).rejects.toThrow(TypeError);
+
+    const instance = { ok: true };
+    await container.registerInstance('Empty', instance);
+
+    expect(await container.resolve<typeof instance>('Empty')).toBe(instance);
+  });
+
   test('should register and resolve primitive values as instances', async () => {
     const config = { apiKey: 'test-key', timeout: 3000 };
 

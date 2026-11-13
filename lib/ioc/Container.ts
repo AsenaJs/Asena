@@ -194,8 +194,12 @@ export class Container {
       throw new Error(`Service '${key}' is already registered`);
     }
 
+    if (instance === null || instance === undefined) {
+      throw new TypeError(`Service '${key}' cannot be registered without an instance`);
+    }
+
     this._services[key] = {
-      Class: Object(instance).constructor,
+      Class: instance.constructor as Class,
       instance: instance,
       singleton: true,
     };
