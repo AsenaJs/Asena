@@ -195,7 +195,7 @@ describe('Container.resolveStrategy - circular detection', () => {
     await container.resolveStrategy('ToolIface');
     await container.resolveStrategy('ToolIface');
 
-    expect((container as any).circularDetector.isEmpty()).toBe(true);
+    expect(await container.resolveStrategy('ToolIface')).toHaveLength(1);
   });
 
   test('should detect a cycle that runs through the strategy key itself', async () => {

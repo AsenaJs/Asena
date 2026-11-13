@@ -271,7 +271,7 @@ describe('Container', () => {
 
     expect(spy).toBeCalled();
 
-    expect(spy).toHaveBeenCalledWith(TestClass);
+    expect(spy).toHaveBeenCalledWith(TestClass, ['TestClass']);
   });
 
   test('should inject dependency', async () => {

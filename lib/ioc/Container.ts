@@ -11,7 +11,7 @@ import type {
 } from './types';
 import { ComponentConstants } from './constants';
 import { getOwnTypedMetadata, getTypedMetadata } from '../utils';
-import { CircularDependencyDetector } from './CircularDependencyDetector';
+import { CircularDependencyError } from './CircularDependencyDetector';
 import { CORE_SERVICE } from './decorators';
 import { collectValueFields, readValue } from './helper/valueResolver';
 
@@ -45,8 +45,6 @@ export class UnregisteredDependencyError extends Error {
 
 export class Container {
   private _services: { [key: string]: ContainerService | ContainerService[] } = {};
-
-  private circularDetector = new CircularDependencyDetector();
 
   private postProcessors: ComponentPostProcessor[] = [];
 
@@ -90,7 +88,7 @@ export class Container {
       return this._services[key] as ContainerService;
     }
 
-    const instance = singleton ? await this.prepareInstance(Class) : null;
+    const instance = singleton ? await this.prepareInstance(Class, []) : null;
 
     if (singleton) {
       this.trackLifecycle(key, instance, Class);
@@ -224,24 +222,34 @@ export class Container {
   }
 
   public async resolve<T>(key: string): Promise<(T | T[]) | null> {
-    // Check circular dependency
-    this.circularDetector.checkCircular(key);
-    this.circularDetector.push(key);
+    return this.resolveChain<T>(key, []);
+  }
 
-    try {
-      const service = this._services[key];
+  /**
+   * The resolution path belongs to one call chain, not to the container: two resolves in flight at
+   * once must not see each other's keys. Each hop passes `[...path, key]` down to what it creates.
+   */
+  private async resolveChain<T>(key: string, path: readonly string[]): Promise<(T | T[]) | null> {
+    this.assertNotCircular(path, key);
 
-      if (!service) {
-        throw new UnregisteredDependencyError(key + ' is not registered');
-      }
+    const service = this._services[key];
 
-      if (Array.isArray(service)) {
-        return await this.resolveMultipleContainerService<T>(service);
-      }
+    if (!service) {
+      throw new UnregisteredDependencyError(key + ' is not registered');
+    }
 
-      return await this.resolveContainerService<T>(service);
-    } finally {
-      this.circularDetector.pop(key);
+    const chain = [...path, key];
+
+    if (Array.isArray(service)) {
+      return await this.resolveMultipleContainerService<T>(service, chain);
+    }
+
+    return await this.resolveContainerService<T>(service, chain);
+  }
+
+  private assertNotCircular(path: readonly string[], key: string): void {
+    if (path.includes(key)) {
+      throw new CircularDependencyError(`Circular dependency detected: ${[...path, key].join(' -> ')}`);
     }
   }
 
@@ -272,24 +280,25 @@ export class Container {
    * @returns {Promise<T[]>} Every implementation, empty when the key has none
    */
   public async resolveStrategy<T>(key: string): Promise<T[]> {
-    // Kept from resolve(): a cycle running through a strategy key must still be reported
-    // rather than recursing until the stack overflows
-    this.circularDetector.checkCircular(key);
-    this.circularDetector.push(key);
+    return this.resolveStrategyChain<T>(key, []);
+  }
 
-    try {
-      const service = this._services[key];
+  private async resolveStrategyChain<T>(key: string, path: readonly string[]): Promise<T[]> {
+    // A cycle running through a strategy key must still be reported rather than recursing
+    // until the stack overflows
+    this.assertNotCircular(path, key);
 
-      if (!service) {
-        return [];
-      }
+    const service = this._services[key];
 
-      return Array.isArray(service)
-        ? await this.resolveMultipleContainerService<T>(service)
-        : [await this.resolveContainerService<T>(service)];
-    } finally {
-      this.circularDetector.pop(key);
+    if (!service) {
+      return [];
     }
+
+    const chain = [...path, key];
+
+    return Array.isArray(service)
+      ? await this.resolveMultipleContainerService<T>(service, chain)
+      : [await this.resolveContainerService<T>(service, chain)];
   }
 
   /**
@@ -307,9 +316,9 @@ export class Container {
 
     for (const containerService of matchingServices) {
       if (Array.isArray(containerService)) {
-        instances.push(await this.resolveMultipleContainerService<T>(containerService));
+        instances.push(await this.resolveMultipleContainerService<T>(containerService, []));
       } else {
-        instances.push(await this.resolveContainerService<T>(containerService));
+        instances.push(await this.resolveContainerService<T>(containerService, []));
       }
     }
 
@@ -337,9 +346,9 @@ export class Container {
     return matches;
   }
 
-  private async resolveContainerService<T>(containerService: ContainerService): Promise<T> {
+  private async resolveContainerService<T>(containerService: ContainerService, path: readonly string[]): Promise<T> {
     if (!containerService.singleton) {
-      return await this.prepareInstance<T>(containerService.Class);
+      return await this.prepareInstance<T>(containerService.Class, path);
     }
 
     if (!containerService.instance) {
@@ -349,8 +358,11 @@ export class Container {
     return containerService.instance as T;
   }
 
-  private async resolveMultipleContainerService<T>(containerService: ContainerService[]): Promise<T[]> {
-    return Promise.all(containerService.map(async (_service) => this.resolveContainerService<T>(_service)));
+  private async resolveMultipleContainerService<T>(
+    containerService: ContainerService[],
+    path: readonly string[],
+  ): Promise<T[]> {
+    return Promise.all(containerService.map(async (_service) => this.resolveContainerService<T>(_service, path)));
   }
 
   /**
@@ -384,14 +396,14 @@ export class Container {
     return this.lifecycleComponents;
   }
 
-  private async prepareInstance<T>(Class: Class) {
+  private async prepareInstance<T>(Class: Class, path: readonly string[]) {
     const newInstance = new Class();
 
     this.injectValues(newInstance, Class); // configuration injection
 
-    await this.injectDependencies(newInstance, Class); // dependency injection
+    await this.injectDependencies(newInstance, Class, path); // dependency injection
 
-    await this.injectStrategies(newInstance, Class); // strategy injection
+    await this.injectStrategies(newInstance, Class, path); // strategy injection
 
     // Post-processing (skipped when postProcessors is empty - zero overhead)
     let processed: any = newInstance;
@@ -488,7 +500,7 @@ export class Container {
     return methods;
   }
 
-  private async injectStrategies(newInstance: any, Class: Class) {
+  private async injectStrategies(newInstance: any, Class: Class, path: readonly string[] = []) {
     const prototypeChain = this.getPrototypeChain(Class);
 
     for (const classInChain of prototypeChain.reverse()) {
@@ -515,7 +527,7 @@ export class Container {
 
         if (strategyProperty?.value !== undefined) continue;
 
-        const strategy: Class[] = await this.resolveStrategy<Class>(interfaceName);
+        const strategy: Class[] = await this.resolveStrategyChain<Class>(interfaceName, path);
 
         const expression: Expressions = getOwnTypedMetadata<Expressions>(
           ComponentConstants.ExpressionKey,
@@ -555,7 +567,7 @@ export class Container {
     }
   }
 
-  private async injectDependencies(newInstance: any, Class: Class) {
+  private async injectDependencies(newInstance: any, Class: Class, path: readonly string[]) {
     const prototypeChain = this.getPrototypeChain(Class);
 
     for (const classInChain of prototypeChain.reverse()) {
@@ -573,7 +585,7 @@ export class Container {
         let instance: Class | Class[];
 
         try {
-          instance = await this.resolve<Class>(name);
+          instance = await this.resolveChain<Class>(name, path);
         } catch (error) {
           // Only the container's own miss, and only once: a nested miss arrives already
           // wrapped in a plain Error, and anything else - CircularDependencyError, a failed
