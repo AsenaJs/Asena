@@ -16,6 +16,7 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 import { CircularDependencyError } from './CircularDependencyDetector';
 import { cycleMessage } from './cycleMessage';
 import { CORE_SERVICE } from './decorators';
+import { resolveDependencyName } from './helper/iocHelper';
 import { collectValueFields, readValue } from './helper/valueResolver';
 
 /**
@@ -637,10 +638,7 @@ export class Container {
 
         // @Inject(Class) snapshots the name at decoration time; registration reads it at boot,
         // so a class named after its dependent is looked up by the name it was registered under.
-        const dependencyClass = dependencyClasses?.[k];
-        const name = dependencyClass
-          ? (getTypedMetadata<string>(ComponentConstants.NameKey, dependencyClass) ?? dependencyClass.name)
-          : frozenName;
+        const name = resolveDependencyName(frozenName, dependencyClasses?.[k]);
 
         let instance: Class | Class[] | null;
 

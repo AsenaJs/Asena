@@ -1,6 +1,7 @@
 import {
   type ComponentPostProcessor,
   ComponentType,
+  type DependencyClasses,
   type Dependencies,
   type ICoreService,
   ICoreServiceNames,
@@ -14,7 +15,7 @@ import * as path from 'node:path';
 import type { Class } from '../server/types';
 import { ComponentConstants } from './constants';
 import * as process from 'node:process';
-import { getStrategyClass } from './helper/iocHelper';
+import { getStrategyClass, resolveDependencyName } from './helper/iocHelper';
 import { getOwnTypedMetadata, getTypedMetadata } from '../utils';
 import { getComponentsDeclaredIn, Inject, Scope } from './component';
 import { CoreService } from './decorators';
@@ -754,8 +755,12 @@ export class IocEngine implements ICoreService {
 
   private getDependencies(component: Class): string[] {
     try {
-      const directDependencies = Object.values(
-        getOwnTypedMetadata<Dependencies>(ComponentConstants.DependencyKey, component) || {},
+      const dependencies = getOwnTypedMetadata<Dependencies>(ComponentConstants.DependencyKey, component) || {};
+      const dependencyClasses =
+        getOwnTypedMetadata<DependencyClasses>(ComponentConstants.DependencyClassKey, component) || {};
+
+      const directDependencies = Object.entries(dependencies).map(([field, frozenName]) =>
+        resolveDependencyName(frozenName, dependencyClasses[field]),
       );
 
       const softDependencies = Object.values(
