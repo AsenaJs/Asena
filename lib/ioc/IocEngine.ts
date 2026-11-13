@@ -759,8 +759,8 @@ export class IocEngine implements ICoreService {
       const dependencyClasses =
         getOwnTypedMetadata<DependencyClasses>(ComponentConstants.DependencyClassKey, component) || {};
 
-      const directDependencies = Object.entries(dependencies).map(([field, frozenName]) =>
-        resolveDependencyName(frozenName, dependencyClasses[field]),
+      const directDependencies = Object.entries(dependencies).map(([field, injectedName]) =>
+        resolveDependencyName(injectedName, dependencyClasses[field]),
       );
 
       const softDependencies = Object.values(

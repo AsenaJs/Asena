@@ -1,7 +1,8 @@
 import * as path from 'node:path';
-import type { Container, ContainerService, Dependencies, Strategies } from '../ioc';
+import type { Container, ContainerService, Dependencies, DependencyClasses, Strategies } from '../ioc';
 import { ComponentConstants, ComponentType } from '../ioc';
 import { Scope } from '../ioc/component/Scope';
+import { resolveDependencyName } from '../ioc/helper/iocHelper';
 import { collectValueFields } from '../ioc/helper/valueResolver';
 import {
   getChainedTypedMetadata,
@@ -90,11 +91,16 @@ const ofType = (components: ComponentEntry[], type: ComponentType): ComponentEnt
 
 const describeDependencies = (Class: Class): DevtoolsDependency[] => {
   const injected = getChainedTypedMetadata<Dependencies>(ComponentConstants.DependencyKey, Class);
+  const injectedClasses = getChainedTypedMetadata<DependencyClasses>(ComponentConstants.DependencyClassKey, Class);
   const strategies = getChainedTypedMetadata<Strategies>(ComponentConstants.StrategyKey, Class);
   const soft = getChainedTypedMetadata<Dependencies>(ComponentConstants.SoftDependencyKey, Class);
 
   const dependencies: DevtoolsDependency[] = [
-    ...Object.entries(injected).map(([field, target]) => ({ field, target, kind: 'inject' as const })),
+    ...Object.entries(injected).map(([field, target]) => ({
+      field,
+      target: resolveDependencyName(target, injectedClasses[field]),
+      kind: 'inject' as const,
+    })),
     ...Object.entries(strategies)
       .filter(([, target]) => Boolean(target))
       .map(([field, target]) => ({ field, target, kind: 'strategy' as const })),

@@ -136,6 +136,21 @@ describe('discoverInjectedFieldsFromClass', () => {
     expect(discoverInjectedFieldsFromClass(NoDependencies)).toEqual([]);
   });
 
+  test('should report the name a class-injected dependency registers under', () => {
+    class LateNamed {}
+
+    class Holder {
+      @Inject(LateNamed)
+      private late!: LateNamed;
+    }
+
+    Component('RealLateNamed')(LateNamed);
+
+    expect(discoverInjectedFieldsFromClass(Holder)).toEqual([
+      { fieldName: 'late', serviceName: 'RealLateNamed', serviceClass: LateNamed, expression: undefined },
+    ]);
+  });
+
   test('should return an empty array for undefined and native constructors', () => {
     expect(discoverInjectedFieldsFromClass(undefined)).toEqual([]);
     expect(discoverInjectedFieldsFromClass(Object)).toEqual([]);

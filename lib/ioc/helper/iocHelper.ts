@@ -3,11 +3,11 @@ import { getTypedMetadata } from '../../utils/typedMetadata';
 import { ComponentConstants } from '../constants';
 import type { Class } from '../../server/types';
 
-// A class-based @Inject is looked up by the dependency's registered name, not the name frozen at decoration time.
-export const resolveDependencyName = (frozenName: string, dependencyClass: Class | undefined): string =>
+// The name a class-injected dependency registers under; a string injection keeps the name it was given.
+export const resolveDependencyName = (injectedName: string, dependencyClass: Class | undefined): string =>
   dependencyClass
-    ? (getTypedMetadata<string>(ComponentConstants.NameKey, dependencyClass) ?? dependencyClass.name)
-    : frozenName;
+    ? getTypedMetadata<string>(ComponentConstants.NameKey, dependencyClass) || dependencyClass.name
+    : injectedName;
 
 // make it proper class
 export const getStrategyClass = (
