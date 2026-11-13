@@ -1446,7 +1446,7 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
     const onErrorStep = `${this.configName(config)}.onError`;
 
     if (!service.hasHandlers) {
-      if (!config?.onError) {
+      if (typeof config?.onError !== 'function') {
         return;
       }
 
@@ -1474,7 +1474,7 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
         );
       }
 
-      if (config?.onError) {
+      if (typeof config?.onError === 'function') {
         devtoolsBus.step('config-onError', onErrorStep);
 
         // Passed as received, as the lone hook is: a value wrapped here would differ from 0.12's.
@@ -1528,7 +1528,7 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
     const onNotFoundStep = `${this.configName(config)}.onNotFound`;
 
     if (!service.hasNotFoundHandler) {
-      if (!config?.onNotFound) {
+      if (typeof config?.onNotFound !== 'function') {
         return;
       }
 
@@ -1544,7 +1544,7 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
         return fromHandler;
       }
 
-      if (config?.onNotFound) {
+      if (typeof config?.onNotFound === 'function') {
         devtoolsBus.step('not-found', onNotFoundStep);
 
         const fromConfig = await config.onNotFound(context, request);
