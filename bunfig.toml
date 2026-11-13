@@ -37,6 +37,7 @@ sortTailwindcss = false
 sortPackageJson = false
 jsdoc = false
 insertFinalNewline = true
+flavor = "prettier"
 ignorePatterns = [
   ".changeset/",
   ".claude/",
