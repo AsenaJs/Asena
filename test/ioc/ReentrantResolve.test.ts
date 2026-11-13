@@ -89,3 +89,30 @@ class TimedSelf {
     }, 0);
   }
 }
+
+class CtorSelfResolving {
+  public static failure: unknown;
+
+  public pending: Promise<void> = container.resolve('CtorSelfResolving').then(
+    () => undefined,
+    (error: unknown) => {
+      CtorSelfResolving.failure = error;
+    },
+  );
+}
+
+describe('re-entrant resolve() from a constructor or field initializer', () => {
+  test('a transient whose field initializer resolves its own key rejects with CircularDependencyError', async () => {
+    CtorSelfResolving.failure = undefined;
+    container = new Container();
+    await container.register('CtorSelfResolving', CtorSelfResolving, false);
+
+    const instance = (await container.resolve('CtorSelfResolving')) as CtorSelfResolving;
+    await instance.pending;
+
+    expect(CtorSelfResolving.failure).toBeInstanceOf(CircularDependencyError);
+    expect((CtorSelfResolving.failure as Error).message).toBe(
+      'Circular dependency detected: CtorSelfResolving -> CtorSelfResolving',
+    );
+  });
+});

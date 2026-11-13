@@ -423,20 +423,20 @@ export class Container {
   }
 
   private async prepareInstance<T>(Class: Class, path: readonly string[]) {
-    const newInstance = new Class();
-
-    this.injectValues(newInstance, Class); // configuration injection
-
-    await this.injectDependencies(newInstance, Class, path); // dependency injection
-
-    await this.injectStrategies(newInstance, Class, path); // strategy injection
-
-    // Post-processors and start hooks are user code that may call back into the container
-    // without a path, so they run inside the frame that carries this chain.
+    // The frame covers construction too: a constructor or field initializer is user code that
+    // may resolve its own key, and it must see this chain rather than an empty one.
     const frame: ResolutionFrame = { path, active: true };
 
     try {
       return await this.resolutionFrames.run(frame, async () => {
+        const newInstance = new Class();
+
+        this.injectValues(newInstance, Class); // configuration injection
+
+        await this.injectDependencies(newInstance, Class, path); // dependency injection
+
+        await this.injectStrategies(newInstance, Class, path); // strategy injection
+
         // Post-processing (skipped when postProcessors is empty - zero overhead)
         let processed: any = newInstance;
 
