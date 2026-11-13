@@ -133,3 +133,48 @@ describe('re-entrant resolveAll() that rebuilds its own caller', () => {
     expect((rootCause(caught) as Error).message).toBe('Circular dependency detected: SoloAll -> SoloAll');
   });
 });
+
+let registerHopEntries = 0;
+
+@Service()
+class RegisterHopSingleton {
+  @OnStart()
+  public async onStart(): Promise<void> {
+    registerHopEntries++;
+
+    if (registerHopEntries > REENTRY_LIMIT) {
+      throw new Error('re-entered past the limit: the cycle was not detected');
+    }
+
+    await container.resolve('RegisterHopProto');
+  }
+}
+
+@Service()
+class RegisterHopProto {
+  @OnStart()
+  public async onStart(): Promise<void> {
+    await container.register('RegisterHopSingleton', RegisterHopSingleton, true);
+  }
+}
+
+describe('re-entrant register() from a start hook', () => {
+  test('a cycle through a singleton registered inside a hook rejects with CircularDependencyError', async () => {
+    registerHopEntries = 0;
+    container = new Container();
+    await container.register('RegisterHopProto', RegisterHopProto, false);
+
+    let caught: unknown;
+
+    try {
+      await container.resolve('RegisterHopProto');
+    } catch (error) {
+      caught = error;
+    }
+
+    expect(rootCause(caught)).toBeInstanceOf(CircularDependencyError);
+    expect((rootCause(caught) as Error).message).toBe(
+      'Circular dependency detected: RegisterHopProto -> RegisterHopSingleton -> RegisterHopProto',
+    );
+  });
+});

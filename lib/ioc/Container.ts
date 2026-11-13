@@ -106,7 +106,7 @@ export class Container {
       return this._services[key] as ContainerService;
     }
 
-    const instance = singleton ? await this.prepareInstance(Class, []) : null;
+    const instance = singleton ? await this.prepareInstance(Class, [...this.currentPath(), key]) : null;
 
     if (singleton) {
       this.trackLifecycle(key, instance, Class);
