@@ -1384,8 +1384,8 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
     const hasConfigOnError = typeof config?.onError === 'function';
     const hasConfigOnNotFound = typeof config?.onNotFound === 'function';
 
-    await this.wireErrorChain(config, hasConfigOnError);
-    await this.wireNotFoundChain(config, hasConfigOnNotFound);
+    await this.wireErrorChain(config);
+    await this.wireNotFoundChain(config);
 
     // Deprecations come last on purpose. The warnings above say something is wrong *now* - a
     // handler that will never run - and a reader scanning for the first line about `onNotFound`
@@ -1423,20 +1423,20 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
   /**
    * @description Hand the adapter whatever should answer a thrown error
    * @param {AsenaConfig} config - The resolved @Config, if there is one
-   * @param {boolean} hasConfigOnError - Whether it declares the deprecated onError() hook
    * @returns {Promise<void>}
    */
-  private async wireErrorChain(config: AsenaConfig | undefined, hasConfigOnError: boolean): Promise<void> {
+  private async wireErrorChain(config: AsenaConfig | undefined): Promise<void> {
     const service = this.prepareExceptionHandlerService;
+    const onError = typeof config?.onError === 'function' ? config.onError.bind(config) : undefined;
 
-    if (!service.hasHandlers && !hasConfigOnError) {
+    if (!service.hasHandlers && !onError) {
       return;
     }
 
     if (!this._adapter) {
       // Only the config hook is reported: it is HTTP-only, so headless really does ignore it.
       // @Catch handlers are not - they still see @On, @EventPattern and @MessagePattern failures.
-      if (hasConfigOnError) {
+      if (onError) {
         this._logger.warn('Headless mode: onError() ignored (no HTTP adapter)');
       }
 
@@ -1446,12 +1446,12 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
     const onErrorStep = `${this.configName(config)}.onError`;
 
     if (!service.hasHandlers) {
-      if (typeof config?.onError !== 'function') {
+      if (!onError) {
         return;
       }
 
       // Nothing to put in front of it, so it goes over unwrapped - byte-identical to 0.10 unless the console is attached.
-      await this._adapter.onError(devtoolsBus.wrap('config-onError', onErrorStep, config.onError.bind(config)));
+      await this._adapter.onError(devtoolsBus.wrap('config-onError', onErrorStep, onError));
 
       return;
     }
@@ -1494,13 +1494,13 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
   /**
    * @description Hand the adapter whatever should answer an unmatched route
    * @param {AsenaConfig} config - The resolved @Config, if there is one
-   * @param {boolean} hasConfigOnNotFound - Whether it declares the deprecated onNotFound() hook
    * @returns {Promise<void>}
    */
-  private async wireNotFoundChain(config: AsenaConfig | undefined, hasConfigOnNotFound: boolean): Promise<void> {
+  private async wireNotFoundChain(config: AsenaConfig | undefined): Promise<void> {
     const service = this.prepareExceptionHandlerService;
+    const onNotFound = typeof config?.onNotFound === 'function' ? config.onNotFound.bind(config) : undefined;
 
-    if (!service.hasNotFoundHandler && !hasConfigOnNotFound) {
+    if (!service.hasNotFoundHandler && !onNotFound) {
       return;
     }
 
@@ -1528,11 +1528,11 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
     const onNotFoundStep = `${this.configName(config)}.onNotFound`;
 
     if (!service.hasNotFoundHandler) {
-      if (typeof config?.onNotFound !== 'function') {
+      if (!onNotFound) {
         return;
       }
 
-      await this._adapter.onNotFound(devtoolsBus.wrap('not-found', onNotFoundStep, config.onNotFound.bind(config)));
+      await this._adapter.onNotFound(devtoolsBus.wrap('not-found', onNotFoundStep, onNotFound));
 
       return;
     }
