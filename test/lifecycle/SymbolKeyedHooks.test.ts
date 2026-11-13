@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
 import { AsenaServerFactory } from '../../lib/server';
 import { Service } from '../../lib/server/decorators';
-import { OnStart, OnStop, PostConstruct } from '../../lib/ioc/component';
+import { OnStart, OnStop, PostConstruct, Scope } from '../../lib/ioc/component';
 import { createMockAdapter } from '../utils/createMockContext';
 import { silentLogger } from '../../lib/test/harness/silentLogger';
 
@@ -53,5 +53,56 @@ describe('symbol-keyed lifecycle hooks', () => {
     await server.stop();
 
     expect(events).toEqual(['start', 'alias', 'stop']);
+  });
+});
+
+describe('symbol-keyed hooks on failure and on transient components', () => {
+  test('a transient with a symbol-keyed @OnStop boots and is warned about by name', async () => {
+    const warnings: string[] = [];
+    const stopSymbol = Symbol('transientStop');
+
+    @Service({ scope: Scope.PROTOTYPE })
+    class TransientSymbolWorker {
+      @OnStop()
+      [stopSymbol]() {}
+    }
+
+    const server = await AsenaServerFactory.create({
+      adapter: createMockAdapter().adapter as any,
+      logger: { ...silentLogger, warn: (message: string) => warnings.push(message) } as any,
+      components: [TransientSymbolWorker],
+      shutdown: { signals: false },
+      keepAlive: false,
+    });
+
+    expect(server).toBeDefined();
+    expect(warnings.find((message) => message.includes('TransientSymbolWorker'))).toContain('Symbol(transientStop)');
+  });
+
+  test('a throwing symbol-keyed @OnStart rejects with the hook named and the original error as cause', async () => {
+    const failure = new Error('boom');
+    const failSymbol = Symbol('failStart');
+
+    @Service()
+    class FailingSymbolStart {
+      @OnStart()
+      [failSymbol]() {
+        throw failure;
+      }
+    }
+
+    const server = await AsenaServerFactory.create({
+      adapter: createMockAdapter().adapter as any,
+      logger: silentLogger,
+      components: [FailingSymbolStart],
+      shutdown: { signals: false },
+      keepAlive: false,
+    });
+
+    const error = await server.start().catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(Error);
+    expect((error as Error).message).toBe("@OnStart hook 'FailingSymbolStart.Symbol(failStart)()' failed");
+    expect((error as Error).cause).toBe(failure);
   });
 });
