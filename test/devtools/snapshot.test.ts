@@ -421,4 +421,43 @@ describe('buildDevtoolsSnapshot class injections', () => {
     expect(snapshot.components.map((component) => component.name)).toContain('MainLedger');
     expect(bookkeeper.dependencies).toEqual([{ field: 'ledger', target: 'MainLedger', kind: 'inject' }]);
   });
+
+  test('takes an inherited field from the base and a redeclared one from the subclass, as the container does', async () => {
+    class Ledger {}
+
+    class Archive {}
+
+    class Journal {}
+
+    class BaseBookkeeper {
+      @Inject(Ledger)
+      public ledger!: Ledger;
+
+      @Inject(Journal)
+      public journal!: Journal;
+    }
+
+    class AuditingBookkeeper extends BaseBookkeeper {
+      @Inject('ArchiveLedger')
+      public override ledger!: Ledger;
+    }
+
+    Service('MainLedger')(Ledger);
+    Service('ArchiveLedger')(Archive);
+    Service('MainJournal')(Journal);
+    Service()(AuditingBookkeeper);
+
+    await using app = await bootFixture([Ledger, Archive, Journal, AuditingBookkeeper]);
+
+    const bookkeeper = await app.resolve<AuditingBookkeeper>('AuditingBookkeeper');
+    const snapshot = buildDevtoolsSnapshot(app.container);
+    const described = snapshot.components.find((component) => component.name === 'AuditingBookkeeper')!;
+
+    expect(bookkeeper.ledger).toBeInstanceOf(Archive);
+    expect(bookkeeper.journal).toBeInstanceOf(Journal);
+    expect(described.dependencies).toEqual([
+      { field: 'journal', target: 'MainJournal', kind: 'inject' },
+      { field: 'ledger', target: 'ArchiveLedger', kind: 'inject' },
+    ]);
+  });
 });

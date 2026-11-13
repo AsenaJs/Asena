@@ -9,6 +9,7 @@ import {
   getChainedTypedMetadataList,
   getComponentType,
   getOwnTypedMetadata,
+  getPrototypeChainOf,
   getTypedMetadata,
 } from '../utils';
 import { ASENA_CONTEXT_CONTRACT, resolveContextContract } from '../adapter/RequestContract';
@@ -89,18 +90,28 @@ const collectComponents = (container: Container): ComponentEntry[] => {
 const ofType = (components: ComponentEntry[], type: ComponentType): ComponentEntry[] =>
   components.filter(({ Class }) => getOwnTypedMetadata<boolean>(type, Class) === true);
 
+// Per class, not merged: a field a subclass re-injects by name must not keep its base's class reference.
+const injectedTargets = (Class: Class): Record<string, string> => {
+  const targets: Record<string, string> = {};
+
+  for (const link of getPrototypeChainOf(Class)) {
+    const injected = getOwnTypedMetadata<Dependencies>(ComponentConstants.DependencyKey, link) ?? {};
+    const injectedClasses = getOwnTypedMetadata<DependencyClasses>(ComponentConstants.DependencyClassKey, link) ?? {};
+
+    for (const [field, target] of Object.entries(injected)) {
+      targets[field] = resolveDependencyName(target, injectedClasses[field]);
+    }
+  }
+
+  return targets;
+};
+
 const describeDependencies = (Class: Class): DevtoolsDependency[] => {
-  const injected = getChainedTypedMetadata<Dependencies>(ComponentConstants.DependencyKey, Class);
-  const injectedClasses = getChainedTypedMetadata<DependencyClasses>(ComponentConstants.DependencyClassKey, Class);
   const strategies = getChainedTypedMetadata<Strategies>(ComponentConstants.StrategyKey, Class);
   const soft = getChainedTypedMetadata<Dependencies>(ComponentConstants.SoftDependencyKey, Class);
 
   const dependencies: DevtoolsDependency[] = [
-    ...Object.entries(injected).map(([field, target]) => ({
-      field,
-      target: resolveDependencyName(target, injectedClasses[field]),
-      kind: 'inject' as const,
-    })),
+    ...Object.entries(injectedTargets(Class)).map(([field, target]) => ({ field, target, kind: 'inject' as const })),
     ...Object.entries(strategies)
       .filter(([, target]) => Boolean(target))
       .map(([field, target]) => ({ field, target, kind: 'strategy' as const })),
