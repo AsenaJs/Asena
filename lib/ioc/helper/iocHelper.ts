@@ -3,7 +3,7 @@ import { getTypedMetadata } from '../../utils/typedMetadata';
 import { ComponentConstants } from '../constants';
 import type { Class } from '../../server/types';
 
-// The name a class-injected dependency registers under; a string injection keeps the name it was given.
+// `||`, as registration reads it: an empty component name registers under the class name.
 export const resolveDependencyName = (injectedName: string, dependencyClass: Class | undefined): string =>
   dependencyClass
     ? getTypedMetadata<string>(ComponentConstants.NameKey, dependencyClass) || dependencyClass.name
