@@ -13,6 +13,8 @@ printWidth = 120
 singleQuote = true
 ignorePatterns = [
   ".changeset/",
+  ".claude/",
+  ".cursor/",
   ".github/",
   "*.log",
   "coverage/",
