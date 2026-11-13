@@ -48,6 +48,9 @@ export const generateHandlerParams = (params: ControllerDecoratorParams | string
     ...DEFAULT_PARAMS,
     ...params,
     path: normalizePathString(params.path),
+    middlewares: params.middlewares ?? [],
+    summary: params.summary ?? '',
+    description: params.description ?? '',
   };
 };
 
