@@ -4,39 +4,27 @@ import { ComponentConstants, type Dependencies, type Strategies } from '../../li
 import { Override } from '../../lib/server/decorators';
 import { getOwnTypedMetadata } from '../../lib/utils/typedMetadata';
 
-// Metadata is keyed by member name. A symbol-keyed member used to be stored under a
-// symbol that the container never reads, so the decorator did nothing without a word.
 describe('field decorators reject symbol-keyed members', () => {
   const memberKey = Symbol('member');
 
-  test('@Inject throws for a symbol key', () => {
+  test('@Inject throws for a symbol key and names the decorator', () => {
     class Holder {}
-    expect(() => Inject('Dep')(Holder.prototype, memberKey)).toThrow(TypeError);
+    expect(() => Inject('Dep')(Holder.prototype, memberKey)).toThrow(/@Inject supports string member names only/);
   });
 
-  test('@Value throws for a symbol key', () => {
+  test('@Value throws for a symbol key and names the decorator', () => {
     class Holder {}
-    expect(() => Value('ENV_KEY')(Holder.prototype, memberKey)).toThrow(TypeError);
+    expect(() => Value('ENV_KEY')(Holder.prototype, memberKey)).toThrow(/@Value supports string member names only/);
   });
 
-  test('@Strategy throws for a symbol key', () => {
+  test('@Strategy throws for a symbol key and names the decorator', () => {
     class Holder {}
-    expect(() => Strategy('Dep')(Holder.prototype, memberKey)).toThrow(TypeError);
+    expect(() => Strategy('Dep')(Holder.prototype, memberKey)).toThrow(/@Strategy supports string member names only/);
   });
 
-  test('@OnStart throws for a symbol key', () => {
+  test('@Override throws for a symbol key and names the decorator', () => {
     class Holder {}
-    expect(() => OnStart()(Holder.prototype, memberKey)).toThrow(TypeError);
-  });
-
-  test('@OnStop throws for a symbol key', () => {
-    class Holder {}
-    expect(() => OnStop()(Holder.prototype, memberKey)).toThrow(TypeError);
-  });
-
-  test('@Override throws for a symbol key', () => {
-    class Holder {}
-    expect(() => Override()(Holder.prototype, memberKey)).toThrow(TypeError);
+    expect(() => Override()(Holder.prototype, memberKey)).toThrow(/@Override supports string member names only/);
   });
 
   test('the same decorators accept a string member name', () => {
@@ -44,14 +32,23 @@ describe('field decorators reject symbol-keyed members', () => {
     expect(() => Inject('Dep')(Holder.prototype, 'dep')).not.toThrow();
     expect(() => Value('ENV_KEY')(Holder.prototype, 'envValue')).not.toThrow();
     expect(() => Strategy('Dep')(Holder.prototype, 'strategy')).not.toThrow();
-    expect(() => OnStart()(Holder.prototype, 'boot')).not.toThrow();
-    expect(() => OnStop()(Holder.prototype, 'halt')).not.toThrow();
     expect(() => Override()(Holder.prototype, 'handle')).not.toThrow();
   });
 });
 
-// Injecting a class that was never decorated as a component used to store `undefined`
-// as the dependency name. The name now falls back to the class name, as IocEngine does.
+describe('lifecycle decorators accept symbol-keyed members', () => {
+  test('@OnStart and @OnStop record a symbol-keyed hook', () => {
+    const boot = Symbol('boot');
+    const halt = Symbol('halt');
+    class Holder {}
+    OnStart()(Holder.prototype, boot);
+    OnStop()(Holder.prototype, halt);
+
+    expect(getOwnTypedMetadata<(string | symbol)[]>(ComponentConstants.PostConstructKey, Holder)).toEqual([boot]);
+    expect(getOwnTypedMetadata<(string | symbol)[]>(ComponentConstants.OnStopKey, Holder)).toEqual([halt]);
+  });
+});
+
 describe('class-based injection of an undecorated class', () => {
   class PlainHelper {}
 

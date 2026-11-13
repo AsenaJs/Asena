@@ -330,7 +330,7 @@ export class IocEngine implements ICoreService {
     }
 
     this.logger.warn(
-      `[IocEngine] '${name}' is transient and declares @OnStop (${stopHooks.join(', ')}), which will never ` +
+      `[IocEngine] '${name}' is transient and declares @OnStop (${stopHooks.map(String).join(', ')}), which will never ` +
         'run - the container keeps no handle on a transient instance. Make it a singleton, or release the ' +
         'resource where it is used.',
     );

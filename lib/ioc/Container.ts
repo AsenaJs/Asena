@@ -485,7 +485,7 @@ export class Container {
       try {
         await instance[hook]();
       } catch (error) {
-        throw new Error(`@OnStart hook '${Class.name}.${hook}()' failed`, { cause: error });
+        throw new Error(`@OnStart hook '${Class.name}.${String(hook)}()' failed`, { cause: error });
       }
     }
   }
@@ -499,16 +499,16 @@ export class Container {
    * @param {Class} Class - The class to inspect
    * @returns {string[]} Method names, empty when the class declares none
    */
-  public getStopHooks(Class: Class): string[] {
+  public getStopHooks(Class: Class): (string | symbol)[] {
     return this.collectHookMethods(Class, ComponentConstants.OnStopKey).reverse();
   }
 
   /**
    * @description The @OnStart method names for a class, in the order they run.
    * @param {Class} Class - The class to inspect
-   * @returns {string[]} Method names, empty when the class declares none
+   * @returns {(string | symbol)[]} Method names, empty when the class declares none
    */
-  public getStartHooks(Class: Class): string[] {
+  public getStartHooks(Class: Class): (string | symbol)[] {
     return this.collectHookMethods(Class, ComponentConstants.PostConstructKey);
   }
 
@@ -516,15 +516,18 @@ export class Container {
    * @description Collect decorated method names across the prototype chain, de-duplicated.
    * @param {Class} Class - The class to inspect
    * @param {symbol} metadataKey - Which hook list to read
-   * @returns {string[]} Method names, ancestors first
+   * @returns {(string | symbol)[]} Method names, ancestors first
    */
-  private collectHookMethods(Class: Class, metadataKey: symbol): string[] {
+  private collectHookMethods(Class: Class, metadataKey: symbol): (string | symbol)[] {
     const prototypeChain = this.getPrototypeChain(Class);
-    const methods: string[] = [];
-    const seen = new Set<string>();
+    const methods: (string | symbol)[] = [];
+    const seen = new Set<string | symbol>();
 
     for (const classInChain of prototypeChain.reverse()) {
-      const hooks: string[] | undefined = getOwnTypedMetadata<string[]>(metadataKey, classInChain);
+      const hooks: (string | symbol)[] | undefined = getOwnTypedMetadata<(string | symbol)[]>(
+        metadataKey,
+        classInChain,
+      );
 
       if (!hooks) {
         continue;

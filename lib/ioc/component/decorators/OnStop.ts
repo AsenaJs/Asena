@@ -1,6 +1,5 @@
 import { ComponentConstants } from '../../constants';
 import { defineTypedMetadata, getOwnTypedMetadata } from '../../../utils/typedMetadata';
-import { assertStringMemberKey } from '../../../utils/decoratorInput';
 
 /**
  * A decorator that marks a method to be called when the server stops.
@@ -20,14 +19,13 @@ import { assertStringMemberKey } from '../../../utils/decoratorInput';
  */
 export const OnStop = (): PropertyDecorator => {
   return (target: object, propertyKey: string | symbol): void => {
-    assertStringMemberKey(propertyKey, '@OnStop');
-
-    const hooks: string[] = getOwnTypedMetadata<string[]>(ComponentConstants.OnStopKey, target.constructor) || [];
+    const hooks: (string | symbol)[] =
+      getOwnTypedMetadata<(string | symbol)[]>(ComponentConstants.OnStopKey, target.constructor) || [];
 
     if (!hooks.includes(propertyKey)) {
       hooks.push(propertyKey);
     }
 
-    defineTypedMetadata<string[]>(ComponentConstants.OnStopKey, hooks, target.constructor);
+    defineTypedMetadata<(string | symbol)[]>(ComponentConstants.OnStopKey, hooks, target.constructor);
   };
 };
