@@ -2,7 +2,7 @@ import type { MiddlewareParams } from '../../../ioc/types/decorators/MiddlewareP
 import { defineComponent } from '../../../ioc/component';
 import { ComponentConstants, ComponentType } from '../../../ioc';
 import { defineTypedMetadata } from '../../../utils/typedMetadata';
-import { VALIDATOR_METHODS } from '../../../adapter';
+import { VALIDATOR_KEYS } from '../../../adapter/types/validatorKeys';
 
 /**
  * Decorator for defining a Middleware component.
@@ -23,11 +23,11 @@ export const Middleware = (params?: MiddlewareParams): ClassDecorator => {
 
 const assertMiddlewareDefinition = (target: Function, validator: boolean): void => {
   if (validator) {
-    const hasValidatorMethod = VALIDATOR_METHODS.some((method) => typeof target.prototype[method] === 'function');
+    const hasValidatorMethod = VALIDATOR_KEYS.some((method) => typeof target.prototype[method] === 'function');
 
     if (!hasValidatorMethod) {
       throw new Error(
-        `Class ${target.name} must implement at least one of the validator methods: ${VALIDATOR_METHODS.join(', ')}.`,
+        `Class ${target.name} must implement at least one of the validator methods: ${VALIDATOR_KEYS.join(', ')}.`,
       );
     }
   } else if (typeof target.prototype.handle !== 'function') {
