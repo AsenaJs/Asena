@@ -31,6 +31,12 @@ experimentalOperatorPosition = "end"
 singleAttributePerLine = false
 requirePragma = false
 insertPragma = false
+checkIgnorePragma = false
+sortImports = false
+sortTailwindcss = false
+sortPackageJson = false
+jsdoc = false
+insertFinalNewline = true
 ignorePatterns = [
   ".changeset/",
   ".claude/",
