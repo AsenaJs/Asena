@@ -14,6 +14,23 @@ singleQuote = true
 tabWidth = 2
 useTabs = false
 endOfLine = "lf"
+semi = true
+quoteProps = "as-needed"
+jsxSingleQuote = false
+trailingComma = "all"
+bracketSpacing = true
+bracketSameLine = false
+arrowParens = "always"
+proseWrap = "preserve"
+htmlWhitespaceSensitivity = "css"
+vueIndentScriptAndStyle = false
+embeddedLanguageFormatting = "auto"
+objectWrap = "preserve"
+experimentalTernaries = false
+experimentalOperatorPosition = "end"
+singleAttributePerLine = false
+requirePragma = false
+insertPragma = false
 ignorePatterns = [
   ".changeset/",
   ".claude/",
