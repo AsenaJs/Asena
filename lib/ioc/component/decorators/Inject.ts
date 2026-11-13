@@ -2,6 +2,7 @@ import type { Class } from '../../../server/types';
 import type { DependencyClasses, Dependencies, Expressions } from '../../types';
 import { ComponentConstants } from '../../constants';
 import { defineTypedMetadata, getOwnTypedMetadata, getTypedMetadata } from '../../../utils/typedMetadata';
+import { assertStringMemberKey } from '../../../utils/decoratorInput';
 
 /**
  * Property decorator to inject a dependency.
@@ -34,7 +35,9 @@ export const Inject = (
   Injection: Class | string | readonly [string | Class, (injectedClass: any) => any],
   expression?: (injectedClass: any) => any,
 ): PropertyDecorator => {
-  return (target: object, propertyKey: string): void => {
+  return (target: object, propertyKey: string | symbol): void => {
+    assertStringMemberKey(propertyKey, '@Inject');
+
     let dependencyName: string;
     let resolvedExpression: ((injectedClass: any) => any) | undefined = expression;
     // Kept only for class-based injections - string injections carry no class reference
@@ -45,7 +48,8 @@ export const Inject = (
       const [name, tupleExpression] = Injection;
 
       // Check Name type, it can be a Class or String
-      dependencyName = typeof name === 'string' ? name : getTypedMetadata<string>(ComponentConstants.NameKey, name);
+      dependencyName =
+        typeof name === 'string' ? name : (getTypedMetadata<string>(ComponentConstants.NameKey, name) ?? name.name);
 
       if (typeof name !== 'string') {
         dependencyClass = name;
@@ -55,10 +59,11 @@ export const Inject = (
     } else if (typeof Injection === 'string') {
       dependencyName = Injection;
     } else {
-      // Injection is a Class
-      dependencyName = getTypedMetadata<string>(ComponentConstants.NameKey, Injection);
-      // The `length === 2` guard above stops TS narrowing the tuple out of this branch
-      dependencyClass = Injection as Class;
+      // Injection is a Class. The `length === 2` guard above stops TS narrowing the tuple out of this branch.
+      const injectedClass = Injection as Class;
+
+      dependencyName = getTypedMetadata<string>(ComponentConstants.NameKey, injectedClass) ?? injectedClass.name;
+      dependencyClass = injectedClass;
     }
 
     // Store dependency

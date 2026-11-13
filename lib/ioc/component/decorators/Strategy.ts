@@ -2,6 +2,7 @@ import type { Class } from '../../../server/types';
 import type { Expressions, Strategies } from '../../types';
 import { ComponentConstants } from '../../constants';
 import { defineTypedMetadata, getOwnTypedMetadata, getTypedMetadata } from '../../../utils/typedMetadata';
+import { assertStringMemberKey } from '../../../utils/decoratorInput';
 
 /**
  * Property decorator to define a strategy.
@@ -10,13 +11,17 @@ import { defineTypedMetadata, getOwnTypedMetadata, getTypedMetadata } from '../.
  * @param expression - The expression to evaluate on the injected class.
  * @returns {PropertyDecorator} - The property decorator function.
  */
-export const Strategy = (Injection: Class | string, expression?: (injectedClass) => any): PropertyDecorator => {
-  return (target: object, propertyKey: string) => {
+export const Strategy = (Injection: Class | string, expression?: (injectedClass: any) => any): PropertyDecorator => {
+  return (target: object, propertyKey: string | symbol) => {
+    assertStringMemberKey(propertyKey, '@Strategy');
+
     const strategies: Strategies =
       getOwnTypedMetadata<Strategies>(ComponentConstants.StrategyKey, target.constructor) || {};
 
     const injectionName =
-      typeof Injection === 'string' ? Injection : getTypedMetadata<string>(ComponentConstants.NameKey, Injection);
+      typeof Injection === 'string'
+        ? Injection
+        : (getTypedMetadata<string>(ComponentConstants.NameKey, Injection) ?? Injection.name);
 
     if (!strategies[propertyKey]) {
       strategies[propertyKey] = injectionName;

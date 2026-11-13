@@ -1,5 +1,6 @@
 import { ComponentConstants } from '../../constants';
 import { defineTypedMetadata, getOwnTypedMetadata } from '../../../utils/typedMetadata';
+import { assertStringMemberKey } from '../../../utils/decoratorInput';
 
 /**
  * A decorator that marks a method to be called when the server starts.
@@ -26,7 +27,9 @@ import { defineTypedMetadata, getOwnTypedMetadata } from '../../../utils/typedMe
  * @returns {PropertyDecorator} The property decorator function.
  */
 export const OnStart = (): PropertyDecorator => {
-  return (target: object, propertyKey: string): void => {
+  return (target: object, propertyKey: string | symbol): void => {
+    assertStringMemberKey(propertyKey, '@OnStart');
+
     const hooks: string[] =
       getOwnTypedMetadata<string[]>(ComponentConstants.PostConstructKey, target.constructor) || [];
 
