@@ -19,7 +19,7 @@
     "outDir": "dist",
     "rootDir": "./",
     // Best practices
-    "strict": false,
+    "strict": true,
     "skipLibCheck": true,
     "noFallthroughCasesInSwitch": true,
     // Some stricter flags

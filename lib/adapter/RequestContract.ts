@@ -134,8 +134,7 @@ export class ContractValidationError extends HttpException implements Validation
     const normalized = issues.map((issue) => ({
       message: issue.message,
       path: (issue.path ?? []).map((segment) => {
-        const key: PropertyKey =
-          segment !== null && typeof segment === 'object' ? segment.key : (segment as PropertyKey);
+        const key: PropertyKey = segment !== null && typeof segment === 'object' ? segment.key : segment;
         return typeof key === 'symbol' ? key.toString() : key;
       }),
     }));

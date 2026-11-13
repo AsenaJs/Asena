@@ -141,7 +141,7 @@ const describeRoutes = (controllers: ComponentEntry[]): DevtoolsRoute[] => {
     for (const [method, params] of Object.entries(declared)) {
       const contract = resolveContextContract(prototypeProbe, method);
       const schemas = contract?.[ASENA_CONTEXT_CONTRACT];
-      const validator = params.validator as Class | undefined;
+      const validator = params.validator;
 
       routes.push({
         controller: name,
