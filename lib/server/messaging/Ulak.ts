@@ -59,7 +59,7 @@ export class Ulak implements ICoreService {
    * Logger instance injected from CoreContainer
    */
   @Inject(ICoreServiceNames.SERVER_LOGGER)
-  private logger: ServerLogger;
+  private logger!: ServerLogger;
 
   /**
    * Map of namespace path to WebSocket service instance

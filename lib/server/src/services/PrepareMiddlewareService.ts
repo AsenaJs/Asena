@@ -14,7 +14,7 @@ export class PrepareMiddlewareService implements ICoreService {
   public serviceName = 'PrepareMiddlewareService';
 
   @Inject(ICoreServiceNames.CONTAINER)
-  private container: Container;
+  private container!: Container;
 
   /**
    * @description Prepares middleware instances from middleware classes

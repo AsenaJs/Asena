@@ -10,7 +10,7 @@ import type { ServerLogger } from '../logger';
  * @template A - Type of the Adapter object
  */
 export abstract class AsenaWebsocketAdapter {
-  public readonly name: string;
+  public readonly name!: string;
 
   /**
    * Registry containing WebSocket services and their configurations
@@ -21,13 +21,13 @@ export abstract class AsenaWebsocketAdapter {
    *   - middlewares: Array of middleware functions
    * @protected
    */
-  protected _websockets: WebSocketRegistry;
+  protected _websockets!: WebSocketRegistry;
 
   /**
    * WebSocket handler instance for managing connections
    * @private
    */
-  private _websocket: WebSocketHandler<any>;
+  private _websocket!: WebSocketHandler<any>;
 
   /**
    * Logger instance for WebSocket-related logging

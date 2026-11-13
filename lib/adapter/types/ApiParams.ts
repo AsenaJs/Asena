@@ -34,9 +34,9 @@ export interface ApiParams<C extends AsenaContext<any, any> = any, SH = unknown>
   /** An array of middleware classes to be applied to the route. */
   middlewares: MiddlewareClass<C>[];
   /** A flag indicating whether to serve static files. */
-  staticServe: StaticServeClass;
+  staticServe?: StaticServeClass;
   /** The validator class for request validation. */
-  validator: ValidatorClass<SH>;
+  validator?: ValidatorClass<SH>;
   validatorCache?: boolean;
 }
 

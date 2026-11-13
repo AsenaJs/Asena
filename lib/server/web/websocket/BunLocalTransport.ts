@@ -11,7 +11,7 @@ import type { WebSocketTransport } from './WebSocketTransport';
  * This is the default transport when no custom transport is configured.
  */
 export class BunLocalTransport implements WebSocketTransport {
-  private server: Server<WebSocketData>;
+  private server!: Server<WebSocketData>;
 
   public async init(server: Server<WebSocketData>): Promise<void> {
     this.server = server;

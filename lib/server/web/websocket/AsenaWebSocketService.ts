@@ -14,7 +14,7 @@ export class AsenaWebSocketService<T = any> {
   /**
    * The WebSocket server instance.
    */
-  public server: AsenaWebSocketServer = null;
+  public server: AsenaWebSocketServer | null = null;
 
   /**
    * A map to store the WebSocket connections.
@@ -24,7 +24,7 @@ export class AsenaWebSocketService<T = any> {
   /**
    * The namespace for the WebSocket connection.
    */
-  private _namespace: string;
+  private _namespace!: string;
 
   /**
    * Sends data to all connected clients.
@@ -48,6 +48,10 @@ export class AsenaWebSocketService<T = any> {
     }
 
     const _nameSpace = nameSpace ? `${this.namespace}.${nameSpace}` : this.namespace;
+
+    if (!this.server) {
+      throw new Error('WebSocket server is not attached');
+    }
 
     this.server.to(_nameSpace, data);
   }

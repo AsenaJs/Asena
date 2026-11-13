@@ -19,10 +19,12 @@ export function composeOnSend(
   for (let i = interceptors.length - 1; i >= 0; i--) {
     const interceptor = interceptors[i];
 
-    if (interceptor.onSend) {
+    const onSend = interceptor.onSend?.bind(interceptor);
+
+    if (onSend) {
       const inner = next;
 
-      next = () => interceptor.onSend(ctx, inner);
+      next = () => onSend(ctx, inner);
     }
   }
 
@@ -47,10 +49,12 @@ export function composeOnReceive(
   for (let i = interceptors.length - 1; i >= 0; i--) {
     const interceptor = interceptors[i];
 
-    if (interceptor.onReceive) {
+    const onReceive = interceptor.onReceive?.bind(interceptor);
+
+    if (onReceive) {
       const inner = next;
 
-      next = () => interceptor.onReceive(ctx, inner);
+      next = () => onReceive(ctx, inner);
     }
   }
 

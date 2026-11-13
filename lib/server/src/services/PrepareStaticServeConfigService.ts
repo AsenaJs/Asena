@@ -13,9 +13,9 @@ export class PrepareStaticServeConfigService implements ICoreService {
   public serviceName = 'PrepareStaticServeConfigService';
 
   @Inject(ICoreServiceNames.CONTAINER)
-  private container: Container;
+  private container!: Container;
 
-  public async prepare(staticServeClass: StaticServeClass): Promise<BaseStaticServeParams> {
+  public async prepare(staticServeClass: StaticServeClass | undefined): Promise<BaseStaticServeParams | undefined> {
     if (!staticServeClass) {
       return;
     }
@@ -23,8 +23,8 @@ export class PrepareStaticServeConfigService implements ICoreService {
     const name = getOwnTypedMetadata<string>(ComponentConstants.NameKey, staticServeClass);
     const root = getOwnTypedMetadata<string>(ComponentConstants.StaticServeRootKey, staticServeClass);
 
-    const staticServeServiceInstance: AsenaStaticServeService<any>[] | AsenaStaticServeService<any> =
-      await this.container.resolve<AsenaStaticServeService<any>>(name);
+    const staticServeServiceInstance: AsenaStaticServeService<any>[] | AsenaStaticServeService<any> | null =
+      await this.container.resolve<AsenaStaticServeService<any>>(name || staticServeClass.name);
 
     if (!staticServeServiceInstance) {
       throw new Error(`Static Serve service ${name} not found.`);

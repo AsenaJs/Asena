@@ -77,6 +77,11 @@ function matchSegmentsIterative(eventSegments: string[], patternSegments: string
 
   while (stack.length > 0) {
     const state = stack.pop();
+
+    if (!state) {
+      break;
+    }
+
     const { eventIndex, patternIndex } = state;
 
     // Create unique key for this state to avoid re-exploring

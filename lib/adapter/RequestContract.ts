@@ -154,7 +154,11 @@ export interface ContractInputContext {
 
 /** Prepared once per route. No schema factory, target scan or metadata lookup on the request path. */
 export function prepareContextValidation(schemas: RequestSchemas): (context: ContractInputContext) => Promise<void> {
-  const steps = INPUT_TARGETS.filter((key) => schemas[key]).map((target) => ({ target, schema: schemas[target] }));
+  const steps = INPUT_TARGETS.flatMap((target) => {
+    const schema = schemas[target];
+
+    return schema ? [{ target, schema }] : [];
+  });
   const validate = async (context: ContractInputContext): Promise<void> => {
     for (const { target, schema } of steps) {
       const result = await schema['~standard'].validate(await context.readContractInput(target));

@@ -14,9 +14,9 @@ export class PrepareValidatorService implements ICoreService {
   public serviceName = 'PrepareValidatorService';
 
   @Inject(ICoreServiceNames.CONTAINER)
-  private container: Container;
+  private container!: Container;
 
-  public async prepare(Validator: ValidatorClass<any>): Promise<BaseValidator> {
+  public async prepare(Validator: ValidatorClass<any> | undefined): Promise<BaseValidator | undefined> {
     if (!Validator) {
       return;
     }
@@ -50,7 +50,11 @@ export class PrepareValidatorService implements ICoreService {
 
     const baseValidatorMiddleware: BaseValidator = {};
 
-    VALIDATOR_METHODS.filter((key) => typeof validator[key] === 'function').forEach((key) => {
+    VALIDATOR_METHODS.forEach((key) => {
+      if (typeof validator[key] !== 'function') {
+        return;
+      }
+
       baseValidatorMiddleware[key] = {
         handle: validator[key].bind(validator),
         override: overrides?.includes(key) || false,

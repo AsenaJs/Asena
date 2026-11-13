@@ -2,7 +2,7 @@ import type { Class } from '../../server/types';
 
 export interface InjectableComponent {
   Class: Class;
-  interface: string;
+  interface: string | undefined;
 }
 
 export interface Dependencies {

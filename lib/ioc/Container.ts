@@ -195,7 +195,7 @@ export class Container {
     }
 
     this._services[key] = {
-      Class: instance.constructor as any,
+      Class: Object(instance).constructor,
       instance: instance,
       singleton: true,
     };
@@ -520,7 +520,7 @@ export class Container {
     const seen = new Set<string>();
 
     for (const classInChain of prototypeChain.reverse()) {
-      const hooks: string[] = getOwnTypedMetadata<string[]>(metadataKey, classInChain);
+      const hooks: string[] | undefined = getOwnTypedMetadata<string[]>(metadataKey, classInChain);
 
       if (!hooks) {
         continue;
@@ -569,7 +569,7 @@ export class Container {
 
         const strategy: Class[] = await this.resolveStrategyChain<Class>(interfaceName, path);
 
-        const expression: Expressions = getOwnTypedMetadata<Expressions>(
+        const expression: Expressions | undefined = getOwnTypedMetadata<Expressions>(
           ComponentConstants.ExpressionKey,
           classInChain,
         );
@@ -615,14 +615,14 @@ export class Container {
 
       if (!deps) continue;
 
-      let property: PropertyDescriptor;
+      let property: PropertyDescriptor | undefined;
 
       for (const [k, name] of Object.entries(deps)) {
         property = Object.getOwnPropertyDescriptor(newInstance, k);
 
         if (property?.value !== undefined) continue;
 
-        let instance: Class | Class[];
+        let instance: Class | Class[] | null;
 
         try {
           instance = await this.resolveChain<Class>(name, path);
@@ -645,7 +645,7 @@ export class Container {
           throw new Error('instance error cannot be null');
         }
 
-        const expression: Expressions = getOwnTypedMetadata<Expressions>(
+        const expression: Expressions | undefined = getOwnTypedMetadata<Expressions>(
           ComponentConstants.ExpressionKey,
           classInChain,
         );

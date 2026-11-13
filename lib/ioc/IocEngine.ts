@@ -37,14 +37,14 @@ export class IocEngine implements ICoreService {
   public serviceName = 'IocEngine';
 
   @Inject('Container')
-  private _container: Container;
+  private _container!: Container;
 
   @Inject(ICoreServiceNames.SERVER_LOGGER)
-  private logger: ServerLogger;
+  private logger!: ServerLogger;
 
   private injectables: InjectableComponent[] = [];
 
-  private config?: IocConfig;
+  private config?: IocConfig | null;
 
   /** Entry files kept out of the scan, empty unless the scan actually ran */
   private entryFiles = new Set<string>();
@@ -57,7 +57,7 @@ export class IocEngine implements ICoreService {
    * @param {IocConfig} config - IoC configuration object
    * @returns {void}
    */
-  public setConfig(config?: IocConfig): void {
+  public setConfig(config?: IocConfig | null): void {
     this.config = config;
   }
 
@@ -551,6 +551,10 @@ export class IocEngine implements ICoreService {
     while (queue.length > 0) {
       const currentNode = queue.shift();
 
+      if (currentNode === undefined) {
+        break;
+      }
+
       visitedCount++;
 
       const currentClass = nameToClass.get(currentNode);
@@ -562,7 +566,7 @@ export class IocEngine implements ICoreService {
       const neighbors = adjacencyList.get(currentNode) || [];
 
       for (const neighbor of neighbors) {
-        const newDegree = inDegree.get(neighbor) - 1;
+        const newDegree = (inDegree.get(neighbor) ?? 0) - 1;
 
         inDegree.set(neighbor, newDegree);
 

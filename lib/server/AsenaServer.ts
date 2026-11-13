@@ -156,28 +156,28 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
   private prepareStaticServeConfigService!: PrepareStaticServeConfigService;
 
   @Inject(ICoreServiceNames.PREPARE_EVENT_SERVICE)
-  private prepareEventService: PrepareEventService;
+  private prepareEventService!: PrepareEventService;
 
   @Inject(ICoreServiceNames.PREPARE_SCHEDULE_SERVICE)
-  private prepareScheduleService: PrepareScheduleService;
+  private prepareScheduleService!: PrepareScheduleService;
 
   @Inject(ICoreServiceNames.PREPARE_FRONTEND_CONTROLLER_SERVICE)
-  private prepareFrontendControllerService: PrepareFrontendControllerService;
+  private prepareFrontendControllerService!: PrepareFrontendControllerService;
 
   @Inject(ICoreServiceNames.PREPARE_MICROSERVICE_SERVICE)
-  private prepareMicroserviceService: PrepareMicroserviceService;
+  private prepareMicroserviceService!: PrepareMicroserviceService;
 
   @Inject(ICoreServiceNames.PREPARE_EXCEPTION_HANDLER_SERVICE)
-  private prepareExceptionHandlerService: PrepareExceptionHandlerService;
+  private prepareExceptionHandlerService!: PrepareExceptionHandlerService;
 
   @Inject(ICoreServiceNames.CRON_RUNNER)
-  private cronRunner: CronRunner;
+  private cronRunner!: CronRunner;
 
   @Inject(ICoreServiceNames.LIFECYCLE_SERVICE)
-  private lifecycleService: LifecycleService;
+  private lifecycleService!: LifecycleService;
 
   @Inject(ICoreServiceNames.DEVTOOLS_SCOPE)
-  private devtoolsScope: DevtoolsScope;
+  private devtoolsScope!: DevtoolsScope;
 
   // Instance state
   private _port!: number;
@@ -983,11 +983,15 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
           devtoolsBus.nameContract(contextClass[ASENA_CONTEXT_CONTRACT], contextClass.name);
         }
 
-        await this._adapter.registerRoute({
+        await this.requireAdapter().registerRoute({
           method: params.method,
           path: lastPath,
           middlewares: middlewares,
-          handler: devtoolsBus.wrap('controller', `${controllerName}.${name}`, controller[name].bind(controller)),
+          handler: devtoolsBus.wrap(
+            'controller',
+            `${controllerName}.${name}`,
+            Reflect.get(controller, name).bind(controller),
+          ),
           staticServe: await this.prepareStaticServeConfig(params.staticServe),
           validator: validatorInstance,
           validatorCache: params.validatorCache,
@@ -1102,7 +1106,9 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
    * @param {StaticServeClass} staticServeClass - Static serve class
    * @returns {Promise<BaseStaticServeParams>}
    */
-  private async prepareStaticServeConfig(staticServeClass: StaticServeClass): Promise<BaseStaticServeParams> {
+  private async prepareStaticServeConfig(
+    staticServeClass: StaticServeClass | undefined,
+  ): Promise<BaseStaticServeParams | undefined> {
     return await this.prepareStaticServeConfigService.prepare(staticServeClass);
   }
 
@@ -1132,8 +1138,16 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
    * @param {ValidatorClass<any>} Validator - Validator class
    * @returns {Promise<BaseValidator>}
    */
-  private async prepareValidator(Validator: ValidatorClass<any>): Promise<BaseValidator> {
+  private async prepareValidator(Validator: ValidatorClass<any> | undefined): Promise<BaseValidator | undefined> {
     return await this.prepareValidatorService.prepare(Validator);
+  }
+
+  private requireAdapter(): A {
+    if (!this._adapter) {
+      throw new Error('HTTP adapter is not initialised');
+    }
+
+    return this._adapter;
   }
 
   /**
@@ -1172,7 +1186,12 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
     }
 
     for (const route of htmlRoutes) {
-      this._adapter.registerHTMLRoute(route.path, route.htmlBundle, route.controllerName, route.controllerBasePath);
+      this.requireAdapter().registerHTMLRoute(
+        route.path,
+        route.htmlBundle,
+        route.controllerName,
+        route.controllerBasePath,
+      );
     }
   }
 
@@ -1195,8 +1214,8 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
       const path = getOwnTypedMetadata<string>(ComponentConstants.PathKey, websocket.constructor);
       const middlewares = await this.prepareTopMiddlewares({ controller: websocket as unknown as Class });
 
-      await this._adapter.registerWebsocketRoute({
-        path: path,
+      await this.requireAdapter().registerWebsocketRoute({
+        path: path || '',
         middlewares: middlewares,
         websocketService: websocket,
         controllerName: getTypedMetadata<string>(ComponentConstants.NameKey, websocket.constructor),
@@ -1331,7 +1350,7 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
 
     const name = getOwnTypedMetadata<string>(ComponentConstants.NameKey, configInstance.constructor);
 
-    this._logger.info(`Config ${yellow(name)} applied`);
+    this._logger.info(`Config ${yellow(String(name))} applied`);
   }
 
   /**
@@ -1427,6 +1446,10 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
     const onErrorStep = `${this.configName(config)}.onError`;
 
     if (!service.hasHandlers) {
+      if (!config?.onError) {
+        return;
+      }
+
       // Nothing to put in front of it, so it goes over unwrapped - byte-identical to 0.10 unless the console is attached.
       await this._adapter.onError(devtoolsBus.wrap('config-onError', onErrorStep, config.onError.bind(config)));
 
@@ -1451,7 +1474,7 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
         );
       }
 
-      if (hasConfigOnError) {
+      if (config?.onError) {
         devtoolsBus.step('config-onError', onErrorStep);
 
         // Passed as received, as the lone hook is: a value wrapped here would differ from 0.12's.
@@ -1505,6 +1528,10 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
     const onNotFoundStep = `${this.configName(config)}.onNotFound`;
 
     if (!service.hasNotFoundHandler) {
+      if (!config?.onNotFound) {
+        return;
+      }
+
       await this._adapter.onNotFound(devtoolsBus.wrap('not-found', onNotFoundStep, config.onNotFound.bind(config)));
 
       return;
@@ -1517,7 +1544,7 @@ export class AsenaServer<A extends AsenaAdapter<any, any>> implements ICoreServi
         return fromHandler;
       }
 
-      if (hasConfigOnNotFound) {
+      if (config?.onNotFound) {
         devtoolsBus.step('not-found', onNotFoundStep);
 
         const fromConfig = await config.onNotFound(context, request);
