@@ -61,9 +61,8 @@ export function expandComponents(components: Class[], overrides: Record<string, 
   // this a BFS without a second loop
   for (const owner of queue) {
     for (const { fieldName, serviceName, serviceClass } of discoverInjectedFieldsFromClass(owner)) {
-      // The stored name is undefined when the dependency was decorated after the dependent:
-      // @Inject reads NameKey at decoration time. Derive it from the class reference instead.
-      const name = serviceName ?? (serviceClass ? componentName(serviceClass) : undefined);
+      // @Inject snapshots the name at decoration time, so a dependency named later is read from its class.
+      const name = serviceClass ? componentName(serviceClass) : serviceName;
 
       if (
         name !== undefined &&
