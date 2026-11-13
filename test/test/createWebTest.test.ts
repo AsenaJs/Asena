@@ -351,3 +351,37 @@ describe('createWebTest', () => {
     });
   });
 });
+
+describe('createWebTest keys a class-injected service by the name it registers under', () => {
+  test('mocks a dependency that is named only after its dependent is decorated', async () => {
+    class LateDependency {
+      public hello() {
+        return 'real';
+      }
+    }
+
+    @Controller('/late')
+    class LateController {
+      @Inject(LateDependency)
+      private dependency!: LateDependency;
+
+      public dependencyOf() {
+        return this.dependency;
+      }
+    }
+
+    // Named only after LateController is decorated, so @Inject stored the class name instead.
+    Service('RealLateDependency')(LateDependency);
+
+    const { app, mocks } = await webTest({ controllers: [LateController] });
+
+    expect(mocks.RealLateDependency).toBeDefined();
+    expect(mocks.LateDependency).toBeUndefined();
+
+    const controller = await app.resolve<LateController>('LateController');
+
+    expect(controller?.dependencyOf()).toBe(mocks.RealLateDependency);
+
+    await app.stop();
+  });
+});

@@ -116,20 +116,22 @@ export async function createWebTest<A extends AsenaAdapter<any, any> = AsenaAdap
   for (const component of realComponents) {
     for (const field of discoverInjectedFieldsFromClass(component)) {
       const { serviceName, serviceClass, fieldName } = field;
+      // The name the container resolves, which for a class-injected service can differ from the one frozen at decoration
+      const name = serviceClass ? componentName(serviceClass) : serviceName;
 
       // Core services are wired during bootstrap and are always real - mocking them would
       // also trip the factory's core-key guard. ulak(...) lands here.
-      if (CORE_SERVICE_NAMES.has(serviceName)) {
+      if (CORE_SERVICE_NAMES.has(name)) {
         continue;
       }
 
       // Already satisfied - either registered for real or replaced by the caller
-      if (realNames.has(serviceName) || Object.hasOwn(overrides, serviceName)) {
+      if (realNames.has(name) || Object.hasOwn(overrides, name)) {
         continue;
       }
 
       // One shared mock per service, so two controllers injecting it see the same double
-      if (Object.hasOwn(autoMocks, serviceName)) {
+      if (Object.hasOwn(autoMocks, name)) {
         continue;
       }
 
@@ -141,7 +143,7 @@ export async function createWebTest<A extends AsenaAdapter<any, any> = AsenaAdap
         );
       }
 
-      autoMocks[serviceName] = createMockFromClass(serviceClass);
+      autoMocks[name] = createMockFromClass(serviceClass);
     }
   }
 
