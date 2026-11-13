@@ -1,6 +1,7 @@
 import { describe, expect, spyOn, test } from 'bun:test';
 import { Middleware } from '../../../lib/server/decorators';
 import { VALIDATOR_METHODS } from '../../../lib/adapter';
+import { getComponentsDeclaredIn } from '../../../lib/ioc/component';
 
 describe('@Middleware definition errors', () => {
   test('throws naming the class when handle() is missing', () => {
@@ -35,6 +36,13 @@ describe('@Middleware definition errors', () => {
       exit.mockRestore();
       error.mockRestore();
     }
+  });
+
+  test('a rejected class is not left in the declared-component registry', () => {
+    class NoHandleMiddleware {}
+
+    expect(() => Middleware()(NoHandleMiddleware)).toThrow();
+    expect(getComponentsDeclaredIn(new Set([import.meta.path]))).not.toContain(NoHandleMiddleware);
   });
 
   test('accepts a class with handle()', () => {
