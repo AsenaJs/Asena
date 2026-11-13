@@ -45,6 +45,12 @@ describe('PrepareValidatorService', () => {
     expect(result).toBeUndefined();
   });
 
+  it('should return undefined when validator is null', async () => {
+    const result = await service.prepare(null as unknown as undefined);
+
+    expect(result).toBeUndefined();
+  });
+
   it('should throw error when validator is not found', async () => {
     mockContainer.resolve = mock(() => null);
 

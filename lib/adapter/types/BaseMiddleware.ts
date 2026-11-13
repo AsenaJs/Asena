@@ -63,4 +63,4 @@ export interface PrepareMiddlewareParams {
   params?: ApiParams;
 }
 
-export const VALIDATOR_METHODS = ['json', 'query', 'form', 'param', 'header'] as const;
+export const VALIDATOR_METHODS = ['json', 'query', 'form', 'param', 'header'];

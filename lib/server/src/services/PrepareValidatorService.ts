@@ -1,9 +1,11 @@
 import { getChainedTypedMetadataList, getOwnTypedMetadata } from '../../../utils/typedMetadata';
 import { ComponentConstants } from '../../../ioc/constants';
 import type { AsenaValidationService, ValidatorClass } from '../../web/middleware';
-import { type BaseValidator, VALIDATOR_METHODS, type ValidatorHandler } from '../../../adapter';
+import { type BaseValidator, type ValidatorHandler } from '../../../adapter';
 import { type Container, CoreService, type ICoreService, ICoreServiceNames } from '../../../ioc';
 import { Inject } from '../../../ioc/component';
+
+const VALIDATOR_KEYS: readonly (keyof BaseValidator)[] = ['json', 'query', 'form', 'param', 'header'];
 
 /**
  * @description Core service for preparing validator instances
@@ -50,7 +52,7 @@ export class PrepareValidatorService implements ICoreService {
 
     const baseValidatorMiddleware: BaseValidator = {};
 
-    VALIDATOR_METHODS.forEach((key) => {
+    VALIDATOR_KEYS.forEach((key) => {
       if (typeof validator[key] !== 'function') {
         return;
       }
