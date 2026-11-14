@@ -2,13 +2,51 @@
 
 coverageSkipTestFiles = true
 
-coveragePathIgnorePatterns = [
-    "test/utils/*.ts",
-    "dist/**/*.js",
-    "dist/**/*.ts"
-]
-
+coveragePathIgnorePatterns = ["test/utils/*.ts", "dist/**/*.js", "dist/**/*.ts"]
 
 
 [test.reporter]
 junit = "junit.xml"
+
+[fmt]
+printWidth = 120
+singleQuote = true
+tabWidth = 2
+useTabs = false
+endOfLine = "lf"
+semi = true
+quoteProps = "as-needed"
+jsxSingleQuote = false
+trailingComma = "all"
+bracketSpacing = true
+bracketSameLine = false
+arrowParens = "always"
+proseWrap = "preserve"
+htmlWhitespaceSensitivity = "css"
+vueIndentScriptAndStyle = false
+embeddedLanguageFormatting = "auto"
+objectWrap = "preserve"
+experimentalTernaries = false
+experimentalOperatorPosition = "end"
+singleAttributePerLine = false
+requirePragma = false
+insertPragma = false
+checkIgnorePragma = false
+sortImports = false
+sortTailwindcss = false
+sortPackageJson = false
+jsdoc = false
+insertFinalNewline = true
+ignorePatterns = [
+  ".changeset/",
+  ".claude/",
+  ".cursor/",
+  ".github/",
+  "*.log",
+  "coverage/",
+  "bun.lockb",
+  "package-lock.json",
+  "yarn.lock",
+  "pnpm-lock.yaml",
+  "*.md",
+]

@@ -50,13 +50,13 @@ jobs:
         run: bun install --frozen-lockfile
 
       - name: Create Version PR or publish
-        uses: changesets/action@v1
+        uses: changesets/action@v2
         with:
-          version: bun run version
-          publish: bun run release
-          commit: 'chore: version packages'
-          title: 'chore: version packages'
-          createGithubReleases: true
+          version-script: bun run version
+          publish-script: bun run release
+          commit-message: 'chore: version packages'
+          pr-title: 'chore: version packages'
+          create-github-releases: true
+          push-with-git-cli: true
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_CONFIG_PROVENANCE: 'true'

@@ -40,7 +40,7 @@ updates:
         patterns:
           - '*'
     ignore:
-      # v2 requires @changesets/cli v3
+      # a new major needs release.yml and the changesets CLI migrated by hand
       - dependency-name: 'changesets/action'
         update-types: ['version-update:semver-major']
     assignees:
