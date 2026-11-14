@@ -1,5 +1,31 @@
 # @asenajs/asena
 
+## 0.13.1
+
+### Patch Changes
+
+- 6459120: Fix dependency resolution and component decorator defects:
+  
+  - Concurrent `resolve()` calls for the same or overlapping components no longer fail with a false `Circular dependency detected` error.
+  - A boot-time circular dependency error now lists the full loop (for example `A -> B -> A`) instead of naming only one component.
+  - A `@Middleware` class without `handle()` (or a `validator: true` class without a validator method) now throws a descriptive error at definition time instead of exiting the process with code 0, so broken apps and test files fail CI.
+  - A `resolveAll()` called from a prototype's start hook or post-processor that would rebuild its own caller now throws `CircularDependencyError` instead of recursing until memory runs out. A `resolveAll()` inside a hook may therefore throw where it used to hang.
+- 6a215e1: Compile the package under `strict` and fix what that surfaced:
+  
+  - A class-based `@Inject(Class)` is looked up by the dependency's registered name at boot as well as at resolve time, so a dependency listed after its dependent boots. `discoverInjectedFields()`, `discoverInjectedFieldsFromClass()`, `createWebTest()` and the devtools dependency graph report the same name.
+  - `@OnStart`, `@PostConstruct` and `@OnStop` accept symbol-keyed methods and run them like string-named ones. A symbol-keyed `@OnStop` used to abort `server.stop()` with a `TypeError`.
+  - `@Inject(Class)` and `@Strategy(Class)` of a class that is not a registered component fall back to the class name, as the container already does when it reads component names.
+  - `AsenaWebSocketService.to()` throws `WebSocket server is not attached` when no server is attached, and a static serve class that is not a component throws `Static Serve service <name> not found.` instead of resolving an undefined key.
+  
+  Public type changes:
+  
+  - `Container.getStartHooks()` and `Container.getStopHooks()` return `(string | symbol)[]` (was `string[]`).
+  - `Container.resolveAll()` is inferred as returning `null` in addition to the array; strict callers must handle it.
+  - `DEFAULT_PARAMS` is typed with `middlewares`, `summary` and `description` required; `generateHandlerParams()` returns `Omit<ApiParams, 'method'>`, and fields passed as `undefined` now fall back to their defaults.
+  - `defineComponent(params?)`, `IocEngine.setConfig(config?: IocConfig | null)` and `readJson(path: string)` (was `any`).
+  - `prepare()` of `PrepareConfigService`, `PrepareStaticServeConfigService`, `PrepareValidatorService` and `PrepareWebsocketService` may resolve to `undefined`; `PrepareStaticServeConfigService.prepare()` accepts `undefined`.
+  - Type declarations now state what the runtime already returns: `staticServe` and `validator` on route params are optional, `BaseStaticServeParams` fields are optional, `InjectableComponent.interface` may be `undefined`, `AsenaSocket.binaryType` may be `undefined`, and `AsenaWebSocketService.server` may be `null` before it is attached.
+
 ## 0.13.0
 
 ### Minor Changes
