@@ -9,7 +9,7 @@ import { Inject } from '../../../lib/ioc/component';
 @Service()
 export class ScannedConsumerService {
   @Inject('ImportedGreetingService')
-  private greetingService: { greet: () => string };
+  private greetingService!: { greet: () => string };
 
   public greet(): string {
     return this.greetingService.greet();

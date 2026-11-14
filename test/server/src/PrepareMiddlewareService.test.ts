@@ -21,7 +21,7 @@ class TestMiddleware2 extends AsenaMiddlewareService {
 
 describe('PrepareMiddlewareService', () => {
   const mockContainer = {
-    resolve: mock(() => null),
+    resolve: mock((): unknown => null),
   };
 
   const mockLogger = {

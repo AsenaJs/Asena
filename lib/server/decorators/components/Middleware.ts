@@ -2,7 +2,7 @@ import type { MiddlewareParams } from '../../../ioc/types/decorators/MiddlewareP
 import { defineComponent } from '../../../ioc/component';
 import { ComponentConstants, ComponentType } from '../../../ioc';
 import { defineTypedMetadata } from '../../../utils/typedMetadata';
-import { VALIDATOR_METHODS } from '../../../adapter';
+import { VALIDATOR_KEYS } from '../../../adapter/types/validatorKeys';
 
 /**
  * Decorator for defining a Middleware component.
@@ -11,21 +11,26 @@ import { VALIDATOR_METHODS } from '../../../adapter';
  * @returns {ClassDecorator} - The class decorator for the middleware.
  */
 export const Middleware = (params?: MiddlewareParams): ClassDecorator => {
-  return defineComponent(ComponentType.MIDDLEWARE, params, (target) => {
+  const decorate = defineComponent(ComponentType.MIDDLEWARE, params, (target) => {
     defineTypedMetadata<boolean>(ComponentConstants.ValidatorKey, params?.validator || false, target);
-
-    if (params?.validator) {
-      const hasValidatorMethod = VALIDATOR_METHODS.some((method) => typeof target.prototype[method] === 'function');
-
-      if (!hasValidatorMethod) {
-        console.error(
-          `Class ${target.name} must implement at least one of the validator methods: ${VALIDATOR_METHODS.join(', ')}.`,
-        );
-        process.exit();
-      }
-    } else if (typeof target.prototype.handle !== 'function') {
-      console.error(`Class ${target.name} must implement a 'handle(context, next)' method.`);
-      process.exit();
-    }
   });
+
+  return (target) => {
+    assertMiddlewareDefinition(target, params?.validator || false);
+    decorate(target);
+  };
+};
+
+const assertMiddlewareDefinition = (target: Function, validator: boolean): void => {
+  if (validator) {
+    const hasValidatorMethod = VALIDATOR_KEYS.some((method) => typeof target.prototype[method] === 'function');
+
+    if (!hasValidatorMethod) {
+      throw new Error(
+        `Class ${target.name} must implement at least one of the validator methods: ${VALIDATOR_KEYS.join(', ')}.`,
+      );
+    }
+  } else if (typeof target.prototype.handle !== 'function') {
+    throw new Error(`Class ${target.name} must implement a 'handle(context, next)' method.`);
+  }
 };

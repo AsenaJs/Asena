@@ -8,7 +8,7 @@ import type { ExportedTestService } from '../service/ExportedTestService.test';
 @Controller({ path: '/test', name: 'ExportedTestController', middlewares: [ExportedTopMiddleware] })
 export class ExportedTestController {
   @Inject('ExportedTestService')
-  private testService: ExportedTestService;
+  private testService!: ExportedTestService;
 
   @Get('/data')
   public getData(context: AsenaContext<any, any>) {

@@ -30,7 +30,7 @@ import { defineTypedMetadata, getOwnTypedMetadata } from '../../../utils/typedMe
  * ```
  */
 export const Value = (key: string, options: ValueOptions = {}): PropertyDecorator => {
-  return (target: object, propertyKey: string): void => {
+  return (target: object, propertyKey: string | symbol): void => {
     const fields: ValueFields = getOwnTypedMetadata<ValueFields>(ComponentConstants.ValueKey, target.constructor) || {};
 
     if (!fields[propertyKey]) {

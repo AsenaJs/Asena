@@ -136,7 +136,7 @@ describe('a @Config whose dependency carries an @OnStart', () => {
       @Config()
       class TransportConfig {
         @Inject(ConnectionService)
-        private connection: ConnectionService;
+        private connection!: ConnectionService;
 
         public transport() {
           observed.started = this.connection.started;
@@ -175,7 +175,7 @@ describe('a @Config whose dependency carries an @OnStart', () => {
       @Config()
       class BorrowingConfig {
         @Inject(ConnectionService)
-        private connection: ConnectionService;
+        private connection!: ConnectionService;
 
         public transport() {
           return { microservice: new BorrowingTransport(this.connection) as any };
@@ -208,7 +208,7 @@ describe('a @Config whose dependency carries an @OnStart', () => {
       @Config()
       class MiddlewareConfig {
         @Inject(ConnectionService)
-        private connection: ConnectionService;
+        private connection!: ConnectionService;
 
         public globalMiddlewares() {
           observed.started = this.connection.started;
@@ -240,7 +240,7 @@ describe('a @Config whose dependency carries an @OnStart', () => {
       @Config()
       class ServeOptionsConfig {
         @Inject(ConnectionService)
-        private connection: ConnectionService;
+        private connection!: ConnectionService;
 
         public serveOptions() {
           observed.started = this.connection.started;
@@ -272,7 +272,7 @@ describe('a @Config whose dependency carries an @OnStart', () => {
       @Config()
       class HandlerConfig {
         @Inject(ConnectionService)
-        private connection: ConnectionService;
+        private connection!: ConnectionService;
 
         public onError(_error: Error, context: any) {
           observed.onError = this.connection.started;
@@ -317,7 +317,7 @@ describe('a @Config whose dependency carries an @OnStart', () => {
       @Middleware()
       class ConnectionMiddleware extends AsenaMiddlewareService {
         @Inject(ConnectionService)
-        private connection: ConnectionService;
+        private connection!: ConnectionService;
 
         public handle(_context: any, next: any) {
           observed.middleware = this.connection.started;
@@ -329,7 +329,7 @@ describe('a @Config whose dependency carries an @OnStart', () => {
       @Controller('/api')
       class PingController {
         @Inject(ConnectionService)
-        private connection: ConnectionService;
+        private connection!: ConnectionService;
 
         @Get('/ping')
         public ping(context: any) {

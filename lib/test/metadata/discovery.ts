@@ -3,6 +3,7 @@ import type { FieldMetadata } from '../types';
 import { ComponentConstants } from '../../ioc';
 import { getOwnTypedMetadata } from '../../utils';
 import { collectValueFields } from '../../ioc/helper/valueResolver';
+import { resolveDependencyName } from '../../ioc/helper/iocHelper';
 
 /**
  * Discovers all fields with @Inject decorator in a component
@@ -79,10 +80,12 @@ export function discoverInjectedFieldsFromClass(ComponentClass: any): FieldMetad
 
         processedFields.add(fieldName);
 
+        const serviceClass = dependencyClasses?.[fieldName];
+
         fields.push({
           fieldName,
-          serviceName,
-          serviceClass: dependencyClasses?.[fieldName],
+          serviceName: resolveDependencyName(serviceName, serviceClass),
+          serviceClass,
           expression: expressions?.[fieldName],
         });
       }

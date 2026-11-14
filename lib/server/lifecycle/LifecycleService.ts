@@ -152,7 +152,7 @@ export class LifecycleService implements ICoreService {
       stopped++;
 
       for (const hook of this.container.getStopHooks(component.Class)) {
-        const label = `${component.Class.name}.${hook}()`;
+        const label = `${component.Class.name}.${String(hook)}()`;
 
         try {
           await this.withTimeout(component.instance[hook](), hookTimeout, label);

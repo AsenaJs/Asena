@@ -27,38 +27,38 @@ class AuditService {
 @Component()
 class MixedService {
   @Inject(UserService)
-  private byClass: UserService;
+  private byClass!: UserService;
 
   @Inject('UserService')
-  private byName: UserService;
+  private byName!: UserService;
 
   @Inject('UserService', (s: any) => s.findById)
-  private byNameWithExpression: (id: string) => Promise<any>;
+  private byNameWithExpression!: (id: string) => Promise<any>;
 
   @Inject(ulak('/stats'))
-  private stats: Ulak.NameSpace<'/stats'>;
+  private stats!: Ulak.NameSpace<'/stats'>;
 
   @Inject([AuditService, (s: any) => s.record] as const)
-  private record: (event: string) => Promise<boolean>;
+  private record!: (event: string) => Promise<boolean>;
 }
 
 @Component()
 class BaseService {
   @Inject(UserService)
-  protected shared: UserService;
+  protected shared!: UserService;
 
   @Inject(AuditService)
-  protected audit: AuditService;
+  protected audit!: AuditService;
 }
 
 @Component()
 class ChildService extends BaseService {
   // Redeclares a parent field with a different injection - the child must win
   @Inject('UserService')
-  protected shared: UserService;
+  protected shared!: UserService;
 
   @Inject(AuditService)
-  private ownAudit: AuditService;
+  private ownAudit!: AuditService;
 }
 
 @Component()
@@ -80,39 +80,39 @@ describe('discoverInjectedFieldsFromClass', () => {
   test('should record the class reference for class injections', () => {
     const field = byName(discoverInjectedFieldsFromClass(MixedService), 'byClass');
 
-    expect(field.serviceName).toBe('UserService');
-    expect(field.serviceClass).toBe(UserService);
-    expect(field.expression).toBeUndefined();
+    expect(field?.serviceName).toBe('UserService');
+    expect(field?.serviceClass).toBe(UserService);
+    expect(field?.expression).toBeUndefined();
   });
 
   test('should leave serviceClass undefined for string injections', () => {
     const field = byName(discoverInjectedFieldsFromClass(MixedService), 'byName');
 
-    expect(field.serviceName).toBe('UserService');
-    expect(field.serviceClass).toBeUndefined();
+    expect(field?.serviceName).toBe('UserService');
+    expect(field?.serviceClass).toBeUndefined();
   });
 
   test('should keep the expression for string injections that carry one', () => {
     const field = byName(discoverInjectedFieldsFromClass(MixedService), 'byNameWithExpression');
 
-    expect(field.serviceClass).toBeUndefined();
-    expect(typeof field.expression).toBe('function');
+    expect(field?.serviceClass).toBeUndefined();
+    expect(typeof field?.expression).toBe('function');
   });
 
   test('should treat ulak() as a core-service dependency with an expression', () => {
     const field = byName(discoverInjectedFieldsFromClass(MixedService), 'stats');
 
-    expect(field.serviceName).toBe('__Ulak__');
-    expect(field.serviceClass).toBeUndefined();
-    expect(typeof field.expression).toBe('function');
+    expect(field?.serviceName).toBe('__Ulak__');
+    expect(field?.serviceClass).toBeUndefined();
+    expect(typeof field?.expression).toBe('function');
   });
 
   test('should record the class reference for class-based tuple injections', () => {
     const field = byName(discoverInjectedFieldsFromClass(MixedService), 'record');
 
-    expect(field.serviceName).toBe('AuditService');
-    expect(field.serviceClass).toBe(AuditService);
-    expect(typeof field.expression).toBe('function');
+    expect(field?.serviceName).toBe('AuditService');
+    expect(field?.serviceClass).toBe(AuditService);
+    expect(typeof field?.expression).toBe('function');
   });
 
   test('should walk the constructor chain and let the child win', () => {
@@ -120,9 +120,9 @@ describe('discoverInjectedFieldsFromClass', () => {
 
     expect(fields.map((field) => field.fieldName).sort()).toEqual(['audit', 'ownAudit', 'shared']);
     // child redeclared `shared` as a string injection, so no class reference survives
-    expect(byName(fields, 'shared').serviceClass).toBeUndefined();
+    expect(byName(fields, 'shared')?.serviceClass).toBeUndefined();
     // inherited untouched field keeps the parent's class reference
-    expect(byName(fields, 'audit').serviceClass).toBe(AuditService);
+    expect(byName(fields, 'audit')?.serviceClass).toBe(AuditService);
   });
 
   test('should not instantiate the component', () => {
@@ -134,6 +134,21 @@ describe('discoverInjectedFieldsFromClass', () => {
 
   test('should return an empty array for classes without dependencies', () => {
     expect(discoverInjectedFieldsFromClass(NoDependencies)).toEqual([]);
+  });
+
+  test('should report the name a class-injected dependency registers under', () => {
+    class LateNamed {}
+
+    class Holder {
+      @Inject(LateNamed)
+      private late!: LateNamed;
+    }
+
+    Component('RealLateNamed')(LateNamed);
+
+    expect(discoverInjectedFieldsFromClass(Holder)).toEqual([
+      { fieldName: 'late', serviceName: 'RealLateNamed', serviceClass: LateNamed, expression: undefined },
+    ]);
   });
 
   test('should return an empty array for undefined and native constructors', () => {

@@ -40,7 +40,13 @@ describe('PrepareValidatorService', () => {
   });
 
   it('should return undefined when validator is not provided', async () => {
-    const result = await service.prepare(null);
+    const result = await service.prepare(undefined);
+
+    expect(result).toBeUndefined();
+  });
+
+  it('should return undefined when validator is null', async () => {
+    const result = await service.prepare(null as unknown as undefined);
 
     expect(result).toBeUndefined();
   });
@@ -58,7 +64,7 @@ describe('PrepareValidatorService', () => {
   });
 
   it('should prepare validator with all method handlers', async () => {
-    const result: BaseValidator<any> = await service.prepare(TestValidator);
+    const result = await service.prepare(TestValidator);
 
     expect(result).toEqual({
       json: {
@@ -71,8 +77,8 @@ describe('PrepareValidatorService', () => {
       },
     });
 
-    expect(result.json.handle.name).toBe('bound json');
-    expect(result.header.handle.name).toBe('bound header');
+    expect(result?.json?.handle.name).toBe('bound json');
+    expect(result?.header?.handle.name).toBe('bound header');
   });
 
   it('should only include methods that exist on validator', async () => {

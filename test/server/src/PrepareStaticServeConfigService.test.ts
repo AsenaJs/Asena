@@ -6,7 +6,7 @@ import type { AsenaContext } from '../../../lib/adapter';
 
 @StaticServe({ root: './public', name: 'StaticServe' })
 export class MockStaticServeMiddleware extends AsenaStaticServeService<any> {
-  public extra = { foo: 'bar' };
+  public extra: { foo: string } | undefined = { foo: 'bar' };
 
   public rewriteRequestPath(path: string): string {
     return `/rewritten${path}`;
@@ -43,7 +43,21 @@ describe('PrepareStaticServeConfigService', () => {
   });
 
   it('should return undefined when staticServeClass is not provided', async () => {
-    const result = await service.prepare(null);
+    const result = await service.prepare(undefined);
+
+    expect(result).toBeUndefined();
+  });
+
+  it('should throw for a static serve class that is not a component', async () => {
+    class UndecoratedStaticServe extends AsenaStaticServeService<any> {}
+
+    expect(service.prepare(UndecoratedStaticServe)).rejects.toThrow(
+      'Static Serve service UndecoratedStaticServe not found.',
+    );
+  });
+
+  it('should return undefined when staticServeClass is null', async () => {
+    const result = await service.prepare(null as unknown as undefined);
 
     expect(result).toBeUndefined();
   });
@@ -57,7 +71,7 @@ describe('PrepareStaticServeConfigService', () => {
   it('should throw error when service is an array', async () => {
     mockContainer.resolve = mock(() => []);
 
-    expect(service.prepare({} as any)).rejects.toThrow('Static serve service cannot be array');
+    expect(service.prepare(MockStaticServeMiddleware)).rejects.toThrow('Static serve service cannot be array');
   });
 
   it('should prepare static serve config with all properties', async () => {
@@ -79,10 +93,12 @@ describe('PrepareStaticServeConfigService', () => {
   });
 
   it('should prepare static serve config without optional properties', async () => {
-    mockStaticServe.extra = undefined;
-    mockStaticServe.rewriteRequestPath = undefined;
-    mockStaticServe.onFound = undefined;
-    mockStaticServe.onNotFound = undefined;
+    Object.assign(mockStaticServe, {
+      extra: undefined,
+      rewriteRequestPath: undefined,
+      onFound: undefined,
+      onNotFound: undefined,
+    });
     mockContainer.resolve = mock(() => mockStaticServe);
 
     const result = await service.prepare(MockStaticServeMiddleware);

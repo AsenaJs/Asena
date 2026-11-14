@@ -166,7 +166,7 @@ export class AsenaServerFactory {
 
     if (primary) {
       const injectableComponents: InjectableComponent[] = primary.map((comp) => {
-        const face: string = getTypedMetadata<string>(ComponentConstants.InterfaceKey, comp);
+        const face = getTypedMetadata<string>(ComponentConstants.InterfaceKey, comp);
 
         return {
           Class: comp,

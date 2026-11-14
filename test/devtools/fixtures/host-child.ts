@@ -72,7 +72,7 @@ const componentSets = [
   [SecondEvents, SecondJob, SecondConfig],
 ];
 const count = Number(process.env.HOST_CHILD_SERVERS ?? 1);
-const servers = [];
+const servers: Array<{ stop: () => Promise<void> }> = [];
 const emitters: EventEmitter[] = [];
 
 for (const components of componentSets.slice(0, count)) {

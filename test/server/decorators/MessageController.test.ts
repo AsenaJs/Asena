@@ -111,7 +111,7 @@ describe('@MessageController Decorator', () => {
 
       const dependencies = getTypedMetadata<Record<string, string>>(ComponentConstants.DependencyKey, OrderHandler);
       expect(dependencies).toBeDefined();
-      expect(dependencies['someService']).toBe('SomeService');
+      expect(dependencies?.['someService']).toBe('SomeService');
     });
   });
 });

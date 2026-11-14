@@ -1,3 +1,5 @@
+import { cycleMessage } from './cycleMessage';
+
 /**
  * @description Custom error class for circular dependency detection
  * Provides detailed information about the circular dependency chain
@@ -10,8 +12,8 @@ export class CircularDependencyError extends Error {
 }
 
 /**
- * @description Detector for circular dependencies in the IoC container
- * Tracks the resolution stack and detects cycles during dependency injection
+ * @description Standalone cycle detector over one shared stack. The container does not use it:
+ * a shared stack cannot tell two overlapping resolves apart.
  */
 export class CircularDependencyDetector {
   private resolutionStack: Set<string> = new Set();
@@ -25,9 +27,8 @@ export class CircularDependencyDetector {
   public checkCircular(serviceName: string): void {
     if (this.resolutionStack.has(serviceName)) {
       const stack = Array.from(this.resolutionStack);
-      const chain = [...stack, serviceName].join(' -> ');
 
-      throw new CircularDependencyError(`Circular dependency detected: ${chain}`);
+      throw new CircularDependencyError(cycleMessage([...stack, serviceName]));
     }
   }
 

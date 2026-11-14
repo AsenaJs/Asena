@@ -7,7 +7,7 @@ import type { Class } from '../../server/types';
 
 export const defineComponent = <T extends ComponentParams>(
   componentType: ComponentType,
-  params: T | string,
+  params?: T | string,
   extra?: (target: Function) => void,
 ): ClassDecorator => {
   return (target: Function) => {
@@ -39,7 +39,10 @@ export const defineComponent = <T extends ComponentParams>(
   };
 };
 
-const paramsGenerator = (params: ComponentParams | string, componentType: ComponentType): ComponentParams => {
+const paramsGenerator = (
+  params: ComponentParams | string | undefined,
+  componentType: ComponentType,
+): ComponentParams => {
   const defaultParam: ComponentParams = { name: undefined, scope: undefined };
 
   if (

@@ -192,7 +192,7 @@ describe('duplicate component names', () => {
     @Service()
     class Consumer {
       @Inject(ProbeA)
-      public probe: ProbeA;
+      public probe!: ProbeA;
     }
 
     expect(() => dedupeAsScanDoes([ProbeA, ProbeB, Consumer])).toThrow(/Duplicate component name detected/);

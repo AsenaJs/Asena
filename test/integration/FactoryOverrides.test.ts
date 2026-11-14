@@ -27,7 +27,7 @@ class MailService {
 @Service()
 class SignupService {
   @Inject(MailService)
-  private mailService: MailService;
+  private mailService!: MailService;
 
   public async signup(email: string) {
     return await this.mailService.send(email);

@@ -30,7 +30,7 @@ class AuditService {
 @Service()
 class InvoiceService {
   @Inject(UserService)
-  private userService: UserService;
+  private userService!: UserService;
 
   public async total() {
     const user = await this.userService.findById('1');
@@ -42,7 +42,7 @@ class InvoiceService {
 @Controller('/billing')
 class BillingController {
   @Inject(InvoiceService)
-  private invoiceService: InvoiceService;
+  private invoiceService!: InvoiceService;
 
   @Get('/total')
   public async total(context: AsenaContext<any, any>) {
@@ -53,7 +53,7 @@ class BillingController {
 @Middleware()
 class AuthMiddleware extends AsenaMiddlewareService {
   @Inject(AuditService)
-  private auditService: AuditService;
+  private auditService!: AuditService;
 
   public async handle(_context: AsenaContext<any, any>, next: () => Promise<void>): Promise<void> {
     await this.auditService.record('auth');
@@ -64,7 +64,7 @@ class AuthMiddleware extends AsenaMiddlewareService {
 @Controller({ path: '/users', middlewares: [AuthMiddleware] })
 class UserController {
   @Inject(UserService)
-  private userService: UserService;
+  private userService!: UserService;
 
   @Get('/:id')
   public async find(context: AsenaContext<any, any>) {
@@ -76,7 +76,7 @@ class UserController {
 class AdminController {
   // Same service as UserController - must resolve to the same shared double
   @Inject(UserService)
-  private userService: UserService;
+  private userService!: UserService;
 
   @Get('/purge')
   public async purge(context: AsenaContext<any, any>) {
@@ -87,7 +87,7 @@ class AdminController {
 @Controller('/chat')
 class ChatController {
   @Inject(ulak('/chat'))
-  private chat: Ulak.NameSpace<'/chat'>;
+  private chat!: Ulak.NameSpace<'/chat'>;
 
   @Get('/ping')
   public async ping(context: AsenaContext<any, any>) {
@@ -100,7 +100,7 @@ class ChatController {
 @Controller('/legacy')
 class LegacyController {
   @Inject('UserService')
-  private userService: UserService;
+  private userService!: UserService;
 
   @Get('/')
   public async list(context: AsenaContext<any, any>) {
@@ -126,7 +126,7 @@ class InheritingUserService extends CrudServiceBase {
 
 abstract class GuardedControllerBase {
   @Inject(UserService)
-  protected userService: UserService;
+  protected userService!: UserService;
 
   @Get({ path: '/guarded', middlewares: [AuthMiddleware] })
   public async guarded(context: AsenaContext<any, any>) {
@@ -147,7 +147,7 @@ class InheritingController extends GuardedControllerBase {
 @Controller('/mocking')
 class MockingController {
   @Inject(InheritingUserService)
-  private userService: InheritingUserService;
+  private userService!: InheritingUserService;
 
   @Get('/find')
   public async find(context: AsenaContext<any, any>) {
@@ -349,5 +349,39 @@ describe('createWebTest', () => {
 
       await app.stop();
     });
+  });
+});
+
+describe('createWebTest keys a class-injected service by the name it registers under', () => {
+  test('mocks a dependency that is named only after its dependent is decorated', async () => {
+    class LateDependency {
+      public hello() {
+        return 'real';
+      }
+    }
+
+    @Controller('/late')
+    class LateController {
+      @Inject(LateDependency)
+      private dependency!: LateDependency;
+
+      public dependencyOf() {
+        return this.dependency;
+      }
+    }
+
+    // Named only after LateController is decorated, so @Inject stored the class name instead.
+    Service('RealLateDependency')(LateDependency);
+
+    const { app, mocks } = await webTest({ controllers: [LateController] });
+
+    expect(mocks.RealLateDependency).toBeDefined();
+    expect(mocks.LateDependency).toBeUndefined();
+
+    const controller = await app.resolve<LateController>('LateController');
+
+    expect(controller?.dependencyOf()).toBe(mocks.RealLateDependency);
+
+    await app.stop();
   });
 });

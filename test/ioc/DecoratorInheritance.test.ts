@@ -24,12 +24,12 @@ class OtherDependency {
 describe('@Inject inheritance', () => {
   abstract class InjectGrandparent {
     @Inject(LeafDependency)
-    protected fromGrandparent: LeafDependency;
+    protected fromGrandparent!: LeafDependency;
   }
 
   abstract class InjectParent extends InjectGrandparent {
     @Inject(OtherDependency)
-    protected fromParent: OtherDependency;
+    protected fromParent!: OtherDependency;
   }
 
   @Service('InjectChild')
@@ -42,7 +42,7 @@ describe('@Inject inheritance', () => {
   @Service('InjectChildWithOwn')
   class InjectChildWithOwn extends InjectParent {
     @Inject(LeafDependency)
-    private own: LeafDependency;
+    private own!: LeafDependency;
 
     public read() {
       return [this.fromGrandparent?.value, this.fromParent?.value, this.own?.value];
@@ -57,7 +57,7 @@ describe('@Inject inheritance', () => {
   });
 
   const register = async (classes: Class[]) => {
-    await engine.searchAndRegister(classes.map((Class) => ({ Class, interface: null }) as InjectableComponent));
+    await engine.searchAndRegister(classes.map((Class) => ({ Class, interface: undefined }) as InjectableComponent));
   };
 
   test('injects fields declared two levels up the chain', async () => {
@@ -120,7 +120,7 @@ describe('@PostConstruct inheritance', () => {
   });
 
   const register = async (classes: Class[]) => {
-    await engine.searchAndRegister(classes.map((Class) => ({ Class, interface: null }) as InjectableComponent));
+    await engine.searchAndRegister(classes.map((Class) => ({ Class, interface: undefined }) as InjectableComponent));
 
     // Start hooks are deferred to server.start(), which these tests do not go through - they
     // are about which hooks the inheritance chain yields, not about when they fire. Drive them
@@ -169,7 +169,7 @@ describe('@Strategy inheritance', () => {
 
   abstract class StrategyBase {
     @Strategy('Greeter')
-    protected greeters: Greeter[];
+    protected greeters!: Greeter[];
   }
 
   @Service('StrategyChild')
@@ -188,7 +188,7 @@ describe('@Strategy inheritance', () => {
     (engine as any)['_container'] = new Container();
 
     await engine.searchAndRegister([
-      { Class: StrategyChild, interface: null },
+      { Class: StrategyChild, interface: undefined },
       { Class: EnglishGreeter, interface: 'Greeter' },
       { Class: TurkishGreeter, interface: 'Greeter' },
     ] as InjectableComponent[]);
@@ -214,7 +214,7 @@ describe('plain method inheritance', () => {
 
     (engine as any)['_container'] = new Container();
 
-    await engine.searchAndRegister([{ Class: MethodChild, interface: null }] as InjectableComponent[]);
+    await engine.searchAndRegister([{ Class: MethodChild, interface: undefined }] as InjectableComponent[]);
 
     const child = (await engine.container.resolve('MethodChild')) as MethodChild;
 
@@ -255,7 +255,7 @@ describe('decorators that replace the class they decorate', () => {
 
     (engine as any)['_container'] = new Container();
 
-    await engine.searchAndRegister([{ Class, interface: null }] as InjectableComponent[]);
+    await engine.searchAndRegister([{ Class, interface: undefined }] as InjectableComponent[]);
 
     return engine.container.resolve(name);
   };
@@ -298,13 +298,13 @@ describe('@Strategy override precedence', () => {
 
     abstract class GreeterBase {
       @Strategy('Quiet')
-      public greeters: any[];
+      public greeters!: any[];
     }
 
     @Service('OverridingConsumer')
     class OverridingConsumer extends GreeterBase {
       @Strategy('Loud')
-      public override greeters: any[];
+      public override greeters!: any[];
     }
 
     const engine = new IocEngine();
@@ -312,7 +312,7 @@ describe('@Strategy override precedence', () => {
     (engine as any)['_container'] = new Container();
 
     await engine.searchAndRegister([
-      { Class: OverridingConsumer, interface: null },
+      { Class: OverridingConsumer, interface: undefined },
       { Class: QuietGreeter, interface: 'Quiet' },
       { Class: LoudGreeter, interface: 'Loud' },
     ] as InjectableComponent[]);
@@ -335,7 +335,7 @@ describe('@Strategy override precedence', () => {
     @Service('DefineSemanticsConsumer')
     class DefineSemanticsConsumer {
       @Strategy('Calm')
-      public greeters: any[];
+      public greeters!: any[];
     }
 
     const engine = new IocEngine();
@@ -343,7 +343,7 @@ describe('@Strategy override precedence', () => {
     (engine as any)['_container'] = new Container();
 
     await engine.searchAndRegister([
-      { Class: DefineSemanticsConsumer, interface: null },
+      { Class: DefineSemanticsConsumer, interface: undefined },
       { Class: CalmGreeter, interface: 'Calm' },
     ] as InjectableComponent[]);
 
@@ -354,7 +354,7 @@ describe('@Strategy override precedence', () => {
     // created before the container gets to inject anything.
     Object.defineProperty(instance, 'greeters', { value: undefined, writable: true, configurable: true });
 
-    await (container as any).injectStrategies(instance, DefineSemanticsConsumer);
+    await (container as any).injectStrategies(instance, DefineSemanticsConsumer, []);
 
     expect(instance.greeters).toBeDefined();
 

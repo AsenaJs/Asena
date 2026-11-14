@@ -44,7 +44,7 @@ describe('Duplicate Route Detection', () => {
     @Controller('/api')
     class ControllerA {
       @Inject(SharedService)
-      private service: SharedService;
+      private service!: SharedService;
 
       @Get('/users')
       public listUsers(context: AsenaContext<any, any>) {
@@ -55,7 +55,7 @@ describe('Duplicate Route Detection', () => {
     @Controller('/api')
     class ControllerB {
       @Inject(SharedService)
-      private service: SharedService;
+      private service!: SharedService;
 
       @Get('/users')
       public getUsers(context: AsenaContext<any, any>) {
@@ -77,7 +77,7 @@ describe('Duplicate Route Detection', () => {
     @Controller('/api')
     class ControllerC {
       @Inject(SharedService)
-      private service: SharedService;
+      private service!: SharedService;
 
       @Get('/items')
       public getItems(context: AsenaContext<any, any>) {
@@ -88,7 +88,7 @@ describe('Duplicate Route Detection', () => {
     @Controller('/api')
     class ControllerD {
       @Inject(SharedService)
-      private service: SharedService;
+      private service!: SharedService;
 
       @Post('/items')
       public createItem(context: AsenaContext<any, any>) {
@@ -111,7 +111,7 @@ describe('Duplicate Route Detection', () => {
     @Controller('/proxy')
     class ProxyController {
       @Inject(SharedService)
-      private service: SharedService;
+      private service!: SharedService;
 
       @All('/endpoint')
       public handleAll(context: AsenaContext<any, any>) {
@@ -122,7 +122,7 @@ describe('Duplicate Route Detection', () => {
     @Controller('/proxy')
     class ConflictController {
       @Inject(SharedService)
-      private service: SharedService;
+      private service!: SharedService;
 
       @Get('/endpoint')
       public handleGet(context: AsenaContext<any, any>) {
@@ -144,7 +144,7 @@ describe('Duplicate Route Detection', () => {
     @Controller('/catch')
     class FirstController {
       @Inject(SharedService)
-      private service: SharedService;
+      private service!: SharedService;
 
       @Get('/data')
       public getData(context: AsenaContext<any, any>) {
@@ -155,7 +155,7 @@ describe('Duplicate Route Detection', () => {
     @Controller('/catch')
     class SecondController {
       @Inject(SharedService)
-      private service: SharedService;
+      private service!: SharedService;
 
       @All('/data')
       public handleAll(context: AsenaContext<any, any>) {
@@ -177,7 +177,7 @@ describe('Duplicate Route Detection', () => {
     @Controller({ path: '/dup', name: 'AlphaController' })
     class AlphaController {
       @Inject(SharedService)
-      private service: SharedService;
+      private service!: SharedService;
 
       @Get('/test')
       public testMethod(context: AsenaContext<any, any>) {
@@ -188,7 +188,7 @@ describe('Duplicate Route Detection', () => {
     @Controller({ path: '/dup', name: 'BetaController' })
     class BetaController {
       @Inject(SharedService)
-      private service: SharedService;
+      private service!: SharedService;
 
       @Get('/test')
       public testMethod(context: AsenaContext<any, any>) {

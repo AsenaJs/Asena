@@ -24,7 +24,7 @@ class TestService {
 })
 class TestController {
   @Inject(TestService)
-  private testService: TestService;
+  private testService!: TestService;
 
   public getData(): string {
     return this.testService.getValue();
@@ -59,8 +59,8 @@ describe('IocEngine', () => {
 
   test('should register components manually', async () => {
     const components: InjectableComponent[] = [
-      { Class: TestService, interface: null },
-      { Class: TestController, interface: null },
+      { Class: TestService, interface: undefined },
+      { Class: TestController, interface: undefined },
     ];
 
     await iocEngine.searchAndRegister(components);
@@ -93,15 +93,15 @@ describe('IocEngine', () => {
       await iocEngine.searchAndRegister();
       expect(true).toBe(false);
     } catch (error) {
-      expect(error.message).toBe('No components or configuration found');
+      expect((error as Error).message).toBe('No components or configuration found');
     }
   });
 
   test('should register dependencies correct when extending class', async () => {
     const components: InjectableComponent[] = [
-      { Class: TestService2, interface: null },
-      { Class: TestController, interface: null },
-      { Class: TestService, interface: null },
+      { Class: TestService2, interface: undefined },
+      { Class: TestController, interface: undefined },
+      { Class: TestService, interface: undefined },
     ];
 
     await iocEngine.searchAndRegister(components);

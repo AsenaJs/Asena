@@ -34,7 +34,7 @@ describe('Bootstrap Phase Flow Integration', () => {
     @Controller('/test')
     class TestController {
       @Inject(TestService)
-      public testService: TestService;
+      public testService!: TestService;
 
       @Get({ path: '/' })
       public getData(context: AsenaContext<any, any>) {
@@ -115,10 +115,10 @@ describe('Bootstrap Phase Flow Integration', () => {
     @Controller('/api')
     class UserController {
       @Inject(UserService)
-      public userService: UserService;
+      public userService!: UserService;
 
       @Inject(AnotherService)
-      public anotherService: AnotherService;
+      public anotherService!: AnotherService;
 
       @Get({ path: '/users' })
       public getUsers(context: AsenaContext<any, any>) {
@@ -158,7 +158,7 @@ describe('Bootstrap Phase Flow Integration', () => {
     @Controller('/config')
     class ConfigController {
       @Inject(ConfigService)
-      public configService: ConfigService;
+      public configService!: ConfigService;
 
       @Get({ path: '/' })
       public getConfig(context: AsenaContext<any, any>) {
@@ -210,7 +210,7 @@ describe('Bootstrap Phase Flow Integration', () => {
     @Service()
     class CacheService {
       @Inject(DatabaseService)
-      public database: DatabaseService;
+      public database!: DatabaseService;
 
       public get(key: string) {
         return `cached: ${key}`;
@@ -220,10 +220,10 @@ describe('Bootstrap Phase Flow Integration', () => {
     @Service()
     class UserService {
       @Inject(DatabaseService)
-      public database: DatabaseService;
+      public database!: DatabaseService;
 
       @Inject(CacheService)
-      public cache: CacheService;
+      public cache!: CacheService;
 
       public getUsers() {
         return [{ id: 1, name: 'User' }];
@@ -233,7 +233,7 @@ describe('Bootstrap Phase Flow Integration', () => {
     @Controller('/api')
     class UserController {
       @Inject(UserService)
-      public userService: UserService;
+      public userService!: UserService;
 
       @Get({ path: '/users' })
       public getUsers(context: AsenaContext<any, any>) {
@@ -278,7 +278,7 @@ describe('Bootstrap Phase Flow Integration', () => {
     @Controller('/api')
     class ApiController {
       @Inject(WebSocketService)
-      public webSocketService: WebSocketService;
+      public webSocketService!: WebSocketService;
 
       @Get({ path: '/' })
       public getData(context: AsenaContext<any, any>) {
@@ -319,7 +319,7 @@ describe('Bootstrap Phase Flow Integration', () => {
     @Controller('/api')
     class ApiController {
       @Inject(MiddlewareService)
-      public middlewareService: MiddlewareService;
+      public middlewareService!: MiddlewareService;
 
       @Get({ path: '/' })
       public getData(context: AsenaContext<any, any>) {

@@ -1,9 +1,10 @@
 import { getChainedTypedMetadataList, getOwnTypedMetadata } from '../../../utils/typedMetadata';
 import { ComponentConstants } from '../../../ioc/constants';
 import type { AsenaValidationService, ValidatorClass } from '../../web/middleware';
-import { type BaseValidator, VALIDATOR_METHODS, type ValidatorHandler } from '../../../adapter';
+import { type BaseValidator, type ValidatorHandler } from '../../../adapter';
 import { type Container, CoreService, type ICoreService, ICoreServiceNames } from '../../../ioc';
 import { Inject } from '../../../ioc/component';
+import { VALIDATOR_KEYS } from '../../../adapter/types/validatorKeys';
 
 /**
  * @description Core service for preparing validator instances
@@ -14,9 +15,9 @@ export class PrepareValidatorService implements ICoreService {
   public serviceName = 'PrepareValidatorService';
 
   @Inject(ICoreServiceNames.CONTAINER)
-  private container: Container;
+  private container!: Container;
 
-  public async prepare(Validator: ValidatorClass<any>): Promise<BaseValidator> {
+  public async prepare(Validator: ValidatorClass<any> | undefined): Promise<BaseValidator | undefined> {
     if (!Validator) {
       return;
     }
@@ -46,11 +47,15 @@ export class PrepareValidatorService implements ICoreService {
       throw new Error('Validator cannot be array');
     }
 
-    const overrides: string[] = getChainedTypedMetadataList<string>(ComponentConstants.OverrideKey, validator);
+    const overrides = getChainedTypedMetadataList<string | symbol>(ComponentConstants.OverrideKey, validator);
 
     const baseValidatorMiddleware: BaseValidator = {};
 
-    VALIDATOR_METHODS.filter((key) => typeof validator[key] === 'function').forEach((key) => {
+    VALIDATOR_KEYS.forEach((key) => {
+      if (typeof validator[key] !== 'function') {
+        return;
+      }
+
       baseValidatorMiddleware[key] = {
         handle: validator[key].bind(validator),
         override: overrides?.includes(key) || false,

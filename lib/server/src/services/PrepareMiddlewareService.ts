@@ -14,7 +14,7 @@ export class PrepareMiddlewareService implements ICoreService {
   public serviceName = 'PrepareMiddlewareService';
 
   @Inject(ICoreServiceNames.CONTAINER)
-  private container: Container;
+  private container!: Container;
 
   /**
    * @description Prepares middleware instances from middleware classes
@@ -49,11 +49,11 @@ export class PrepareMiddlewareService implements ICoreService {
       if (!instances) continue;
 
       const normalizedInstances = Array.isArray(instances) ? instances : [instances];
-      let override: string[];
+      let override: (string | symbol)[];
       let isOverride: boolean;
 
       for (const instance of normalizedInstances) {
-        override = getChainedTypedMetadataList<string>(ComponentConstants.OverrideKey, instance);
+        override = getChainedTypedMetadataList<string | symbol>(ComponentConstants.OverrideKey, instance);
 
         isOverride = override ? override.includes('handle') : false;
 

@@ -65,7 +65,7 @@ const isPlainData = (args: unknown[]): boolean => {
     for (const key of Reflect.ownKeys(value)) {
       const descriptor = Object.getOwnPropertyDescriptor(value, key);
 
-      if (typeof key === 'symbol' || !('value' in descriptor)) {
+      if (typeof key === 'symbol' || !descriptor || !('value' in descriptor)) {
         return false;
       }
 
@@ -105,7 +105,10 @@ const renderText = (method: ConsoleMethod, args: unknown[], below: (...args: nev
     }
     case 'dir': {
       const [value, options] = args;
-      const body = typeof value === 'string' ? value : Bun.inspect(value, options);
+      const body =
+        typeof value === 'string'
+          ? value
+          : Bun.inspect(value, options !== null && typeof options === 'object' ? options : undefined);
 
       return { text: `${body}\n`, forward: [body], formatted: [] };
     }
@@ -227,7 +230,7 @@ const install = (onlyNative: boolean): (() => void) => {
       const captured = (...args: unknown[]): unknown => {
         // A passed console.assert prints nothing.
         if (!live || inConsole || holders.size === 0 || (method === 'assert' && args[0])) {
-          return original.apply(console, args);
+          return Reflect.apply(original, console, args);
         }
 
         // Keeps the line single on a runtime whose console writes through process.stdout.write.
@@ -244,7 +247,7 @@ const install = (onlyNative: boolean): (() => void) => {
           });
 
           // Arguments that could run code when inspected go out as the record's text, so they run once.
-          return original.apply(console, taken ? taken.forward : args);
+          return Reflect.apply(original, console, taken ? taken.forward : args);
         } finally {
           inConsole = false;
         }
@@ -261,7 +264,7 @@ const install = (onlyNative: boolean): (() => void) => {
           capture(stream, (record) => chunkText(record, stream, args[0]));
         }
 
-        return original.apply(this, args);
+        return Reflect.apply(original, this, args);
       };
     });
   }

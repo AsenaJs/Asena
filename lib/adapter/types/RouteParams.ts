@@ -11,8 +11,8 @@ export interface RouteParams<C extends AsenaContext<any, any>, VS, E = any> {
   path: string;
   middlewares: BaseMiddleware<C>[];
   handler: AsenaHandler<C>;
-  staticServe: BaseStaticServeParams<C, E>;
-  validator: BaseValidator<VS>;
+  staticServe?: BaseStaticServeParams<C, E>;
+  validator?: BaseValidator<VS>;
   validatorCache?: boolean;
   validatorName?: string;
   contextClass?: ContractContextClass;

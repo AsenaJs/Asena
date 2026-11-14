@@ -26,7 +26,8 @@ export function genericHandler({
   };
 }
 
-export const DEFAULT_PARAMS: ControllerDecoratorParams = {
+export const DEFAULT_PARAMS: ControllerDecoratorParams &
+  Required<Pick<ApiParams, 'middlewares' | 'summary' | 'description'>> = {
   path: '',
   middlewares: [],
   summary: '',
@@ -35,7 +36,7 @@ export const DEFAULT_PARAMS: ControllerDecoratorParams = {
   validator: undefined,
 };
 
-export const generateHandlerParams = (params: ControllerDecoratorParams | string): ControllerDecoratorParams => {
+export const generateHandlerParams = (params: ControllerDecoratorParams | string): Omit<ApiParams, 'method'> => {
   if (typeof params === 'string') {
     return {
       ...DEFAULT_PARAMS,
@@ -47,6 +48,9 @@ export const generateHandlerParams = (params: ControllerDecoratorParams | string
     ...DEFAULT_PARAMS,
     ...params,
     path: normalizePathString(params.path),
+    middlewares: params.middlewares ?? [],
+    summary: params.summary ?? '',
+    description: params.description ?? '',
   };
 };
 

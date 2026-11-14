@@ -14,7 +14,7 @@ class TestClass {
 @Component()
 class TestClass2 {
   @Inject(TestClass)
-  private testClass: TestClass;
+  private testClass!: TestClass;
 
   public testMethod() {
     return this.testClass.testMethod();
@@ -24,10 +24,10 @@ class TestClass2 {
 @Component()
 class TestClass3 {
   @Inject(TestClass)
-  private testClass: TestClass;
+  private testClass!: TestClass;
 
   @Inject(TestClass2)
-  private testClass2: TestClass2;
+  private testClass2!: TestClass2;
 
   public testMethod() {
     return this.testClass.testMethod() + '-' + this.testClass2.testMethod();
@@ -48,7 +48,7 @@ class TestClass4 implements TestInterface {
 @Component()
 class TestClass5 implements TestInterface {
   @Inject(TestClass4)
-  private testClass4: TestClass4;
+  private testClass4!: TestClass4;
 
   public testMethod() {
     return this.testClass4.testMethod();
@@ -58,7 +58,7 @@ class TestClass5 implements TestInterface {
 @Component()
 class TestClass6 {
   @Strategy('TestInterface')
-  public services: TestInterface[];
+  public services!: TestInterface[];
 
   public testMethod() {
     return this.services.map((service) => service.testMethod()).join('-');
@@ -271,7 +271,10 @@ describe('Container', () => {
 
     expect(spy).toBeCalled();
 
-    expect(spy).toHaveBeenCalledWith(TestClass);
+    const [preparedClass, chain] = spy.mock.calls[0] as unknown as [unknown, { key: string }[]];
+
+    expect(preparedClass).toBe(TestClass);
+    expect(chain.map((link) => link.key)).toEqual(['TestClass']);
   });
 
   test('should inject dependency', async () => {
@@ -460,6 +463,16 @@ describe('Container', () => {
     }).toThrow("Service 'TestInstance' is already registered");
   });
 
+  test('registerInstance rejects null and undefined without taking the key', async () => {
+    await expect(container.registerInstance('Empty', null)).rejects.toThrow(TypeError);
+    await expect(container.registerInstance('Empty', undefined)).rejects.toThrow(TypeError);
+
+    const instance = { ok: true };
+    await container.registerInstance('Empty', instance);
+
+    expect(await container.resolve<typeof instance>('Empty')).toBe(instance);
+  });
+
   test('should register and resolve primitive values as instances', async () => {
     const config = { apiKey: 'test-key', timeout: 3000 };
 
@@ -497,7 +510,7 @@ describe('Container', () => {
     @Component()
     class UserService {
       @Inject('LoggerService')
-      public logger: LoggerService;
+      public logger!: LoggerService;
 
       public getUser() {
         return this.logger.log('Getting user');
@@ -642,7 +655,7 @@ describe('Container dependency resolution errors', () => {
     @Component()
     class Dependent {
       @Inject(NeverRegistered)
-      private dependency: NeverRegistered;
+      private dependency!: NeverRegistered;
 
       public ping() {
         return this.dependency.ping();
@@ -667,13 +680,13 @@ describe('Container dependency resolution errors', () => {
     @Component()
     class Middle {
       @Inject(Leaf)
-      private leaf: Leaf;
+      private leaf!: Leaf;
     }
 
     @Component()
     class Root {
       @Inject(Middle)
-      private middle: Middle;
+      private middle!: Middle;
     }
 
     // Prototypes: neither class is constructed until resolve, so the miss for Leaf happens

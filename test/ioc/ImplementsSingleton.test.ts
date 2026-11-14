@@ -85,13 +85,13 @@ describe('@Implements singleton', () => {
     @Service()
     class Notifier {
       @Inject(SmtpMailer)
-      public byName: SmtpMailer;
+      public byName!: SmtpMailer;
 
       @Inject('IMailer')
-      public byInterface: SmtpMailer;
+      public byInterface!: SmtpMailer;
 
       @Strategy('IMailer')
-      public all: SmtpMailer[];
+      public all!: SmtpMailer[];
     }
 
     const app = await boot([SmtpMailer, Notifier]);
@@ -131,13 +131,13 @@ describe('@Implements singleton', () => {
     @Service()
     class Broadcaster {
       @Inject(EmailChannel)
-      public email: EmailChannel;
+      public email!: EmailChannel;
 
       @Inject(SmsChannel)
-      public sms: SmsChannel;
+      public sms!: SmsChannel;
 
       @Strategy('IChannel')
-      public channels: unknown[];
+      public channels!: unknown[];
     }
 
     const app = await boot([EmailChannel, SmsChannel, Broadcaster]);
@@ -264,7 +264,7 @@ describe('@Implements singleton', () => {
       public ses: unknown;
 
       @Strategy('IMailer')
-      public mailers: unknown[];
+      public mailers!: unknown[];
     }
 
     const fake = { send: () => 'fake' };

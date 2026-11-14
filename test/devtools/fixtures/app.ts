@@ -98,13 +98,13 @@ export class DollarFormatter {
 @Service({ name: 'ItemService' })
 export class ItemService {
   @Value('DEVTOOLS_FIXTURE_PAGE_SIZE', { default: 20, parse: Number })
-  public pageSize: number;
+  public pageSize!: number;
 
   @Value('DEVTOOLS_FIXTURE_REGION')
-  public region: string;
+  public region!: string;
 
   @Strategy('PriceFormatter')
-  public formatters: EuroFormatter[];
+  public formatters!: EuroFormatter[];
 
   public find(id: string) {
     return { id };
@@ -124,7 +124,7 @@ export class ItemDraft {
 @Controller({ path: '/items', middlewares: [AuditTrail] })
 export class ItemController {
   @Inject(ItemService)
-  private itemService: ItemService;
+  private itemService!: ItemService;
 
   @Get('/:id')
   public find(context: AsenaContext<any, any>) {

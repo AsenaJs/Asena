@@ -61,13 +61,10 @@ export function expandComponents(components: Class[], overrides: Record<string, 
   // this a BFS without a second loop
   for (const owner of queue) {
     for (const { fieldName, serviceName, serviceClass } of discoverInjectedFieldsFromClass(owner)) {
-      // The stored name is undefined when the dependency was decorated after the dependent:
-      // @Inject reads NameKey at decoration time. Derive it from the class reference instead.
-      const name = serviceName ?? (serviceClass ? componentName(serviceClass) : undefined);
-
       if (
-        name !== undefined &&
-        (CORE_SERVICE_NAMES.has(name) || Object.hasOwn(overrides, name) || providedNames.has(name))
+        CORE_SERVICE_NAMES.has(serviceName) ||
+        Object.hasOwn(overrides, serviceName) ||
+        providedNames.has(serviceName)
       ) {
         continue;
       }
@@ -84,7 +81,7 @@ export function expandComponents(components: Class[], overrides: Record<string, 
         continue;
       }
 
-      missing.push(`${owner.name}.${fieldName} injects '${name}', which is not in components or overrides`);
+      missing.push(`${owner.name}.${fieldName} injects '${serviceName}', which is not in components or overrides`);
     }
   }
 

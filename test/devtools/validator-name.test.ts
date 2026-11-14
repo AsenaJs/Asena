@@ -43,12 +43,14 @@ class OrderController {
 const bootOrders = () => bootWithMockAdapter([OrderController, OrderBodyValidator, CustomerQueryValidator]);
 
 const registeredRoute = (app: TestApp, path: string): RouteParams<any, any> => {
-  const routes: RouteParams<any, any>[] = mockAdapterOf(app).registerRoute.mock.calls.map(([route]) => route);
+  const routes: RouteParams<any, any>[] = mockAdapterOf(app).registerRoute.mock.calls.map(
+    (call: unknown[]) => call[0] as RouteParams<any, any>,
+  );
   const route = routes.find((candidate) => candidate.path === path);
 
   expect(route).toBeDefined();
 
-  return route;
+  return route!;
 };
 
 describe('validatorName on registered routes', () => {

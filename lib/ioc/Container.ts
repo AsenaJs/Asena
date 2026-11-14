@@ -4,6 +4,7 @@ import type {
   ComponentType,
   ContainerService,
   Dependencies,
+  DependencyClasses,
   Expressions,
   LifecycleComponent,
   StartHookMode,
@@ -11,9 +12,21 @@ import type {
 } from './types';
 import { ComponentConstants } from './constants';
 import { getOwnTypedMetadata, getTypedMetadata } from '../utils';
-import { CircularDependencyDetector } from './CircularDependencyDetector';
+import { AsyncLocalStorage } from 'node:async_hooks';
+import { CircularDependencyError } from './CircularDependencyDetector';
+import { cycleMessage } from './cycleMessage';
 import { CORE_SERVICE } from './decorators';
+import { resolveDependencyName } from './helper/iocHelper';
 import { collectValueFields, readValue } from './helper/valueResolver';
+
+/**
+ * One component in a resolution chain. `active` turns false once the resolve that created it
+ * settles, so a chain carried into a hook does not read its finished links as a cycle.
+ */
+interface ChainLink {
+  readonly key: string;
+  active: boolean;
+}
 
 /**
  * The message behind an assignment to a wired field.
@@ -46,11 +59,15 @@ export class UnregisteredDependencyError extends Error {
 export class Container {
   private _services: { [key: string]: ContainerService | ContainerService[] } = {};
 
-  private circularDetector = new CircularDependencyDetector();
-
   private postProcessors: ComponentPostProcessor[] = [];
 
   private overriddenKeys = new Set<string>();
+
+  /**
+   * Carries the chain into user code (start hooks, post-processors) that re-enters the container
+   * without a chain parameter. Scoped per container, so two containers never see each other.
+   */
+  private readonly resolutionChains = new AsyncLocalStorage<readonly ChainLink[]>();
 
   /** Key -> entries that live there only as an alias of their own key (see `registerAlias`). */
   private aliases = new Map<string, Set<ContainerService>>();
@@ -90,7 +107,9 @@ export class Container {
       return this._services[key] as ContainerService;
     }
 
-    const instance = singleton ? await this.prepareInstance(Class) : null;
+    const instance = singleton
+      ? await this.enterChain(this.currentPath(), key, (chain) => this.prepareInstance(Class, chain))
+      : null;
 
     if (singleton) {
       this.trackLifecycle(key, instance, Class);
@@ -178,8 +197,12 @@ export class Container {
       throw new Error(`Service '${key}' is already registered`);
     }
 
+    if (instance === null || instance === undefined) {
+      throw new TypeError(`Service '${key}' cannot be registered without an instance`);
+    }
+
     this._services[key] = {
-      Class: instance.constructor as any,
+      Class: instance.constructor as Class,
       instance: instance,
       singleton: true,
     };
@@ -224,24 +247,57 @@ export class Container {
   }
 
   public async resolve<T>(key: string): Promise<(T | T[]) | null> {
-    // Check circular dependency
-    this.circularDetector.checkCircular(key);
-    this.circularDetector.push(key);
+    return this.resolveChain<T>(key, this.currentPath());
+  }
+
+  /** The chain of the construction this call runs inside, empty when it starts a fresh chain. */
+  private currentPath(): readonly ChainLink[] {
+    return this.resolutionChains.getStore() ?? [];
+  }
+
+  /**
+   * The resolution chain belongs to one call chain, not to the container: two resolves in flight at
+   * once must not see each other's keys. Each hop hands the chain it extends to what it creates.
+   */
+  private async resolveChain<T>(key: string, path: readonly ChainLink[]): Promise<(T | T[]) | null> {
+    this.assertNotCircular(path, key);
+
+    const service = this._services[key];
+
+    if (!service) {
+      throw new UnregisteredDependencyError(key + ' is not registered');
+    }
+
+    return this.enterChain<T | T[]>(path, key, (chain) =>
+      Array.isArray(service)
+        ? this.resolveMultipleContainerService<T>(service, chain)
+        : this.resolveContainerService<T>(service, chain),
+    );
+  }
+
+  /**
+   * Runs `work` with the chain extended by `key`. The link is retired when `work` settles, and
+   * links already retired are dropped from the chain handed on.
+   */
+  private async enterChain<T>(
+    path: readonly ChainLink[],
+    key: string,
+    work: (chain: readonly ChainLink[]) => Promise<T>,
+  ): Promise<T> {
+    const link: ChainLink = { key, active: true };
 
     try {
-      const service = this._services[key];
-
-      if (!service) {
-        throw new UnregisteredDependencyError(key + ' is not registered');
-      }
-
-      if (Array.isArray(service)) {
-        return await this.resolveMultipleContainerService<T>(service);
-      }
-
-      return await this.resolveContainerService<T>(service);
+      return await work([...path.filter((entry) => entry.active), link]);
     } finally {
-      this.circularDetector.pop(key);
+      link.active = false;
+    }
+  }
+
+  private assertNotCircular(path: readonly ChainLink[], key: string): void {
+    const live = path.filter((entry) => entry.active);
+
+    if (live.some((entry) => entry.key === key)) {
+      throw new CircularDependencyError(cycleMessage([...live.map((entry) => entry.key), key]));
     }
   }
 
@@ -272,24 +328,25 @@ export class Container {
    * @returns {Promise<T[]>} Every implementation, empty when the key has none
    */
   public async resolveStrategy<T>(key: string): Promise<T[]> {
-    // Kept from resolve(): a cycle running through a strategy key must still be reported
-    // rather than recursing until the stack overflows
-    this.circularDetector.checkCircular(key);
-    this.circularDetector.push(key);
+    return this.resolveStrategyChain<T>(key, this.currentPath());
+  }
 
-    try {
-      const service = this._services[key];
+  private async resolveStrategyChain<T>(key: string, path: readonly ChainLink[]): Promise<T[]> {
+    // A cycle running through a strategy key must still be reported rather than recursing
+    // until the stack overflows
+    this.assertNotCircular(path, key);
 
-      if (!service) {
-        return [];
-      }
+    const service = this._services[key];
 
-      return Array.isArray(service)
-        ? await this.resolveMultipleContainerService<T>(service)
-        : [await this.resolveContainerService<T>(service)];
-    } finally {
-      this.circularDetector.pop(key);
+    if (!service) {
+      return [];
     }
+
+    return this.enterChain(path, key, async (chain) =>
+      Array.isArray(service)
+        ? await this.resolveMultipleContainerService<T>(service, chain)
+        : [await this.resolveContainerService<T>(service, chain)],
+    );
   }
 
   /**
@@ -304,20 +361,25 @@ export class Container {
     }
 
     const instances: (T | T[])[] = [];
+    const path = this.currentPath();
 
-    for (const containerService of matchingServices) {
-      if (Array.isArray(containerService)) {
-        instances.push(await this.resolveMultipleContainerService<T>(containerService));
-      } else {
-        instances.push(await this.resolveContainerService<T>(containerService));
-      }
+    for (const [key, containerService] of matchingServices) {
+      this.assertNotCircular(path, key);
+
+      instances.push(
+        await this.enterChain<T | T[]>(path, key, (chain) =>
+          Array.isArray(containerService)
+            ? this.resolveMultipleContainerService<T>(containerService, chain)
+            : this.resolveContainerService<T>(containerService, chain),
+        ),
+      );
     }
 
     return instances;
   }
 
-  private filterServices(typeOfComponent: ComponentType): (ContainerService | ContainerService[])[] {
-    const matches: (ContainerService | ContainerService[])[] = [];
+  private filterServices(typeOfComponent: ComponentType): [string, ContainerService | ContainerService[]][] {
+    const matches: [string, ContainerService | ContainerService[]][] = [];
 
     for (const [key, value] of Object.entries(this._services)) {
       const aliased = this.aliases.get(key);
@@ -331,15 +393,15 @@ export class Container {
         continue;
       }
 
-      matches.push(entries.length > 1 ? entries : entries[0]);
+      matches.push([key, entries.length > 1 ? entries : entries[0]]);
     }
 
     return matches;
   }
 
-  private async resolveContainerService<T>(containerService: ContainerService): Promise<T> {
+  private async resolveContainerService<T>(containerService: ContainerService, path: readonly ChainLink[]): Promise<T> {
     if (!containerService.singleton) {
-      return await this.prepareInstance<T>(containerService.Class);
+      return await this.prepareInstance<T>(containerService.Class, path);
     }
 
     if (!containerService.instance) {
@@ -349,8 +411,11 @@ export class Container {
     return containerService.instance as T;
   }
 
-  private async resolveMultipleContainerService<T>(containerService: ContainerService[]): Promise<T[]> {
-    return Promise.all(containerService.map(async (_service) => this.resolveContainerService<T>(_service)));
+  private async resolveMultipleContainerService<T>(
+    containerService: ContainerService[],
+    path: readonly ChainLink[],
+  ): Promise<T[]> {
+    return Promise.all(containerService.map(async (_service) => this.resolveContainerService<T>(_service, path)));
   }
 
   /**
@@ -384,30 +449,33 @@ export class Container {
     return this.lifecycleComponents;
   }
 
-  private async prepareInstance<T>(Class: Class) {
-    const newInstance = new Class();
+  private async prepareInstance<T>(Class: Class, path: readonly ChainLink[]) {
+    // The chain covers construction too: a constructor or field initializer is user code that
+    // may resolve its own key, and it must see this chain rather than an empty one.
+    return await this.resolutionChains.run(path, async () => {
+      const newInstance = new Class();
 
-    this.injectValues(newInstance, Class); // configuration injection
+      this.injectValues(newInstance, Class); // configuration injection
 
-    await this.injectDependencies(newInstance, Class); // dependency injection
+      await this.injectDependencies(newInstance, Class, path); // dependency injection
 
-    await this.injectStrategies(newInstance, Class); // strategy injection
+      await this.injectStrategies(newInstance, Class, path); // strategy injection
 
-    // Post-processing (skipped when postProcessors is empty - zero overhead)
-    let processed: any = newInstance;
+      let processed: any = newInstance;
 
-    for (const processor of this.postProcessors) {
-      processed = (await processor.postProcess(processed, Class)) ?? processed;
-    }
+      for (const processor of this.postProcessors) {
+        processed = (await processor.postProcess(processed, Class)) ?? processed;
+      }
 
-    // Deferred mode leaves the start hooks to LifecycleService. The hook runs against the
-    // *processed* instance either way - a post-processor may have returned a proxy, and the
-    // hook has to see the same object every other component was injected with.
-    if (this.startHookMode === 'immediate') {
-      await this.executeStartHooks(processed, Class);
-    }
+      // Deferred mode leaves the start hooks to LifecycleService. The hook runs against the
+      // *processed* instance either way - a post-processor may have returned a proxy, and the
+      // hook has to see the same object every other component was injected with.
+      if (this.startHookMode === 'immediate') {
+        await this.executeStartHooks(processed, Class);
+      }
 
-    return processed as T;
+      return processed as T;
+    });
   }
 
   /**
@@ -429,7 +497,7 @@ export class Container {
       try {
         await instance[hook]();
       } catch (error) {
-        throw new Error(`@OnStart hook '${Class.name}.${hook}()' failed`, { cause: error });
+        throw new Error(`@OnStart hook '${Class.name}.${String(hook)}()' failed`, { cause: error });
       }
     }
   }
@@ -441,18 +509,18 @@ export class Container {
    * was brought up, matching how LifecycleService walks the components themselves.
    *
    * @param {Class} Class - The class to inspect
-   * @returns {string[]} Method names, empty when the class declares none
+   * @returns {(string | symbol)[]} Method names, empty when the class declares none
    */
-  public getStopHooks(Class: Class): string[] {
+  public getStopHooks(Class: Class): (string | symbol)[] {
     return this.collectHookMethods(Class, ComponentConstants.OnStopKey).reverse();
   }
 
   /**
    * @description The @OnStart method names for a class, in the order they run.
    * @param {Class} Class - The class to inspect
-   * @returns {string[]} Method names, empty when the class declares none
+   * @returns {(string | symbol)[]} Method names, empty when the class declares none
    */
-  public getStartHooks(Class: Class): string[] {
+  public getStartHooks(Class: Class): (string | symbol)[] {
     return this.collectHookMethods(Class, ComponentConstants.PostConstructKey);
   }
 
@@ -460,15 +528,18 @@ export class Container {
    * @description Collect decorated method names across the prototype chain, de-duplicated.
    * @param {Class} Class - The class to inspect
    * @param {symbol} metadataKey - Which hook list to read
-   * @returns {string[]} Method names, ancestors first
+   * @returns {(string | symbol)[]} Method names, ancestors first
    */
-  private collectHookMethods(Class: Class, metadataKey: symbol): string[] {
+  private collectHookMethods(Class: Class, metadataKey: symbol): (string | symbol)[] {
     const prototypeChain = this.getPrototypeChain(Class);
-    const methods: string[] = [];
-    const seen = new Set<string>();
+    const methods: (string | symbol)[] = [];
+    const seen = new Set<string | symbol>();
 
     for (const classInChain of prototypeChain.reverse()) {
-      const hooks: string[] = getOwnTypedMetadata<string[]>(metadataKey, classInChain);
+      const hooks: (string | symbol)[] | undefined = getOwnTypedMetadata<(string | symbol)[]>(
+        metadataKey,
+        classInChain,
+      );
 
       if (!hooks) {
         continue;
@@ -488,7 +559,7 @@ export class Container {
     return methods;
   }
 
-  private async injectStrategies(newInstance: any, Class: Class) {
+  private async injectStrategies(newInstance: any, Class: Class, path: readonly ChainLink[]) {
     const prototypeChain = this.getPrototypeChain(Class);
 
     for (const classInChain of prototypeChain.reverse()) {
@@ -515,9 +586,9 @@ export class Container {
 
         if (strategyProperty?.value !== undefined) continue;
 
-        const strategy: Class[] = await this.resolveStrategy<Class>(interfaceName);
+        const strategy: Class[] = await this.resolveStrategyChain<Class>(interfaceName, path);
 
-        const expression: Expressions = getOwnTypedMetadata<Expressions>(
+        const expression: Expressions | undefined = getOwnTypedMetadata<Expressions>(
           ComponentConstants.ExpressionKey,
           classInChain,
         );
@@ -555,7 +626,7 @@ export class Container {
     }
   }
 
-  private async injectDependencies(newInstance: any, Class: Class) {
+  private async injectDependencies(newInstance: any, Class: Class, path: readonly ChainLink[]) {
     const prototypeChain = this.getPrototypeChain(Class);
 
     for (const classInChain of prototypeChain.reverse()) {
@@ -563,17 +634,24 @@ export class Container {
 
       if (!deps) continue;
 
-      let property: PropertyDescriptor;
+      const dependencyClasses = getOwnTypedMetadata<DependencyClasses>(
+        ComponentConstants.DependencyClassKey,
+        classInChain,
+      );
 
-      for (const [k, name] of Object.entries(deps)) {
+      let property: PropertyDescriptor | undefined;
+
+      for (const [k, injectedName] of Object.entries(deps)) {
         property = Object.getOwnPropertyDescriptor(newInstance, k);
 
         if (property?.value !== undefined) continue;
 
-        let instance: Class | Class[];
+        const name = resolveDependencyName(injectedName, dependencyClasses?.[k]);
+
+        let instance: Class | Class[] | null;
 
         try {
-          instance = await this.resolve<Class>(name);
+          instance = await this.resolveChain<Class>(name, path);
         } catch (error) {
           // Only the container's own miss, and only once: a nested miss arrives already
           // wrapped in a plain Error, and anything else - CircularDependencyError, a failed
@@ -593,7 +671,7 @@ export class Container {
           throw new Error('instance error cannot be null');
         }
 
-        const expression: Expressions = getOwnTypedMetadata<Expressions>(
+        const expression: Expressions | undefined = getOwnTypedMetadata<Expressions>(
           ComponentConstants.ExpressionKey,
           classInChain,
         );

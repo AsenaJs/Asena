@@ -10,7 +10,7 @@ class TestConfig implements AsenaConfig {}
 
 describe('PrepareConfigService', () => {
   const mockContainer = {
-    resolveAll: mock(() => []),
+    resolveAll: mock((): unknown[] => []),
   };
 
   const mockLogger = {

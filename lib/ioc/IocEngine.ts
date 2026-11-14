@@ -1,6 +1,7 @@
 import {
   type ComponentPostProcessor,
   ComponentType,
+  type DependencyClasses,
   type Dependencies,
   type ICoreService,
   ICoreServiceNames,
@@ -14,11 +15,12 @@ import * as path from 'node:path';
 import type { Class } from '../server/types';
 import { ComponentConstants } from './constants';
 import * as process from 'node:process';
-import { getStrategyClass } from './helper/iocHelper';
+import { getStrategyClass, resolveDependencyName } from './helper/iocHelper';
 import { getOwnTypedMetadata, getTypedMetadata } from '../utils';
 import { getComponentsDeclaredIn, Inject, Scope } from './component';
 import { CoreService } from './decorators';
 import { CircularDependencyError } from './CircularDependencyDetector';
+import { cycleMessage } from './cycleMessage';
 import type { ServerLogger } from '../logger';
 
 /**
@@ -36,14 +38,14 @@ export class IocEngine implements ICoreService {
   public serviceName = 'IocEngine';
 
   @Inject('Container')
-  private _container: Container;
+  private _container!: Container;
 
   @Inject(ICoreServiceNames.SERVER_LOGGER)
-  private logger: ServerLogger;
+  private logger!: ServerLogger;
 
   private injectables: InjectableComponent[] = [];
 
-  private config?: IocConfig;
+  private config?: IocConfig | null;
 
   /** Entry files kept out of the scan, empty unless the scan actually ran */
   private entryFiles = new Set<string>();
@@ -56,7 +58,7 @@ export class IocEngine implements ICoreService {
    * @param {IocConfig} config - IoC configuration object
    * @returns {void}
    */
-  public setConfig(config?: IocConfig): void {
+  public setConfig(config?: IocConfig | null): void {
     this.config = config;
   }
 
@@ -329,7 +331,7 @@ export class IocEngine implements ICoreService {
     }
 
     this.logger.warn(
-      `[IocEngine] '${name}' is transient and declares @OnStop (${stopHooks.join(', ')}), which will never ` +
+      `[IocEngine] '${name}' is transient and declares @OnStop (${stopHooks.map(String).join(', ')}), which will never ` +
         'run - the container keeps no handle on a transient instance. Make it a singleton, or release the ' +
         'resource where it is used.',
     );
@@ -550,6 +552,10 @@ export class IocEngine implements ICoreService {
     while (queue.length > 0) {
       const currentNode = queue.shift();
 
+      if (currentNode === undefined) {
+        break;
+      }
+
       visitedCount++;
 
       const currentClass = nameToClass.get(currentNode);
@@ -561,7 +567,7 @@ export class IocEngine implements ICoreService {
       const neighbors = adjacencyList.get(currentNode) || [];
 
       for (const neighbor of neighbors) {
-        const newDegree = inDegree.get(neighbor) - 1;
+        const newDegree = (inDegree.get(neighbor) ?? 0) - 1;
 
         inDegree.set(neighbor, newDegree);
 
@@ -574,7 +580,7 @@ export class IocEngine implements ICoreService {
     if (visitedCount !== inDegree.size) {
       const cycle = this.findCycle(adjacencyList);
 
-      throw new CircularDependencyError(`Circular dependency detected: ${cycle.join(' -> ')}`);
+      throw new CircularDependencyError(cycleMessage(cycle));
     }
 
     return sorted.reverse();
@@ -637,41 +643,38 @@ export class IocEngine implements ICoreService {
 
   private findCycle(adjacencyList: Map<string, string[]>): string[] {
     const visited = new Set<string>();
-    const recStack = new Set<string>();
-    const cycle: string[] = [];
+    const path: string[] = [];
 
-    const dfs = (node: string): boolean => {
-      if (recStack.has(node)) {
-        cycle.push(node);
-        return true;
+    const dfs = (node: string): string[] | null => {
+      const start = path.indexOf(node);
+
+      if (start !== -1) {
+        return [...path.slice(start), node];
       }
 
-      if (visited.has(node)) return false;
+      if (visited.has(node)) return null;
 
       visited.add(node);
-      recStack.add(node);
+      path.push(node);
 
-      const neighbors = adjacencyList.get(node) || [];
+      for (const neighbor of adjacencyList.get(node) || []) {
+        const cycle = dfs(neighbor);
 
-      for (const neighbor of neighbors) {
-        if (dfs(neighbor)) {
-          if (cycle[0] !== cycle[cycle.length - 1]) {
-            cycle.push(node);
-          }
-
-          return true;
-        }
+        if (cycle) return cycle;
       }
 
-      recStack.delete(node);
-      return false;
+      path.pop();
+
+      return null;
     };
 
     for (const node of adjacencyList.keys()) {
-      if (dfs(node)) break;
+      const cycle = dfs(node);
+
+      if (cycle) return cycle;
     }
 
-    return cycle.reverse();
+    return [];
   }
 
   /**
@@ -752,8 +755,12 @@ export class IocEngine implements ICoreService {
 
   private getDependencies(component: Class): string[] {
     try {
-      const directDependencies = Object.values(
-        getOwnTypedMetadata<Dependencies>(ComponentConstants.DependencyKey, component) || {},
+      const dependencies = getOwnTypedMetadata<Dependencies>(ComponentConstants.DependencyKey, component) || {};
+      const dependencyClasses =
+        getOwnTypedMetadata<DependencyClasses>(ComponentConstants.DependencyClassKey, component) || {};
+
+      const directDependencies = Object.entries(dependencies).map(([field, injectedName]) =>
+        resolveDependencyName(injectedName, dependencyClasses[field]),
       );
 
       const softDependencies = Object.values(

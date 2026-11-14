@@ -250,7 +250,7 @@ describe('the HTTP exception chain', () => {
     @ExceptionHandler()
     class AuditingErrors {
       @Inject(AuditService)
-      private audit: AuditService;
+      private audit!: AuditService;
 
       @Catch(BusinessFailure)
       public handle(error: Error, ctx: any) {

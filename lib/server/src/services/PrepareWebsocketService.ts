@@ -14,12 +14,12 @@ export class PrepareWebsocketService implements ICoreService {
   public serviceName = 'PrepareWebsocketService';
 
   @Inject(ICoreServiceNames.CONTAINER)
-  private container: Container;
+  private container!: Container;
 
   @Inject(ICoreServiceNames.__ULAK__)
-  private ulak: Ulak;
+  private ulak!: Ulak;
 
-  public async prepare(): Promise<AsenaWebSocketService<WebSocketData>[]> {
+  public async prepare(): Promise<AsenaWebSocketService<WebSocketData>[] | undefined> {
     const webSockets = await this.container.resolveAll<AsenaWebSocketService<WebSocketData>>(ComponentType.WEBSOCKET);
 
     if (!webSockets?.length) {
@@ -33,7 +33,7 @@ export class PrepareWebsocketService implements ICoreService {
     const preparedWebsockets: AsenaWebSocketService<WebSocketData>[] = [];
 
     for (const webSocket of flatWebSockets) {
-      const path = getOwnTypedMetadata<string>(ComponentConstants.PathKey, webSocket.constructor);
+      const path = getOwnTypedMetadata<string>(ComponentConstants.PathKey, webSocket.constructor) || '';
 
       if (registeredPaths.has(path)) {
         throw new Error(`Duplicate WebSocket path found: ${path}`);

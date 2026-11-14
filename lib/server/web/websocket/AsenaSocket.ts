@@ -344,7 +344,7 @@ export class AsenaSocket<T> {
    * - 'uint8array': JavaScript Uint8Array
    * - 'blob': JavaScript Blob
    */
-  public get binaryType(): 'nodebuffer' | 'arraybuffer' | 'uint8array' | 'blob' {
+  public get binaryType(): 'nodebuffer' | 'arraybuffer' | 'uint8array' | 'blob' | undefined {
     return this._binaryType;
   }
 

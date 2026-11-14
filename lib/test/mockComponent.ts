@@ -107,8 +107,9 @@ export function mockComponent<T extends object>(
     (instance as any)[field] = readValue(spec, ComponentClass, field);
   }
 
-  const fieldsToMock = options.injections
-    ? allInjectedFields.filter((field) => options.injections.includes(field.fieldName))
+  const injections = options.injections;
+  const fieldsToMock = injections
+    ? allInjectedFields.filter((field) => injections.includes(field.fieldName))
     : allInjectedFields;
 
   const mocks: Record<string, any> = {};

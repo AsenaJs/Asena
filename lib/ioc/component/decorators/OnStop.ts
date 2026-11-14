@@ -18,13 +18,14 @@ import { defineTypedMetadata, getOwnTypedMetadata } from '../../../utils/typedMe
  * @returns {PropertyDecorator} The property decorator function.
  */
 export const OnStop = (): PropertyDecorator => {
-  return (target: object, propertyKey: string): void => {
-    const hooks: string[] = getOwnTypedMetadata<string[]>(ComponentConstants.OnStopKey, target.constructor) || [];
+  return (target: object, propertyKey: string | symbol): void => {
+    const hooks: (string | symbol)[] =
+      getOwnTypedMetadata<(string | symbol)[]>(ComponentConstants.OnStopKey, target.constructor) || [];
 
     if (!hooks.includes(propertyKey)) {
       hooks.push(propertyKey);
     }
 
-    defineTypedMetadata<string[]>(ComponentConstants.OnStopKey, hooks, target.constructor);
+    defineTypedMetadata<(string | symbol)[]>(ComponentConstants.OnStopKey, hooks, target.constructor);
   };
 };

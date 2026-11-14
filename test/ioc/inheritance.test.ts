@@ -19,11 +19,11 @@ describe('Inheritance Tests', () => {
 
   test('should register dependencies correctly for inherited services', async () => {
     const components: InjectableComponent[] = [
-      { Class: BaseServiceTest, interface: null },
-      { Class: BaseDataBaseServiceTest, interface: null },
-      { Class: InheritedService1Test, interface: null },
-      { Class: InheritedService2Test, interface: null },
-      { Class: InheritedService3Test, interface: null },
+      { Class: BaseServiceTest, interface: undefined },
+      { Class: BaseDataBaseServiceTest, interface: undefined },
+      { Class: InheritedService1Test, interface: undefined },
+      { Class: InheritedService2Test, interface: undefined },
+      { Class: InheritedService3Test, interface: undefined },
     ];
 
     await iocEngine.searchAndRegister(components);
@@ -53,7 +53,7 @@ describe('Inheritance Tests', () => {
 
     const deps = getOwnTypedMetadata<Dependencies>(ComponentConstants.DependencyKey, baseService.constructor);
 
-    expect(Object.keys(deps).length).toBe(1);
+    expect(Object.keys(deps ?? {}).length).toBe(1);
 
     // Inherited servislerin doğru şekilde oluşturulduğunu kontrol ediyoruz
     expect(service1).toBeInstanceOf(InheritedService1Test);
@@ -68,10 +68,10 @@ describe('Inheritance Tests', () => {
 
   test('should not share injected dependencies between inherited services', async () => {
     const components: InjectableComponent[] = [
-      { Class: BaseDataBaseServiceTest, interface: null },
-      { Class: BaseServiceTest, interface: null },
-      { Class: InheritedService1Test, interface: null },
-      { Class: InheritedService2Test, interface: null },
+      { Class: BaseDataBaseServiceTest, interface: undefined },
+      { Class: BaseServiceTest, interface: undefined },
+      { Class: InheritedService1Test, interface: undefined },
+      { Class: InheritedService2Test, interface: undefined },
     ];
 
     await iocEngine.searchAndRegister(components);

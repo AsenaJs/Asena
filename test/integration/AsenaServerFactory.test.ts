@@ -47,7 +47,7 @@ describe('AsenaServerFactory Integration', () => {
     @Controller('/test')
     class TestController {
       @Inject(TestService)
-      public testService: TestService;
+      public testService!: TestService;
 
       @Get({ path: '/' })
       public getData(context: AsenaContext<any, any>) {
@@ -131,10 +131,10 @@ describe('AsenaServerFactory Integration', () => {
     @Controller('/api')
     class ApiController {
       @Inject(UserService)
-      public userService: UserService;
+      public userService!: UserService;
 
       @Inject(PostService)
-      public postService: PostService;
+      public postService!: PostService;
 
       @Get({ path: '/users' })
       public getUsers(context: AsenaContext<any, any>) {

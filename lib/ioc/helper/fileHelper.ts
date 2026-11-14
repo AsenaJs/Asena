@@ -37,7 +37,7 @@ export const getAllFiles = (dirPath: string, arrayOfFiles: string[] = []): strin
   return arrayOfFiles;
 };
 
-export const readJson = (path) => {
+export const readJson = (path: string) => {
   const file = fs.readFileSync(path, { encoding: 'utf-8' });
 
   return JSON.parse(file);

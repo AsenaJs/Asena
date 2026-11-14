@@ -25,12 +25,12 @@ export abstract class AsenaAdapter<C extends AsenaContext<any, any>, VS> {
   /**
    * The name identifier of the adapter
    */
-  public readonly name: string;
+  public readonly name!: string;
 
   /**
    * Server port number
    */
-  protected port: number;
+  protected port!: number;
 
   /**
    * Logger instance for server operations
@@ -40,7 +40,7 @@ export abstract class AsenaAdapter<C extends AsenaContext<any, any>, VS> {
   /**
    * WebSocket adapter instance for handling real-time communications
    */
-  protected websocketAdapter: AsenaWebsocketAdapter;
+  protected websocketAdapter!: AsenaWebsocketAdapter;
 
   /**
    * Creates a new adapter instance

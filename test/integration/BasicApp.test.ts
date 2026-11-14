@@ -47,7 +47,7 @@ describe('Basic Application Integration', () => {
     @Service()
     class UserService {
       @Inject(DatabaseService)
-      public database: DatabaseService;
+      public database!: DatabaseService;
 
       public getUsers() {
         const connection = this.database.connect();
@@ -59,7 +59,7 @@ describe('Basic Application Integration', () => {
     @Controller('/api')
     class ApiController {
       @Inject(UserService)
-      public userService: UserService;
+      public userService!: UserService;
 
       @Get({ path: '/users' })
       public getUsers(context: AsenaContext<any, any>) {
@@ -95,7 +95,7 @@ describe('Basic Application Integration', () => {
     @Controller('/users')
     class UserController {
       @Inject(SharedService)
-      public sharedService: SharedService;
+      public sharedService!: SharedService;
 
       @Get({ path: '/' })
       public getUsers(context: AsenaContext<any, any>) {
@@ -106,7 +106,7 @@ describe('Basic Application Integration', () => {
     @Controller('/posts')
     class PostController {
       @Inject(SharedService)
-      public sharedService: SharedService;
+      public sharedService!: SharedService;
 
       @Get({ path: '/' })
       public getPosts(context: AsenaContext<any, any>) {

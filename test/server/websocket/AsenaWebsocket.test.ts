@@ -2,6 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, jest, mock, test } from 'b
 import type { AsenaWebSocketServer } from '../../../lib/server/web/websocket';
 import { AsenaSocket, AsenaWebSocketService, type Socket } from '../../../lib/server/web/websocket';
 
+let spy: Record<'close' | 'terminate', ReturnType<typeof mock>>;
+
 describe('WebSocket Tests', () => {
   let wsService: AsenaWebSocketService<any>;
   let mockServer: AsenaWebSocketServer;
@@ -195,15 +197,15 @@ describe('WebSocket Tests', () => {
         'test-namespace',
       );
 
-      global.spy = {
+      spy = {
         // eslint-disable-next-line max-nested-callbacks
         close: mock(() => 1),
         // eslint-disable-next-line max-nested-callbacks
         terminate: mock(() => 1),
       };
 
-      mockWs['ws'].close = global.spy.close;
-      mockWs['ws'].terminate = global.spy.terminate;
+      mockWs['ws'].close = spy.close;
+      mockWs['ws'].terminate = spy.terminate;
     });
 
     it('should call ws close with code and reason', () => {
@@ -212,19 +214,19 @@ describe('WebSocket Tests', () => {
 
       mockWs.close(code, reason);
 
-      expect(global.spy.close).toHaveBeenCalledWith(code, reason);
+      expect(spy.close).toHaveBeenCalledWith(code, reason);
     });
 
     it('should call ws close without parameters', () => {
       mockWs.close();
 
-      expect(global.spy.close).toHaveBeenCalledWith(undefined, undefined);
+      expect(spy.close).toHaveBeenCalledWith(undefined, undefined);
     });
 
     it('should call ws end (terminate)', () => {
       mockWs.terminate();
 
-      expect(global.spy.terminate).toHaveBeenCalled();
+      expect(spy.terminate).toHaveBeenCalled();
     });
   });
 

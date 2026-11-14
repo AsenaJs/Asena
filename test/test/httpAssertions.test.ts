@@ -54,9 +54,9 @@ describe('TestHttpCall', () => {
           (error: Error) => error,
         );
 
-      expect(failure.message).toContain('Expected status 200 but received 404');
-      expect(failure.message).toContain('/not-found');
-      expect(failure.message).toContain('no such user');
+      expect(failure?.message).toContain('Expected status 200 but received 404');
+      expect(failure?.message).toContain('/not-found');
+      expect(failure?.message).toContain('no such user');
     });
   });
 
@@ -77,8 +77,8 @@ describe('TestHttpCall', () => {
           (error: Error) => error,
         );
 
-      expect(failure.message).toContain("Expected header 'x-missing' to be present");
-      expect(failure.message).toContain('Received headers:');
+      expect(failure?.message).toContain("Expected header 'x-missing' to be present");
+      expect(failure?.message).toContain('Received headers:');
     });
   });
 
@@ -121,8 +121,8 @@ describe('TestHttpCall', () => {
           (error: Error) => error,
         );
 
-      expect(failure.message).toContain('Expected a JSON body but parsing failed');
-      expect(failure.message).toContain('<html>oops</html>');
+      expect(failure?.message).toContain('Expected a JSON body but parsing failed');
+      expect(failure?.message).toContain('<html>oops</html>');
     });
   });
 

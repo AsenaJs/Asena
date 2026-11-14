@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
-import { Container, IocEngine } from '../../lib/ioc';
+import { CircularDependencyError, Container, IocEngine } from '../../lib/ioc';
 import { Component, Service } from '../../lib/server/decorators';
-import { Implements, Inject, Strategy } from '../../lib/ioc/component';
+import { Implements, Inject, OnStart, Strategy } from '../../lib/ioc/component';
 import type { Class } from '../../lib/server/types';
 
 /**
@@ -66,13 +66,13 @@ class BetaTool implements Tool {
 @Component()
 class Consumer {
   @Strategy('ToolIface')
-  public tools: Tool[];
+  public tools!: Tool[];
 }
 
 @Component()
 class ExprConsumer {
   @Strategy('ToolIface', (tool: Tool) => tool.name)
-  public names: string[];
+  public names!: string[];
 }
 
 /** Registers `impls` under the strategy key, then both consumers. */
@@ -183,24 +183,49 @@ describe('Container - @Strategy cardinality', () => {
 @Component()
 class SelfStrategy {
   @Strategy('SelfIface')
-  public peers: SelfStrategy[];
+  public peers!: SelfStrategy[];
+}
+
+@Component()
+class ArmedStrategy {
+  public static armed = false;
+  public static container: Container;
+
+  @OnStart()
+  public async onStart(): Promise<void> {
+    if (ArmedStrategy.armed) {
+      await ArmedStrategy.container.resolveStrategy('ArmedIface');
+    }
+  }
 }
 
 describe('Container.resolveStrategy - circular detection', () => {
-  test('should leave the resolution stack empty so the key can be resolved again', async () => {
-    // resolveStrategy used to inherit push/pop from resolve(). A dedicated lookup that pushes
-    // without popping would leave the key on the stack and report the SECOND call as a cycle.
-    const container = await containerWith(AlphaTool);
+  test('should resolve the same key again after a rejected cycle through it', async () => {
+    // The cycle is only reachable while `armed`, so the second call is the same key on a
+    // container that already failed once. A path left behind by the first call would reject it.
+    const container = new Container();
 
-    await container.resolveStrategy('ToolIface');
-    await container.resolveStrategy('ToolIface');
+    ArmedStrategy.container = container;
+    await container.register('ArmedIface', ArmedStrategy, false);
 
-    expect((container as any).circularDetector.isEmpty()).toBe(true);
+    ArmedStrategy.armed = true;
+
+    try {
+      const failure = await container.resolveStrategy('ArmedIface').then(
+        () => undefined,
+        (error: Error) => error,
+      );
+
+      expect(failure?.cause).toBeInstanceOf(CircularDependencyError);
+    } finally {
+      ArmedStrategy.armed = false;
+    }
+
+    expect(await container.resolveStrategy('ArmedIface')).toHaveLength(1);
   });
 
   test('should detect a cycle that runs through the strategy key itself', async () => {
-    // Entered under the component name, so the strategy key is only ever pushed by
-    // resolveStrategy. Without that push this recurses until the stack overflows.
+    // Entered under the component name, so the cycle closes through the strategy key.
     const container = new Container();
 
     await container.register('SelfStrategy', SelfStrategy, false);
@@ -249,12 +274,12 @@ class DerivedSearchTool extends SearchTool {
 @Service('ToolRegistry')
 class ToolRegistry {
   @Strategy('AgentTool')
-  public handlers: Tool[];
+  public handlers!: Tool[];
 }
 
 class StrategyBase {
   @Strategy('AgentTool')
-  public inherited: Tool[];
+  public inherited!: Tool[];
 }
 
 @Service('DerivedRegistry')
@@ -385,7 +410,7 @@ describe('IocEngine - empty strategy key diagnostic', () => {
 @Component()
 class InjectConsumer {
   @Inject('ToolIface')
-  public tool: Tool | Tool[];
+  public tool!: Tool | Tool[];
 }
 
 describe('@Inject on a key with several implementations', () => {

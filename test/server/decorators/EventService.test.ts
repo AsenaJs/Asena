@@ -107,7 +107,7 @@ describe('@EventService Decorator', () => {
       const dependencies = getTypedMetadata<Record<string, string>>(ComponentConstants.DependencyKey, UserEventService);
       expect(dependencies).toBeDefined();
 
-      expect(dependencies['someService']).toBe('SomeService');
+      expect(dependencies?.['someService']).toBe('SomeService');
     });
 
     test('should initialize dependency and strategy metadata', () => {

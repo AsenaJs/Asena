@@ -61,7 +61,7 @@ export class PrepareFrontendControllerService implements ICoreService {
 
     for (const [methodName, pageRoute] of Object.entries(pageRoutes)) {
       const fullPath = path.join(basePath, pageRoute.path).replace(/\\/g, '/');
-      const result = await controller[methodName]();
+      const result = await Reflect.get(controller, methodName).call(controller);
 
       // Dynamic import() returns { default: HTMLBundle }, direct return gives HTMLBundle
       const htmlBundle = result?.default ?? result;

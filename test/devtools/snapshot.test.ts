@@ -7,6 +7,7 @@ import { buildDevtoolsSnapshot } from '../../lib/devtools/snapshot';
 import type { DevtoolsSnapshot } from '../../lib/devtools/protocol';
 import { Config, Controller, ExceptionHandler, Middleware, Service } from '../../lib/server/decorators';
 import { Get } from '../../lib/server/web/decorators';
+import { Inject } from '../../lib/ioc/component';
 import { Catch } from '../../lib/server/exception';
 import type { AsenaContext, AsenaNextHandler } from '../../lib/adapter';
 import { HTTP_EXCEPTION } from '../../lib/adapter/types/HttpException';
@@ -397,5 +398,66 @@ describe('buildDevtoolsSnapshot inheritance', () => {
 
     expect(snapshot.routes.map((route) => [route.path, route.middlewares])).toEqual([['/things/', ['BaseGuard']]]);
     expect(thing.dependencies).toEqual([{ field: null, target: 'BaseGuard', kind: 'soft' }]);
+  });
+});
+
+describe('buildDevtoolsSnapshot class injections', () => {
+  test('points an inject edge at the name the dependency registers under', async () => {
+    class Ledger {}
+
+    class Bookkeeper {
+      @Inject(Ledger)
+      public ledger!: Ledger;
+    }
+
+    Service('MainLedger')(Ledger);
+    Service()(Bookkeeper);
+
+    await using app = await bootFixture([Ledger, Bookkeeper]);
+
+    const snapshot = buildDevtoolsSnapshot(app.container);
+    const bookkeeper = snapshot.components.find((component) => component.name === 'Bookkeeper')!;
+
+    expect(snapshot.components.map((component) => component.name)).toContain('MainLedger');
+    expect(bookkeeper.dependencies).toEqual([{ field: 'ledger', target: 'MainLedger', kind: 'inject' }]);
+  });
+
+  test('takes an inherited field from the base and a redeclared one from the subclass, as the container does', async () => {
+    class Ledger {}
+
+    class Archive {}
+
+    class Journal {}
+
+    class BaseBookkeeper {
+      @Inject(Ledger)
+      public ledger!: Ledger;
+
+      @Inject(Journal)
+      public journal!: Journal;
+    }
+
+    class AuditingBookkeeper extends BaseBookkeeper {
+      @Inject('ArchiveLedger')
+      public override ledger!: Ledger;
+    }
+
+    Service('MainLedger')(Ledger);
+    Service('ArchiveLedger')(Archive);
+    Service('MainJournal')(Journal);
+    Service()(AuditingBookkeeper);
+
+    await using app = await bootFixture([Ledger, Archive, Journal, AuditingBookkeeper]);
+
+    const bookkeeper = await app.resolve<AuditingBookkeeper>('AuditingBookkeeper');
+    const snapshot = buildDevtoolsSnapshot(app.container);
+    const described = snapshot.components.find((component) => component.name === 'AuditingBookkeeper')!;
+
+    expect(bookkeeper.ledger).toBeInstanceOf(Archive);
+    expect(bookkeeper.journal).toBeInstanceOf(Journal);
+    expect(described.dependencies).toEqual([
+      { field: 'journal', target: 'MainJournal', kind: 'inject' },
+      { field: 'ledger', target: 'ArchiveLedger', kind: 'inject' },
+    ]);
   });
 });

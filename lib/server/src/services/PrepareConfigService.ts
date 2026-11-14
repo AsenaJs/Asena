@@ -14,12 +14,12 @@ export class PrepareConfigService implements ICoreService {
   public serviceName = 'PrepareConfigService';
 
   @Inject(ICoreServiceNames.CONTAINER)
-  private container: Container;
+  private container!: Container;
 
   @Inject(ICoreServiceNames.SERVER_LOGGER)
-  private logger: ServerLogger;
+  private logger!: ServerLogger;
 
-  public async prepare(): Promise<AsenaConfig> {
+  public async prepare(): Promise<AsenaConfig | undefined> {
     const config = await this.container.resolveAll<AsenaConfig>(ComponentType.CONFIG);
 
     if (!config?.length) {
@@ -44,7 +44,7 @@ export class PrepareConfigService implements ICoreService {
 
     const name = getTypedMetadata<string>(ComponentConstants.NameKey, config[0].constructor);
 
-    this.logger.info(`AsenaConfig service found ${yellow(name)}`);
+    this.logger.info(`AsenaConfig service found ${yellow(String(name))}`);
 
     return configInstance;
   }

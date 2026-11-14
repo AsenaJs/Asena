@@ -22,7 +22,7 @@ export function composeOnSend(
     if (interceptor.onSend) {
       const inner = next;
 
-      next = () => interceptor.onSend(ctx, inner);
+      next = () => interceptor.onSend!(ctx, inner);
     }
   }
 
@@ -50,7 +50,7 @@ export function composeOnReceive(
     if (interceptor.onReceive) {
       const inner = next;
 
-      next = () => interceptor.onReceive(ctx, inner);
+      next = () => interceptor.onReceive!(ctx, inner);
     }
   }
 
